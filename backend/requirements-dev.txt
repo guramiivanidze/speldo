@@ -5,16 +5,10 @@ django-cors-headers==4.9.0
 
 # WebSocket support
 channels==4.3.2
-channels_redis==4.2.1
 daphne==4.2.1
 
-# Database
-dj-database-url==2.3.0
-psycopg2-binary==2.9.10
-
-# Static files & Images
-whitenoise==6.8.2
-Pillow==11.1.0
+# Note: Pillow removed - Python 3.14 not supported yet
+# For image uploads, use Python 3.12 and run: pip install Pillow
 
 # Development
 python-dotenv==1.0.1
