@@ -43,38 +43,38 @@ export default function CardDisplay({
     <div
       className={`
         dev-card group relative rounded-xl overflow-hidden
-        ${compact ? 'h-full min-h-[100px] max-h-[140px]' : 'h-full min-h-[150px] max-h-[200px]'}
+        h-full w-full
         ${canBuy ? 'afford-glow' : ''}
         cursor-default shadow-lg
       `}
       style={{ background: CARD_GRADIENT[card.bonus] }}
     >
       {/* Background gem image */}
-      <div 
+      <div
         className="absolute inset-0 bg-cover bg-center"
         style={{ backgroundImage: `url(${GEM_IMAGES[card.bonus]})` }}
       />
-      
+
       {/* Gradient overlay for readability */}
-      <div 
+      <div
         className="absolute inset-0"
         style={{ background: `${CARD_GRADIENT[card.bonus]}`, opacity: 0.7 }}
       />
-      
+
       {/* Main content - horizontal layout */}
       <div className="h-full flex relative z-10">
-        
+
         {/* Left section - Level + Gem */}
         <div className="flex flex-col items-center justify-between py-2 px-2 w-1/3">
           {/* Level badge */}
           <div className={`
             text-[9px] font-black tracking-wider leading-none
             px-1.5 py-0.5 rounded-full text-slate-900
-            ${LEVEL_COLOR[card.level as 1|2|3]}
+            ${LEVEL_COLOR[card.level as 1 | 2 | 3]}
           `}>
             {ROMAN[card.level]}
           </div>
-          
+
           {/* Gem orb */}
           <div
             className="gem-orb shrink-0"
@@ -84,7 +84,7 @@ export default function CardDisplay({
               background: GEM_GRADIENT[card.bonus],
             }}
           />
-          
+
           {/* Gem label */}
           <span className={`text-[7px] font-semibold uppercase tracking-wide opacity-60 ${textCls}`}>
             {TOKEN_LABEL[card.bonus]}
@@ -93,20 +93,20 @@ export default function CardDisplay({
 
         {/* Right section - Points + Cost */}
         <div className="flex-1 flex flex-col justify-between py-2 pr-2">
-          {/* Points (top right) */}
+          {/* Points (top right) - Golden circle badge */}
           <div className="flex justify-end">
             {card.points > 0 ? (
-              <div
-                className={`
-                  w-6 h-6 rounded-full flex items-center justify-center
-                  font-black text-sm leading-none
-                  bg-white/20 backdrop-blur-sm border border-white/30
-                  shadow-inner ${textCls}
-                `}
+              <div 
+                className="w-7 h-7 rounded-full flex items-center justify-center
+                           font-black text-sm text-amber-900 drop-shadow-lg
+                           border-2 border-amber-300 shadow-inner"
+                style={{
+                  background: 'linear-gradient(135deg, #fde047 0%, #fbbf24 50%, #f59e0b 100%)',
+                }}
               >
                 {card.points}
               </div>
-            ) : <div className="w-6 h-6" />}
+            ) : <div className="w-7 h-7" />}
           </div>
 
           {/* Cost circles (bottom right) */}

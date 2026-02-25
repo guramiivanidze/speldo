@@ -72,6 +72,7 @@ interface TokenRowProps {
   disabledColors?: TokenColor[];
   size?: 'sm' | 'md' | 'lg';
   showLabel?: boolean;
+  vertical?: boolean;
 }
 
 export function TokenRow({
@@ -81,10 +82,11 @@ export function TokenRow({
   disabledColors = [],
   size = 'md',
   showLabel = true,
+  vertical = false,
 }: TokenRowProps) {
   const all: TokenColor[] = ['white', 'blue', 'green', 'red', 'black', 'gold'];
   return (
-    <div className="flex gap-2 flex-wrap items-end">
+    <div className={vertical ? 'flex flex-col gap-2 items-center' : 'flex gap-2 flex-wrap items-end'}>
       {all.map((color) => {
         const count = tokens[color] ?? 0;
         return (

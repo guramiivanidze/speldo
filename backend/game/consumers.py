@@ -2,18 +2,24 @@
 WebSocket consumer for Splendor game.
 """
 import json
+from datetime import timedelta
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import User
+from django.utils import timezone
 
 from .models import Game, GamePlayer
 from .game_logic import (
-    CARD_BY_ID, NOBLE_BY_ID, COLORS,
+    COLORS, get_all_cards, get_all_nobles, get_card, get_noble,
     apply_take_tokens, apply_discard_tokens,
     apply_reserve_card, apply_buy_card,
     apply_noble_visit, check_nobles,
     check_end_condition, determine_winner,
 )
+
+# Pause timeout constants
+PAUSE_TIMEOUT_MINUTES = 5
+SURVEY_INTERVAL_MINUTES = 1
 
 
 def serialize_game_state(game, players):
@@ -28,10 +34,21 @@ def serialize_game_state(game, players):
             'reserved_card_ids': gp.reserved_card_ids,
             'noble_ids': gp.noble_ids,
             'prestige_points': gp.prestige_points,
+            'is_online': gp.is_online,
         })
 
     # Deck counts (hidden)
     deck_counts = {lvl: len(ids) for lvl, ids in game.decks.items()}
+
+    # Calculate pause remaining time
+    pause_remaining_seconds = None
+    if game.status == Game.STATUS_PAUSED and game.pause_expires_at:
+        remaining = game.pause_expires_at - timezone.now()
+        pause_remaining_seconds = max(0, int(remaining.total_seconds()))
+
+    # Build cards_data and nobles_data from database
+    cards_data = {str(c['id']): c for c in get_all_cards()}
+    nobles_data = {str(n['id']): n for n in get_all_nobles()}
 
     return {
         'game_id': str(game.id),
@@ -44,8 +61,13 @@ def serialize_game_state(game, players):
         'available_nobles': game.available_nobles,
         'players': players_data,
         'winner_id': game.winner_id,
-        'cards_data': {str(k): v for k, v in CARD_BY_ID.items()},
-        'nobles_data': {str(k): v for k, v in NOBLE_BY_ID.items()},
+        'cards_data': cards_data,
+        'nobles_data': nobles_data,
+        # Pause/leave state
+        'is_paused': game.status == Game.STATUS_PAUSED,
+        'pause_remaining_seconds': pause_remaining_seconds,
+        'left_player_id': game.left_player_id,
+        'player_votes': game.player_votes,
     }
 
 
@@ -61,6 +83,9 @@ class GameConsumer(AsyncWebsocketConsumer):
 
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
+        
+        # Handle rejoin - mark player as online
+        await self.handle_rejoin()
         await self.send_game_state()
 
     async def disconnect(self, close_code):
@@ -77,6 +102,9 @@ class GameConsumer(AsyncWebsocketConsumer):
             'reserve_card': self.handle_reserve_card,
             'buy_card': self.handle_buy_card,
             'choose_noble': self.handle_choose_noble,
+            'leave_game': self.handle_leave_game,
+            'vote_response': self.handle_vote_response,
+            'refresh_state': self.handle_refresh_state,
         }
 
         handler = handlers.get(action)
@@ -85,16 +113,344 @@ class GameConsumer(AsyncWebsocketConsumer):
         else:
             await self.send_error(f"Unknown action: {action}")
 
+    async def handle_rejoin(self):
+        """Mark player as online when they reconnect."""
+        @database_sync_to_async
+        def _db():
+            from django.db import transaction
+            try:
+                with transaction.atomic():
+                    game = Game.objects.select_for_update().get(code=self.game_code)
+                    player = game.players.filter(user=self.user).first()
+                    if player:
+                        was_offline = not player.is_online
+                        player.is_online = True
+                        player.left_at = None
+                        player.save()
+                        
+                        # Check if pause has expired
+                        if game.status == Game.STATUS_PAUSED and game.pause_expires_at:
+                            if timezone.now() > game.pause_expires_at:
+                                # Pause expired - end the game
+                                game.status = Game.STATUS_FINISHED
+                                game.save()
+                                return 'timeout_ended'
+                        
+                        # If game was paused because this player left, resume
+                        if game.status == Game.STATUS_PAUSED and game.left_player_id == self.user.id:
+                            game.status = Game.STATUS_PLAYING
+                            game.paused_at = None
+                            game.pause_expires_at = None
+                            game.left_player_id = None
+                            game.player_votes = {}
+                            game.last_survey_at = None
+                            game.save()
+                            return 'resumed'
+                        return 'online' if was_offline else None
+                    return None
+            except Game.DoesNotExist:
+                return None
+
+        result = await _db()
+        if result == 'timeout_ended':
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {'type': 'pause_timeout_ended'}
+            )
+            await self.send_game_state()
+        elif result == 'resumed':
+            # Notify all players the game has resumed
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {'type': 'game_resumed', 'user_id': self.user.id, 'username': self.user.username}
+            )
+            await self.send_game_state()
+        elif result == 'online':
+            await self.send_game_state()
+
+    async def pause_timeout_ended(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'pause_timeout_ended',
+        }))
+
+    async def game_resumed(self, event):
+        # Send the resume notification
+        await self.send(text_data=json.dumps({
+            'type': 'game_resumed',
+            'user_id': event['user_id'],
+            'username': event['username'],
+        }))
+        # Each consumer sends the updated game state to their client
+        game, players = await self.get_game_and_players()
+        if game:
+            @database_sync_to_async
+            def _serialize():
+                return serialize_game_state(game, players)
+            
+            state = await _serialize()
+            await self.send(text_data=json.dumps({
+                'type': 'game_state',
+                'state': state,
+            }))
+
+    async def handle_leave_game(self, payload):
+        """Handle player leaving the game - pause for others."""
+        @database_sync_to_async
+        def _db():
+            from django.db import transaction
+            try:
+                with transaction.atomic():
+                    game = Game.objects.select_for_update().get(code=self.game_code)
+                    player = game.players.filter(user=self.user).first()
+                    
+                    if not player:
+                        return "You are not in this game."
+                    
+                    if game.status not in [Game.STATUS_PLAYING, Game.STATUS_PAUSED]:
+                        return "Game is not in progress."
+                    
+                    # Mark player as offline
+                    player.is_online = False
+                    player.left_at = timezone.now()
+                    player.save()
+                    
+                    # Check if all players have left
+                    online_players = game.players.filter(is_online=True).count()
+                    
+                    if online_players == 0:
+                        # All players left - end game
+                        game.status = Game.STATUS_FINISHED
+                        game.save()
+                        return 'game_ended'
+                    
+                    # Pause the game
+                    game.status = Game.STATUS_PAUSED
+                    game.paused_at = timezone.now()
+                    game.pause_expires_at = timezone.now() + timedelta(minutes=PAUSE_TIMEOUT_MINUTES)
+                    game.left_player_id = self.user.id
+                    game.player_votes = {}
+                    game.last_survey_at = timezone.now()
+                    game.save()
+                    
+                    return {'paused': True, 'user_id': self.user.id, 'username': self.user.username}
+            except Game.DoesNotExist:
+                return "Game not found."
+
+        result = await _db()
+        
+        if isinstance(result, str):
+            if result == 'game_ended':
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {'type': 'game_ended_all_left'}
+                )
+            else:
+                await self.send_error(result)
+        elif isinstance(result, dict) and result.get('paused'):
+            # Notify all players about pause and show survey
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'player_left_survey',
+                    'left_user_id': result['user_id'],
+                    'left_username': result['username'],
+                }
+            )
+            await self.send_game_state()
+
+    async def player_left_survey(self, event):
+        # Send the survey notification
+        await self.send(text_data=json.dumps({
+            'type': 'player_left_survey',
+            'left_user_id': event['left_user_id'],
+            'left_username': event['left_username'],
+        }))
+        # Each consumer sends the updated game state to their client
+        game, players = await self.get_game_and_players()
+        if game:
+            @database_sync_to_async
+            def _serialize():
+                return serialize_game_state(game, players)
+            
+            state = await _serialize()
+            await self.send(text_data=json.dumps({
+                'type': 'game_state',
+                'state': state,
+            }))
+
+    async def game_ended_all_left(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'game_ended_all_left',
+        }))
+
+    async def handle_vote_response(self, payload):
+        """Handle vote for end game or wait."""
+        vote = payload.get('vote')  # 'wait' or 'end'
+        
+        if vote not in ['wait', 'end']:
+            await self.send_error("Invalid vote. Must be 'wait' or 'end'.")
+            return
+
+        @database_sync_to_async
+        def _db():
+            from django.db import transaction
+            try:
+                with transaction.atomic():
+                    game = Game.objects.select_for_update().get(code=self.game_code)
+                    
+                    if game.status != Game.STATUS_PAUSED:
+                        return "Game is not paused."
+                    
+                    player = game.players.filter(user=self.user).first()
+                    if not player or not player.is_online:
+                        return "You are not an active player."
+                    
+                    # Record vote
+                    votes = dict(game.player_votes)
+                    votes[str(self.user.id)] = vote
+                    game.player_votes = votes
+                    game.save()
+                    
+                    # Check if all online players have voted
+                    online_players = game.players.filter(is_online=True)
+                    online_ids = set(str(p.user.id) for p in online_players)
+                    voted_ids = set(votes.keys())
+                    
+                    if online_ids == voted_ids:
+                        # All online players have voted
+                        end_votes = sum(1 for v in votes.values() if v == 'end')
+                        
+                        if end_votes > 0:
+                            # At least one player wants to end - end the game
+                            game.status = Game.STATUS_FINISHED
+                            game.save()
+                            return 'game_ended_by_vote'
+                        else:
+                            # All voted to wait - reset votes for next survey
+                            game.player_votes = {}
+                            game.last_survey_at = timezone.now()
+                            game.save()
+                            return 'all_wait'
+                    
+                    return 'vote_recorded'
+            except Game.DoesNotExist:
+                return "Game not found."
+
+        result = await _db()
+        
+        if result == 'game_ended_by_vote':
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {'type': 'game_ended_by_vote'}
+            )
+            await self.send_game_state()
+        elif result == 'all_wait':
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {'type': 'all_voted_wait'}
+            )
+            await self.send_game_state()
+        elif result == 'vote_recorded':
+            await self.send_game_state()
+        else:
+            await self.send_error(result)
+
+    async def game_ended_by_vote(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'game_ended_by_vote',
+        }))
+
+    async def all_voted_wait(self, event):
+        await self.send(text_data=json.dumps({
+            'type': 'all_voted_wait',
+        }))
+
+    async def handle_refresh_state(self, payload):
+        """Handle refresh state request - just sends current game state."""
+        await self.send_game_state()
+
     async def send_game_state(self):
+        # First check pause status
+        await self.check_pause_status()
+        
         game, players = await self.get_game_and_players()
         if game is None:
             await self.send_error("Game not found.")
             return
-        state = serialize_game_state(game, players)
+        
+        @database_sync_to_async
+        def _serialize():
+            return serialize_game_state(game, players)
+        
+        state = await _serialize()
         await self.channel_layer.group_send(
             self.room_group_name,
             {'type': 'game_state_update', 'state': state}
         )
+
+    async def check_pause_status(self):
+        """Check if pause has timed out or if it's time for a new survey."""
+        @database_sync_to_async
+        def _db():
+            from django.db import transaction
+            try:
+                with transaction.atomic():
+                    game = Game.objects.select_for_update().get(code=self.game_code)
+                    
+                    if game.status != Game.STATUS_PAUSED:
+                        return None
+                    
+                    now = timezone.now()
+                    
+                    # Check if pause has expired
+                    if game.pause_expires_at and now > game.pause_expires_at:
+                        game.status = Game.STATUS_FINISHED
+                        game.save()
+                        return 'timeout_ended'
+                    
+                    # Check if it's time for a new survey (1 minute since last survey)
+                    # Only if all online players have voted to wait
+                    if game.last_survey_at:
+                        time_since_survey = now - game.last_survey_at
+                        if time_since_survey.total_seconds() >= 60:  # 1 minute
+                            online_players = list(game.players.filter(is_online=True))
+                            online_ids = set(str(p.user.id) for p in online_players)
+                            voted_ids = set(game.player_votes.keys())
+                            
+                            # All online players have voted and all voted wait
+                            if online_ids == voted_ids:
+                                all_wait = all(v == 'wait' for v in game.player_votes.values())
+                                if all_wait:
+                                    # Reset votes for new survey
+                                    game.player_votes = {}
+                                    game.last_survey_at = now
+                                    game.save()
+                                    return 'new_survey'
+                    
+                    return None
+            except Game.DoesNotExist:
+                return None
+        
+        result = await _db()
+        if result == 'timeout_ended':
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {'type': 'pause_timeout_ended'}
+            )
+        elif result == 'new_survey':
+            # Trigger new survey for all players
+            game, players = await self.get_game_and_players()
+            if game and game.left_player_id:
+                left_player = next((p for p in players if p.user.id == game.left_player_id), None)
+                if left_player:
+                    await self.channel_layer.group_send(
+                        self.room_group_name,
+                        {
+                            'type': 'player_left_survey',
+                            'left_user_id': left_player.user.id,
+                            'left_username': left_player.user.username,
+                        }
+                    )
 
     async def game_state_update(self, event):
         await self.send(text_data=json.dumps({

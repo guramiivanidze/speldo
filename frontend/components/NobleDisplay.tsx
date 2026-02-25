@@ -8,32 +8,61 @@ interface NobleDisplayProps {
   compact?: boolean;
 }
 
+// Noble portrait images - elegant royal/historical themed backgrounds
+const NOBLE_IMAGES: string[] = [
+  'https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=200&h=300&fit=crop', // Royal texture
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=300&fit=crop', // Portrait style
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&h=300&fit=crop', // Noble portrait
+  'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&h=300&fit=crop', // Elegant figure
+  'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200&h=300&fit=crop', // Royal person
+];
+
 export default function NobleDisplay({ noble, compact = false }: NobleDisplayProps) {
+  // Use noble id to pick consistent image
+  const imageIndex = noble.id % NOBLE_IMAGES.length;
+  const bgImage = NOBLE_IMAGES[imageIndex];
+
   if (compact) {
     return (
       <div
-        className="noble-tile rounded-lg flex flex-col items-center gap-1 border border-amber-500/40"
-        style={{ width: 58, padding: '6px 4px' }}
+        className="relative rounded-xl overflow-hidden border border-amber-500/50 shadow-lg group h-full w-full"
       >
-        {/* Points */}
-        <div className="w-6 h-6 rounded-full bg-amber-400 flex items-center justify-center font-black text-xs text-amber-900 shadow-md">
-          {noble.points}
-        </div>
-        {/* Requirements */}
-        <div className="flex flex-col gap-0.5 w-full px-1">
-          {GEM_COLORS.map((color) => {
-            const req = noble.requirements[color];
-            if (!req) return null;
-            return (
-              <div key={color} className="flex items-center justify-between">
+        {/* Background image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${bgImage})` }}
+        />
+        {/* Dark overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-amber-950/90 via-amber-900/50 to-amber-800/30" />
+        
+        {/* Content */}
+        <div className="relative h-full flex flex-col justify-between p-1.5">
+          {/* Points badge - top right */}
+          <div className="flex justify-end">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 flex items-center justify-center font-black text-xs text-amber-900 shadow-md border border-amber-200/50">
+              {noble.points}
+            </div>
+          </div>
+          
+          {/* Requirements - bottom */}
+          <div className="flex gap-1 justify-center flex-wrap">
+            {GEM_COLORS.map((color) => {
+              const req = noble.requirements[color];
+              if (!req) return null;
+              return (
                 <div
-                  className="gem-orb"
-                  style={{ width: 10, height: 10, background: GEM_DOT_STYLE[color], flexShrink: 0 }}
-                />
-                <span className="text-[9px] font-bold text-amber-200">{req}</span>
-              </div>
-            );
-          })}
+                  key={color}
+                  className="flex items-center gap-0.5 bg-black/40 rounded px-1 py-0.5"
+                >
+                  <div
+                    className="border border-white/30 shadow-sm"
+                    style={{ width: 10, height: 10, background: GEM_DOT_STYLE[color] }}
+                  />
+                  <span className="text-[9px] font-bold text-white">{req}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
@@ -41,51 +70,50 @@ export default function NobleDisplay({ noble, compact = false }: NobleDisplayPro
 
   return (
     <div
-      className="noble-tile rounded-xl flex flex-col border border-amber-500/30"
-      style={{ width: 88, padding: '10px 8px' }}
+      className="relative rounded-xl overflow-hidden border border-amber-500/40 shadow-xl group h-full w-full"
     >
-      {/* Crown + points */}
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-amber-400 text-base leading-none">♛</span>
-        <div className="
-          w-7 h-7 rounded-full
-          bg-gradient-to-br from-amber-300 to-amber-600
-          flex items-center justify-center
-          font-black text-sm text-amber-900
-          shadow-md
-        ">
-          {noble.points}
+      {/* Background image */}
+      <div
+        className="absolute inset-0 bg-cover bg-center transition-transform duration-300 group-hover:scale-110"
+        style={{ backgroundImage: `url(${bgImage})` }}
+      />
+      {/* Elegant overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-amber-950/95 via-amber-900/60 to-transparent" />
+      
+      {/* Gold border effect */}
+      <div className="absolute inset-0 border-2 border-amber-400/20 rounded-xl" />
+      
+      {/* Content */}
+      <div className="relative h-full flex flex-col justify-between p-2">
+        {/* Top - Crown + Points */}
+        <div className="flex items-start justify-between">
+          <span className="text-amber-400 text-sm leading-none drop-shadow-lg">♛</span>
+          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-200 via-amber-400 to-amber-600 flex items-center justify-center font-black text-sm text-amber-900 shadow-lg border-2 border-amber-200/50">
+            {noble.points}
+          </div>
         </div>
-      </div>
 
-      {/* Separator */}
-      <div className="w-full h-px bg-amber-500/20 mb-2" />
-
-      {/* Requirements */}
-      <div className="flex flex-col gap-1">
-        {GEM_COLORS.map((color) => {
-          const req = noble.requirements[color];
-          if (!req) return null;
-          return (
-            <div key={color} className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
+        {/* Bottom - Requirements */}
+        <div className="bg-black/50 backdrop-blur-sm rounded-lg p-1.5">
+          <div className="flex gap-1.5 justify-center flex-wrap">
+            {GEM_COLORS.map((color) => {
+              const req = noble.requirements[color];
+              if (!req) return null;
+              return (
                 <div
-                  className="gem-orb shrink-0"
-                  style={{ width: 12, height: 12, background: GEM_DOT_STYLE[color] }}
-                />
-              </div>
-              <div className="flex gap-0.5">
-                {[...Array(req)].map((_, i) => (
+                  key={color}
+                  className="flex items-center gap-0.5"
+                >
                   <div
-                    key={i}
-                    className="rounded-sm"
-                    style={{ width: 7, height: 7, background: GEM_DOT_STYLE[color], opacity: 0.85 }}
+                    className="shadow-sm border border-white/30"
+                    style={{ width: 12, height: 12, background: GEM_DOT_STYLE[color] }}
                   />
-                ))}
-              </div>
-            </div>
-          );
-        })}
+                  <span className="text-[10px] font-bold text-amber-100">{req}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );

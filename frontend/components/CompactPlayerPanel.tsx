@@ -33,11 +33,19 @@ export default function CompactPlayerPanel({
     return (
         <div
             className={`
-        glass rounded-lg p-2.5 transition-all duration-200
-        ${isCurrentTurn ? 'border-2 border-amber-500/80 turn-pulse' : 'border border-white/10'}
+        glass rounded-lg p-2.5 transition-all duration-200 relative
+        ${isCurrentTurn ? 'border-4 border-amber-500 turn-pulse' : 'border border-white/10'}
         ${isVertical ? 'w-full' : ''}
+        ${!player.is_online ? 'opacity-60' : ''}
       `}
         >
+            {/* Offline indicator */}
+            {!player.is_online && (
+                <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-md">
+                    OFFLINE
+                </div>
+            )}
+            
             {/* Header - Name + Avatar */}
             <div className={`flex items-center gap-2 ${isVertical ? 'flex-col' : ''}`}>
                 {/* Avatar */}
@@ -113,24 +121,21 @@ export default function CompactPlayerPanel({
             )}
 
             {/* Bonuses row */}
-            <div className={`mt-2 flex gap-1.5 ${isVertical ? 'flex-wrap justify-center' : ''}`}>
+            <div className={`mt-2 flex gap-2 ${isVertical ? 'flex-wrap justify-center' : ''}`}>
                 {GEM_COLORS.map((color) => {
                     const count = bonuses[color] || 0;
                     return (
-                        <div key={color} className="flex items-center gap-0.5">
+                        <div key={color} className="flex flex-col items-center gap-0.5">
                             <div
-                                className="gem-orb"
-                                style={{ width: 10, height: 10, background: GEM_DOT_STYLE[color] }}
+                                className="rounded-sm shadow-sm border border-white/20"
+                                style={{ width: 16, height: 16, background: GEM_DOT_STYLE[color] }}
                             />
-                            <span className={`text-[9px] font-bold ${count > 0 ? 'text-slate-200' : 'text-slate-600'}`}>
+                            <span className={`text-[10px] font-bold ${count > 0 ? 'text-slate-200' : 'text-slate-600'}`}>
                                 {count}
                             </span>
                         </div>
                     );
                 })}
-                {totalBonuses > 0 && (
-                    <span className="text-[9px] text-slate-500 ml-1">({totalBonuses} cards)</span>
-                )}
             </div>
 
             {/* Nobles */}

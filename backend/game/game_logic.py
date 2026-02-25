@@ -5,11 +5,73 @@ All game state is manipulated here; the consumer calls these functions.
 import random
 import string
 
-from .card_data import ALL_CARDS, NOBLES
-
-CARD_BY_ID = {c['id']: c for c in ALL_CARDS}
-NOBLE_BY_ID = {n['id']: n for n in NOBLES}
 COLORS = ['white', 'blue', 'green', 'red', 'black']
+
+# Cached card/noble data from database
+_card_cache = None
+_noble_cache = None
+
+
+def _load_cards():
+    """Load all cards from database into cache."""
+    global _card_cache
+    if _card_cache is None:
+        from .models import DevelopmentCard
+        _card_cache = {}
+        for card in DevelopmentCard.objects.all():
+            _card_cache[card.id] = {
+                'id': card.id,
+                'level': card.level,
+                'bonus': card.bonus,
+                'points': card.points,
+                'cost': card.cost,
+                'background_image': card.background_image.url if card.background_image else '',
+            }
+    return _card_cache
+
+
+def _load_nobles():
+    """Load all nobles from database into cache."""
+    global _noble_cache
+    if _noble_cache is None:
+        from .models import Noble
+        _noble_cache = {}
+        for noble in Noble.objects.all():
+            _noble_cache[noble.id] = {
+                'id': noble.id,
+                'points': noble.points,
+                'requirements': noble.requirements,
+                'background_image': noble.background_image.url if noble.background_image else '',
+                'name': noble.name or '',
+            }
+    return _noble_cache
+
+
+def get_card(card_id):
+    """Get card data by ID."""
+    return _load_cards().get(card_id)
+
+
+def get_noble(noble_id):
+    """Get noble data by ID."""
+    return _load_nobles().get(noble_id)
+
+
+def get_all_cards():
+    """Get all cards."""
+    return list(_load_cards().values())
+
+
+def get_all_nobles():
+    """Get all nobles."""
+    return list(_load_nobles().values())
+
+
+def clear_card_cache():
+    """Clear cached data (call when cards are updated in admin)."""
+    global _card_cache, _noble_cache
+    _card_cache = None
+    _noble_cache = None
 
 
 def generate_code():
@@ -22,15 +84,16 @@ def initial_bank(player_count):
 
 
 def initial_decks_and_nobles(player_count):
-    level1 = [c['id'] for c in ALL_CARDS if c['level'] == 1]
-    level2 = [c['id'] for c in ALL_CARDS if c['level'] == 2]
-    level3 = [c['id'] for c in ALL_CARDS if c['level'] == 3]
+    all_cards = get_all_cards()
+    level1 = [c['id'] for c in all_cards if c['level'] == 1]
+    level2 = [c['id'] for c in all_cards if c['level'] == 2]
+    level3 = [c['id'] for c in all_cards if c['level'] == 3]
     random.shuffle(level1)
     random.shuffle(level2)
     random.shuffle(level3)
 
     noble_count = player_count + 1
-    all_nobles = list(NOBLE_BY_ID.keys())
+    all_nobles = list(_load_nobles().keys())
     random.shuffle(all_nobles)
     nobles = all_nobles[:noble_count]
 
@@ -47,7 +110,7 @@ def initial_decks_and_nobles(player_count):
 def get_player_bonuses(purchased_card_ids):
     bonuses = {c: 0 for c in COLORS}
     for cid in purchased_card_ids:
-        card = CARD_BY_ID.get(cid)
+        card = get_card(cid)
         if card:
             bonuses[card['bonus']] += 1
     return bonuses
@@ -55,7 +118,7 @@ def get_player_bonuses(purchased_card_ids):
 
 def effective_cost(card_id, player_tokens, purchased_card_ids):
     """Return tokens that must be spent (after applying bonuses). Returns None if can't afford."""
-    card = CARD_BY_ID[card_id]
+    card = get_card(card_id)
     bonuses = get_player_bonuses(purchased_card_ids)
     remaining = {}
     for color in COLORS:
@@ -89,7 +152,7 @@ def check_nobles(game_data, player_data):
     bonuses = get_player_bonuses(player_data['purchased_card_ids'])
     eligible = []
     for nid in game_data['available_nobles']:
-        noble = NOBLE_BY_ID[nid]
+        noble = get_noble(nid)
         qualifies = all(bonuses.get(c, 0) >= v for c, v in noble['requirements'].items())
         if qualifies:
             eligible.append(nid)
@@ -250,8 +313,8 @@ def apply_buy_card(game_data, player_data, card_id):
     purchased.append(card_id)
 
     # Compute new prestige
-    card = CARD_BY_ID[card_id]
-    prestige = sum(CARD_BY_ID[cid]['points'] for cid in purchased)
+    card = get_card(card_id)
+    prestige = sum(get_card(cid)['points'] for cid in purchased)
 
     game_data = dict(game_data)
     game_data['visible_cards'] = visible
@@ -275,7 +338,7 @@ def apply_noble_visit(game_data, player_data, noble_id):
     nobles_list.remove(noble_id)
     noble_ids.append(noble_id)
 
-    noble = NOBLE_BY_ID[noble_id]
+    noble = get_noble(noble_id)
     prestige = player_data['prestige_points'] + noble['points']
 
     game_data = dict(game_data)

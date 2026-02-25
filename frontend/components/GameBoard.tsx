@@ -79,31 +79,7 @@ export default function GameBoard({
   const levels: ('3' | '2' | '1')[] = ['3', '2', '1'];
 
   return (
-    <div className="h-screen w-full flex flex-col overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-2">
-      
-      {/* Status Banner - Top */}
-      <div className={`
-        shrink-0 rounded-lg px-3 py-1.5 flex items-center justify-between mb-2
-        ${isMyTurn
-          ? 'bg-amber-500/15 border border-amber-500/40'
-          : 'bg-slate-800/60 border border-slate-700/50'}
-      `}>
-        <div className="flex items-center gap-2">
-          {isMyTurn ? (
-            <>
-              <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              <span className="font-bold text-amber-300 text-sm">Your turn</span>
-            </>
-          ) : (
-            <>
-              <div className="w-2 h-2 rounded-full bg-slate-500" />
-              <span className="text-slate-400 text-sm">
-                Waiting for <span className="text-slate-200 font-semibold">{currentPlayer?.username}</span>
-              </span>
-            </>
-          )}
-        </div>
-      </div>
+    <div className="h-full w-full flex flex-col overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-2">
 
       {/* Main Board Grid */}
       <div className="flex-1 grid grid-rows-[auto_1fr_auto] grid-cols-[auto_1fr_auto] gap-2 min-h-0">
@@ -137,7 +113,7 @@ export default function GameBoard({
         <div />
 
         {/* Left opponent */}
-        <div className="flex items-center justify-center w-32">
+        <div className="flex items-center justify-center w-44">
           {opponents.length >= 2 && opponents[0] && (
             <CompactPlayerPanel
               player={opponents[0]}
@@ -150,56 +126,36 @@ export default function GameBoard({
         </div>
 
         {/* CENTER - Main Game Area */}
-        <div className="glass rounded-xl p-3 flex flex-col gap-2 overflow-hidden min-h-0">
+        <div className="glass rounded-xl p-3 flex gap-3 overflow-hidden min-h-0">
           
-          {/* Gem Bank - Centered */}
-          <div className="flex justify-center items-center gap-2 shrink-0">
-            <span className="text-slate-400 text-xs">◈</span>
-            <TokenRow
-              tokens={tokens_in_bank}
-              onClickToken={isMyTurn && gameState.status === 'playing' ? handleTokenClick : undefined}
-              selectedTokens={selectedTokens}
-              size="md"
-            />
-            {selectedTokens.length > 0 && (
-              <div className="flex items-center gap-1.5 ml-2">
-                <button
-                  className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold"
-                  onClick={confirmTakeTokens}
-                >
-                  Take
-                </button>
-                <button
-                  className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs font-bold"
-                  onClick={() => setSelectedTokens([])}
-                >
-                  ✕
-                </button>
+          {/* Left side - Nobles + Cards */}
+          <div className="flex-1 flex flex-col gap-2 min-h-0">
+            {/* Nobles - Centered */}
+            <div className="flex justify-center items-center gap-3 shrink-0">
+              <span className="text-amber-400 text-sm">♫</span>
+              <div className="flex gap-3">
+                {available_nobles.map((nid) => {
+                  const noble = nobles_data[String(nid)];
+                  if (!noble) return null;
+                  return (
+                    <div key={nid} className="w-60 h-20">
+                      <NobleDisplay noble={noble} compact />
+                    </div>
+                  );
+                })}
               </div>
-            )}
-          </div>
-
-          {/* Nobles - Centered */}
-          <div className="flex justify-center items-center gap-2 shrink-0">
-            <span className="text-amber-400 text-sm">♛</span>
-            <div className="flex gap-2">
-              {available_nobles.map((nid) => {
-                const noble = nobles_data[String(nid)];
-                return noble ? <NobleDisplay key={nid} noble={noble} compact /> : null;
-              })}
             </div>
-          </div>
 
-          <div className="h-px bg-white/10 shrink-0" />
+            <div className="h-px bg-white/10 shrink-0" />
 
-          {/* Card Rows */}
-          <div className="flex-1 flex flex-col gap-2 min-h-0 justify-center w-full overflow-hidden">
+            {/* Card Rows */}
+            <div className="flex-1 flex flex-col gap-4 min-h-0 justify-center w-full overflow-hidden">
             {levels.map((level) => (
-              <div key={level} className="flex items-stretch gap-2 w-full h-[calc(33%-8px)]">
+              <div key={level} className="flex items-stretch gap-3 w-full flex-1 min-h-0">
                 {/* Deck */}
                 <button
                   className={`
-                    shrink-0 w-12 rounded-lg flex flex-col items-center justify-center
+                    shrink-0 w-14 rounded-lg flex flex-col items-center justify-center
                     text-[10px] font-bold transition-all
                     ${isMyTurn && canReserveMore && (deck_counts[level] ?? 0) > 0
                       ? 'bg-slate-700 text-slate-300 hover:bg-slate-600 cursor-pointer border border-slate-600'
@@ -216,7 +172,7 @@ export default function GameBoard({
                 </button>
 
                 {/* Cards - responsive grid */}
-                <div className="flex-1 grid grid-cols-4 gap-2 h-full">
+                <div className="flex-1 grid grid-cols-4 gap-4 h-full">
                   {(visible_cards[level] || []).map((cardId) => {
                     const card = cards_data[String(cardId)];
                     if (!card) return null;
@@ -237,11 +193,41 @@ export default function GameBoard({
                 </div>
               </div>
             ))}
+            </div>
+          </div>
+
+          {/* Right side - Gem Bank (inside board) */}
+          <div className="shrink-0 flex flex-col items-center justify-center gap-2 border-l border-white/10 pl-3">
+            <span className="text-slate-400 text-xs">◈ Bank</span>
+            <TokenRow
+              tokens={tokens_in_bank}
+              onClickToken={isMyTurn && gameState.status === 'playing' ? handleTokenClick : undefined}
+              selectedTokens={selectedTokens}
+              size="sm"
+              showLabel={false}
+              vertical
+            />
+            {selectedTokens.length > 0 && (
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold w-full"
+                  onClick={confirmTakeTokens}
+                >
+                  Take
+                </button>
+                <button
+                  className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-[10px] font-bold w-full"
+                  onClick={() => setSelectedTokens([])}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Right opponent */}
-        <div className="flex items-center justify-center w-32">
+        <div className="flex items-center justify-center w-44">
           {opponents.length >= 3 && opponents[2] && (
             <CompactPlayerPanel
               player={opponents[2]}

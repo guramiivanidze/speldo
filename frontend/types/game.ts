@@ -24,12 +24,13 @@ export interface PlayerState {
   reserved_card_ids: number[];
   noble_ids: number[];
   prestige_points: number;
+  is_online: boolean;
 }
 
 export interface GameState {
   game_id: string;
   code: string;
-  status: 'waiting' | 'playing' | 'finished';
+  status: 'waiting' | 'playing' | 'paused' | 'finished';
   current_player_index: number;
   tokens_in_bank: Record<TokenColor, number>;
   visible_cards: Record<string, number[]>;
@@ -39,10 +40,19 @@ export interface GameState {
   winner_id: number | null;
   cards_data: Record<string, Card>;
   nobles_data: Record<string, Noble>;
+  // Pause/leave state
+  is_paused: boolean;
+  pause_remaining_seconds: number | null;
+  left_player_id: number | null;
+  player_votes: Record<string, 'wait' | 'end'>;
 }
 
 export interface WebSocketMessage {
-  type: 'game_state' | 'error';
+  type: 'game_state' | 'error' | 'player_left_survey' | 'game_resumed' | 'game_ended_by_vote' | 'game_ended_all_left' | 'all_voted_wait' | 'pause_timeout_ended';
   state?: GameState;
   message?: string;
+  left_user_id?: number;
+  left_username?: string;
+  user_id?: number;
+  username?: string;
 }

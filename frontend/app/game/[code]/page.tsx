@@ -1,11 +1,13 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useGameHeader } from '@/contexts/GameHeaderContext';
 import { useGameSocket } from '@/hooks/useGameSocket';
 import { startGame } from '@/lib/api';
 import GameBoard from '@/components/GameBoard';
+import PauseSurveyModal from '@/components/PauseSurveyModal';
 
 const GEM_COLORS_HEX = ['#f1f5f9', '#3b82f6', '#10b981', '#ef4444', '#475569', '#fde047'];
 
@@ -32,22 +34,99 @@ export default function GamePage({ params }: PageProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [startError, setStartError] = useState('');
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [notification, setNotification] = useState<string | null>(null);
+  const { setHeaderState, clearHeaderState } = useGameHeader();
 
   const {
     gameState,
     error,
     connected,
+    pauseEvent,
     takeTokens,
     reserveCard,
     buyCard,
+    leaveGame,
+    voteResponse,
+    refreshState,
     clearError,
+    clearPauseEvent,
   } = useGameSocket(user ? code : null);
+
+  // Set up header with Leave button when in game
+  const handleLeaveClick = useCallback(() => {
+    setShowLeaveConfirm(true);
+  }, []);
+
+  useEffect(() => {
+    if (gameState?.status === 'playing' || gameState?.status === 'paused') {
+      setHeaderState({
+        showLeaveButton: true,
+        gameCode: code,
+        connected,
+        onLeaveGame: handleLeaveClick,
+      });
+    } else {
+      setHeaderState({
+        showLeaveButton: false,
+        gameCode: code,
+        connected,
+        onLeaveGame: null,
+      });
+    }
+  }, [gameState?.status, code, connected, setHeaderState, handleLeaveClick]);
+
+  // Clear header state on unmount
+  useEffect(() => {
+    return () => clearHeaderState();
+  }, [clearHeaderState]);
 
   useEffect(() => {
     if (!loading && !user) {
       router.push('/');
     }
   }, [user, loading, router]);
+
+  // Periodic refresh when game is paused to update timer and check for new surveys
+  useEffect(() => {
+    if (gameState?.status !== 'paused') return;
+    
+    const interval = setInterval(() => {
+      refreshState();
+    }, 5000); // Refresh every 5 seconds when paused
+    
+    return () => clearInterval(interval);
+  }, [gameState?.status, refreshState]);
+
+  // Handle pause events
+  useEffect(() => {
+    if (!pauseEvent) return;
+    
+    if (pauseEvent.type === 'player_left') {
+      setNotification(`${pauseEvent.leftUsername} has left the game. Game paused.`);
+      setTimeout(() => setNotification(null), 5000);
+      // Refresh state to ensure we have the latest paused state
+      refreshState();
+      clearPauseEvent();
+    } else if (pauseEvent.type === 'game_resumed') {
+      setNotification(`${pauseEvent.rejoinedUsername} has rejoined! Game resumed.`);
+      setTimeout(() => setNotification(null), 3000);
+      clearPauseEvent();
+    } else if (pauseEvent.type === 'game_ended_vote') {
+      setNotification('Game ended by vote.');
+      clearPauseEvent();
+    } else if (pauseEvent.type === 'game_ended_all_left') {
+      setNotification('All players left. Game ended.');
+      clearPauseEvent();
+    } else if (pauseEvent.type === 'all_voted_wait') {
+      setNotification('All players voted to wait. Survey will appear again in 1 minute.');
+      setTimeout(() => setNotification(null), 3000);
+      clearPauseEvent();
+    } else if (pauseEvent.type === 'pause_timeout') {
+      setNotification('Pause timeout expired. Game ended.');
+      clearPauseEvent();
+    }
+  }, [pauseEvent, clearPauseEvent, refreshState]);
 
   async function handleStart() {
     setStartError('');
@@ -58,6 +137,12 @@ export default function GamePage({ params }: PageProps) {
     }
   }
 
+  function handleLeaveGame() {
+    leaveGame();
+    setShowLeaveConfirm(false);
+    router.push('/');
+  }
+
   if (loading || !user) {
     return (
       <div className="flex justify-center items-center min-h-[60vh]">
@@ -66,40 +151,80 @@ export default function GamePage({ params }: PageProps) {
     );
   }
 
+  // Get user's current vote
+  const myVote = gameState?.player_votes?.[String(user.id)] || null;
+  const leftPlayer = gameState?.players.find(p => p.id === gameState?.left_player_id);
+
   // Active game - full viewport, no container
-  if (gameState?.status === 'playing') {
+  if (gameState?.status === 'playing' || gameState?.status === 'paused') {
     return (
-      <div className="fixed inset-0">
-        {/* Floating top bar */}
-        <div className="absolute top-2 left-2 z-10 flex items-center gap-2 bg-slate-900/80 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-slate-700/50">
-          <button
-            className="text-xs text-slate-500 hover:text-indigo-300 transition-colors font-semibold"
-            onClick={() => router.push('/')}
-          >
-            ← Exit
-          </button>
-          <div className="h-3 w-px bg-slate-700" />
-          <span className="font-mono font-bold text-slate-300 text-xs">{code}</span>
-          <div
-            className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-400' : 'bg-red-400'}`}
-          />
-        </div>
-        
+      <div className="fixed inset-0 top-[53px]">
+        {/* Notification toast */}
+        {notification && (
+          <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-40 
+                          px-4 py-2 bg-emerald-500/20 border border-emerald-500/40 
+                          rounded-lg text-emerald-300 text-sm">
+            {notification}
+          </div>
+        )}
+
         {/* Error floating */}
         {error && (
-          <div className="absolute top-2 right-2 z-10 px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+          <div className="absolute top-2 right-2 z-30 px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
             <span>{error}</span>
             <button onClick={clearError} className="text-red-400 hover:text-red-200 font-bold">✕</button>
           </div>
         )}
 
-        <GameBoard
-          gameState={gameState}
-          myUserId={user.id}
-          onTakeTokens={takeTokens}
-          onReserveCard={reserveCard}
-          onBuyCard={buyCard}
-        />
+        {/* Leave confirmation modal */}
+        {showLeaveConfirm && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+              <h2 className="text-lg font-bold text-slate-100 mb-2">Leave Game?</h2>
+              <p className="text-slate-400 text-sm mb-6">
+                The game will be paused for 5 minutes. Other players can vote to end the game or wait for you to rejoin.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowLeaveConfirm(false)}
+                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm
+                    bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all"
+                >
+                  Stay
+                </button>
+                <button
+                  onClick={handleLeaveGame}
+                  className="flex-1 py-2.5 rounded-xl font-semibold text-sm
+                    bg-red-600 hover:bg-red-500 text-white transition-all"
+                >
+                  Leave
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Pause survey modal */}
+        {gameState?.status === 'paused' && leftPlayer && (
+          <PauseSurveyModal
+            leftUsername={leftPlayer.username}
+            pauseRemainingSeconds={gameState.pause_remaining_seconds}
+            myVote={myVote as 'wait' | 'end' | null}
+            allVotes={gameState.player_votes}
+            players={gameState.players}
+            onVote={voteResponse}
+          />
+        )}
+
+        <div className="absolute inset-0 z-0">
+          <GameBoard
+            gameState={gameState}
+            myUserId={user.id}
+            onTakeTokens={takeTokens}
+            onReserveCard={reserveCard}
+            onBuyCard={buyCard}
+          />
+        </div>
       </div>
     );
   }

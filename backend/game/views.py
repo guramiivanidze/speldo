@@ -1,11 +1,13 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 from .models import Game, GamePlayer
 from .game_logic import (
     generate_code, initial_bank,
-    initial_decks_and_nobles, CARD_BY_ID, NOBLE_BY_ID,
+    initial_decks_and_nobles,
 )
 from .consumers import serialize_game_state
 
@@ -56,6 +58,19 @@ class GameJoinView(APIView):
             game=game, user=request.user, order=count,
             tokens={c: 0 for c in ['white', 'blue', 'green', 'red', 'black', 'gold']},
         )
+
+        # Broadcast updated game state to all connected players
+        players_with_users = list(game.players.select_related('user').order_by('order'))
+        state = serialize_game_state(game, players_with_users)
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'game_{code}',
+            {
+                'type': 'game_state_update',
+                'state': state,
+            }
+        )
+
         return Response({'message': 'Joined successfully.'})
 
 
@@ -80,6 +95,18 @@ class GameStartView(APIView):
         game.available_nobles = nobles
         game.status = Game.STATUS_PLAYING
         game.save()
+
+        # Broadcast game state to all connected players
+        players_with_users = list(game.players.select_related('user').order_by('order'))
+        state = serialize_game_state(game, players_with_users)
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f'game_{code}',
+            {
+                'type': 'game_state_update',
+                'state': state,
+            }
+        )
 
         return Response({'message': 'Game started.'})
 
