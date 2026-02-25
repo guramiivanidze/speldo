@@ -16,7 +16,7 @@ interface GameInfo {
 const GEM_COLORS_HEX = ['#f1f5f9', '#3b82f6', '#10b981', '#ef4444', '#475569', '#fde047'];
 
 export default function Home() {
-  const { user, loading, setUser } = useAuth();
+  const { user, loading, setUser, clearAuth } = useAuth();
   const router = useRouter();
 
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -210,7 +210,7 @@ export default function Home() {
         </div>
         <button
           className="text-xs text-slate-500 hover:text-red-400 transition-colors font-semibold underline underline-offset-2"
-          onClick={async () => { await logout(); setUser(null); }}
+          onClick={async () => { await logout(); clearAuth(); }}
         >
           Sign out
         </button>

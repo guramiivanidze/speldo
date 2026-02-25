@@ -1,59 +1,72 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-let cachedCsrfToken: string | null = null;
+const AUTH_TOKEN_KEY = 'speldo_auth_token';
 
-async function getCsrfToken(): Promise<string> {
-  if (cachedCsrfToken) return cachedCsrfToken;
-  
-  try {
-    const res = await fetch(`${API_BASE}/api/auth/csrf/`, { credentials: 'include' });
-    const data = await res.json();
-    const token = data.csrfToken || '';
-    cachedCsrfToken = token;
-    return token;
-  } catch {
-    return '';
+export function getStoredToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+export function setStoredToken(token: string | null) {
+  if (typeof window === 'undefined') return;
+  if (token) {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
   }
 }
 
 async function apiFetch(path: string, options: RequestInit = {}) {
-  const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(
-    (options.method || 'GET').toUpperCase()
-  );
-  const csrfToken = isWrite ? await getCsrfToken() : '';
+  const token = getStoredToken();
+  
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...options.headers as Record<string, string>,
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
   const res = await fetch(`${API_BASE}${path}`, {
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(isWrite ? { 'X-CSRFToken': csrfToken } : {}),
-      ...options.headers,
-    },
     ...options,
+    headers,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Request failed');
+  if (!res.ok) throw new Error(data.detail || data.error || 'Request failed');
   return data;
 }
 
 export async function register(username: string, password: string) {
-  return apiFetch('/api/auth/register/', {
+  const data = await apiFetch('/api/auth/register/', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   });
+  if (data.token) {
+    setStoredToken(data.token);
+  }
+  return data;
 }
 
 export async function login(username: string, password: string) {
-  return apiFetch('/api/auth/login/', {
+  const data = await apiFetch('/api/auth/login/', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   });
+  if (data.token) {
+    setStoredToken(data.token);
+  }
+  return data;
 }
 
 export async function logout() {
-  const result = await apiFetch('/api/auth/logout/', { method: 'POST' });
-  cachedCsrfToken = null; // Clear cached token on logout
-  return result;
+  try {
+    await apiFetch('/api/auth/logout/', { method: 'POST' });
+  } catch {
+    // Ignore errors on logout
+  }
+  setStoredToken(null);
+  return { message: 'Logged out.' };
 }
 
 export async function getMe() {

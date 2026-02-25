@@ -7,6 +7,11 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 
 
+def create_auth_token(user):
+    """Create a signed auth token for a user."""
+    return signing.dumps({'user_id': user.id}, salt='api-auth')
+
+
 class CsrfTokenView(APIView):
     """Return CSRF token for cross-origin requests"""
     permission_classes = [AllowAny]
@@ -38,7 +43,8 @@ class RegisterView(APIView):
             return Response({'error': 'Username already taken.'}, status=400)
         user = User.objects.create_user(username=username, password=password)
         login(request, user)
-        return Response({'id': user.id, 'username': user.username}, status=201)
+        token = create_auth_token(user)
+        return Response({'id': user.id, 'username': user.username, 'token': token}, status=201)
 
 
 class LoginView(APIView):
@@ -51,10 +57,13 @@ class LoginView(APIView):
         if user is None:
             return Response({'error': 'Invalid credentials.'}, status=400)
         login(request, user)
-        return Response({'id': user.id, 'username': user.username})
+        token = create_auth_token(user)
+        return Response({'id': user.id, 'username': user.username, 'token': token})
 
 
 class LogoutView(APIView):
+    permission_classes = [AllowAny]
+    
     def post(self, request):
         logout(request)
         return Response({'message': 'Logged out.'})

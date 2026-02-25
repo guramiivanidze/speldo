@@ -145,6 +145,7 @@ CSRF_COOKIE_HTTPONLY = False  # Allow JS to read CSRF cookie
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'accounts.authentication.SignedTokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
