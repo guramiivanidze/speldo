@@ -8,8 +8,9 @@ async function getCsrfToken(): Promise<string> {
   try {
     const res = await fetch(`${API_BASE}/api/auth/csrf/`, { credentials: 'include' });
     const data = await res.json();
-    cachedCsrfToken = data.csrfToken || '';
-    return cachedCsrfToken;
+    const token = data.csrfToken || '';
+    cachedCsrfToken = token;
+    return token;
   } catch {
     return '';
   }
