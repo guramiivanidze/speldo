@@ -94,20 +94,11 @@ else:
 # Channel layers - use Redis in production
 REDIS_URL = os.environ.get('REDIS_URL')
 if REDIS_URL:
-    # Upstash uses rediss:// (SSL) - parse and configure properly
-    import ssl
-    ssl_context = ssl.create_default_context()
-    ssl_context.check_hostname = False
-    ssl_context.verify_mode = ssl.CERT_NONE
-    
     CHANNEL_LAYERS = {
         'default': {
             'BACKEND': 'channels_redis.core.RedisChannelLayer',
             'CONFIG': {
-                'hosts': [{
-                    'address': REDIS_URL,
-                    'ssl': ssl_context if REDIS_URL.startswith('rediss://') else None,
-                }],
+                'hosts': [REDIS_URL],
             },
         },
     }
