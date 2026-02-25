@@ -94,12 +94,15 @@ else:
 # Channel layers - use Redis in production
 REDIS_URL = os.environ.get('REDIS_URL')
 if REDIS_URL:
-    # channels_redis should handle rediss:// URLs directly
+    # For Upstash SSL, use the pubsub channel layer which handles SSL better
+    # Append SSL cert requirements to skip verification
+    import ssl
+    
     CHANNEL_LAYERS = {
         'default': {
-            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'BACKEND': 'channels_redis.pubsub.RedisPubSubChannelLayer',
             'CONFIG': {
-                'hosts': [{'address': REDIS_URL}],
+                'hosts': [REDIS_URL],
             },
         },
     }
