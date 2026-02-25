@@ -1,8 +1,17 @@
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
+from django.middleware.csrf import get_token
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
+
+
+class CsrfTokenView(APIView):
+    """Return CSRF token for cross-origin requests"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({'csrfToken': get_token(request)})
 
 
 class RegisterView(APIView):

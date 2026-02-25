@@ -1,15 +1,17 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-function getCsrfToken(): string {
-  if (typeof document === 'undefined') return '';
-  const match = document.cookie.match(/csrftoken=([^;]+)/);
-  return match ? match[1] : '';
-}
+let cachedCsrfToken: string | null = null;
 
-async function ensureCsrf() {
-  // Trigger a GET request so Django sets the csrftoken cookie
-  if (!getCsrfToken()) {
-    await fetch(`${API_BASE}/api/auth/me/`, { credentials: 'include' }).catch(() => {});
+async function getCsrfToken(): Promise<string> {
+  if (cachedCsrfToken) return cachedCsrfToken;
+  
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/csrf/`, { credentials: 'include' });
+    const data = await res.json();
+    cachedCsrfToken = data.csrfToken || '';
+    return cachedCsrfToken;
+  } catch {
+    return '';
   }
 }
 
@@ -17,13 +19,13 @@ async function apiFetch(path: string, options: RequestInit = {}) {
   const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(
     (options.method || 'GET').toUpperCase()
   );
-  if (isWrite) await ensureCsrf();
+  const csrfToken = isWrite ? await getCsrfToken() : '';
 
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...(isWrite ? { 'X-CSRFToken': getCsrfToken() } : {}),
+      ...(isWrite ? { 'X-CSRFToken': csrfToken } : {}),
       ...options.headers,
     },
     ...options,
@@ -48,7 +50,9 @@ export async function login(username: string, password: string) {
 }
 
 export async function logout() {
-  return apiFetch('/api/auth/logout/', { method: 'POST' });
+  const result = await apiFetch('/api/auth/logout/', { method: 'POST' });
+  cachedCsrfToken = null; // Clear cached token on logout
+  return result;
 }
 
 export async function getMe() {
