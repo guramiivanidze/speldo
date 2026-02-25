@@ -15,6 +15,10 @@ Django==6.0.2
 django-channels==0.7.0
 django-cors-headers==4.9.0
 djangorestframework==3.16.1
+dj-database-url==2.3.0
+gunicorn==23.0.0
+whitenoise==6.8.2
+psycopg2-binary==2.9.10
 hyperlink==21.0.0
 idna==3.11
 Incremental==24.11.0
