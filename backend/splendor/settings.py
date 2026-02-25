@@ -16,6 +16,9 @@ RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+# Allow all onrender.com domains in production
+if not DEBUG:
+    ALLOWED_HOSTS.append('.onrender.com')
 
 # Frontend URL for CORS
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
