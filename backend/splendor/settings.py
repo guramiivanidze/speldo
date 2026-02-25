@@ -91,27 +91,14 @@ else:
         }
     }
 
-# Channel layers - use Redis in production
-REDIS_URL = os.environ.get('REDIS_URL')
-if REDIS_URL:
-    # For Upstash SSL, use the pubsub channel layer which handles SSL better
-    # Append SSL cert requirements to skip verification
-    import ssl
-    
-    CHANNEL_LAYERS = {
-        'default': {
-            'BACKEND': 'channels_redis.pubsub.RedisPubSubChannelLayer',
-            'CONFIG': {
-                'hosts': [REDIS_URL],
-            },
-        },
-    }
-else:
-    CHANNEL_LAYERS = {
-        'default': {
-            'BACKEND': 'channels.layers.InMemoryChannelLayer',
-        },
-    }
+# Channel layers
+# Note: InMemoryChannelLayer works for single-instance deployment
+# For multi-instance scaling, you'd need Redis with proper SSL config
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
 
 AUTH_PASSWORD_VALIDATORS = []
 
