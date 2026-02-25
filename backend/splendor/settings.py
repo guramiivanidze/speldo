@@ -130,6 +130,10 @@ CORS_ALLOWED_ORIGINS = [
 ]
 if FRONTEND_URL and FRONTEND_URL not in CORS_ALLOWED_ORIGINS:
     CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
+# Allow all onrender.com subdomains in production
+CORS_ALLOWED_ORIGIN_REGEXES = []
+if not DEBUG:
+    CORS_ALLOWED_ORIGIN_REGEXES.append(r'^https://.*\.onrender\.com$')
 CORS_ALLOW_CREDENTIALS = True
 
 # Cookie settings for cross-origin
@@ -140,6 +144,9 @@ CSRF_COOKIE_SECURE = not DEBUG
 CSRF_TRUSTED_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000']
 if FRONTEND_URL:
     CSRF_TRUSTED_ORIGINS.append(FRONTEND_URL)
+# Also trust all onrender.com subdomains in production
+if not DEBUG:
+    CSRF_TRUSTED_ORIGINS.append('https://*.onrender.com')
 CSRF_COOKIE_HTTPONLY = False  # Allow JS to read CSRF cookie
 
 REST_FRAMEWORK = {
