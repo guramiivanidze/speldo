@@ -60,6 +60,11 @@ export async function getMe() {
   return apiFetch('/api/auth/me/');
 }
 
+export async function getWebSocketToken(): Promise<string> {
+  const data = await apiFetch('/api/auth/ws-token/');
+  return data.token;
+}
+
 export async function listGames() {
   return apiFetch('/api/games/');
 }

@@ -1,6 +1,7 @@
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.middleware.csrf import get_token
+from django.core import signing
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
@@ -12,6 +13,17 @@ class CsrfTokenView(APIView):
 
     def get(self, request):
         return Response({'csrfToken': get_token(request)})
+
+
+class WebSocketTokenView(APIView):
+    """Return a signed token for WebSocket authentication"""
+
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return Response({'error': 'Not authenticated'}, status=401)
+        # Create a signed token with user ID, expires in 1 hour
+        token = signing.dumps({'user_id': request.user.id}, salt='websocket-auth')
+        return Response({'token': token})
 
 
 class RegisterView(APIView):
