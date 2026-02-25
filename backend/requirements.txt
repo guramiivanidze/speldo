@@ -18,6 +18,7 @@ dj-database-url==2.3.0
 gunicorn==23.0.0
 whitenoise==6.8.2
 psycopg2-binary==2.9.10
+Pillow==11.1.0
 hyperlink==21.0.0
 idna==3.11
 Incremental==24.11.0
