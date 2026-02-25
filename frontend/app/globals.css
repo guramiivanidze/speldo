@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary:  #0b0f1a;
+  --bg-surface:  #131929;
+  --bg-elevated: #1c2540;
+  --gold:        #f5c518;
+  --gold-dim:    #92710a;
+}
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html { color-scheme: dark; }
+
+body {
+  background: var(--bg-primary);
+  color: #e2e8f0;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Scrollbars ─────────────────────────── */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: #334155; border-radius: 4px; }
+
+/* ─── Token chip 3-D ─────────────────────── */
+.token-chip {
+  position: relative;
+  transition: transform .15s ease, box-shadow .15s ease;
+  box-shadow:
+    0 3px 0 rgba(0,0,0,.7),
+    inset 0 1px 2px rgba(255,255,255,.22),
+    inset 0 -2px 4px rgba(0,0,0,.45);
+}
+.token-chip:hover:not(:disabled):not([data-inactive]) {
+  transform: translateY(-3px);
+  box-shadow:
+    0 6px 0 rgba(0,0,0,.7),
+    inset 0 1px 2px rgba(255,255,255,.22),
+    inset 0 -2px 4px rgba(0,0,0,.45);
+}
+.token-chip.token-selected {
+  transform: translateY(-4px) scale(1.1);
+  box-shadow:
+    0 8px 0 rgba(0,0,0,.7),
+    0 0 0 3px #f5c518,
+    0 0 16px rgba(245,197,24,.45),
+    inset 0 1px 2px rgba(255,255,255,.22);
+}
+
+/* ─── Dev card ───────────────────────────── */
+.dev-card {
+  transition: transform .18s cubic-bezier(.34,1.4,.64,1), box-shadow .18s;
+  will-change: transform;
+}
+.dev-card:hover { transform: translateY(-5px) scale(1.04); }
+.dev-card.afford-glow {
+  box-shadow: 0 0 0 2px #22c55e, 0 0 14px rgba(34,197,94,.35);
+}
+
+/* ─── Gem orb ────────────────────────────── */
+.gem-orb {
+  position: relative;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 -4px 8px rgba(0,0,0,.45),
+    inset 0 3px 5px rgba(255,255,255,.2),
+    0 3px 10px rgba(0,0,0,.5);
+}
+.gem-orb::after {
+  content: '';
+  position: absolute;
+  top: 14%;
+  left: 18%;
+  width: 32%;
+  height: 22%;
+  border-radius: 50%;
+  background: rgba(255,255,255,.4);
+  transform: rotate(-30deg);
+}
+
+/* ─── Noble tile ─────────────────────────── */
+.noble-tile {
+  background: linear-gradient(155deg, #261d02 0%, #0e0c04 100%);
+  box-shadow:
+    0 4px 18px rgba(0,0,0,.65),
+    inset 0 0 0 1px rgba(245,197,24,.2);
+  transition: transform .18s, box-shadow .18s;
+}
+.noble-tile:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 8px 24px rgba(0,0,0,.7),
+    inset 0 0 0 1px rgba(245,197,24,.45);
+}
+
+/* ─── Glass panel ────────────────────────── */
+.glass {
+  background: rgba(19,25,41,.75);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,.07);
+}
+
+/* ─── Gold glow text ─────────────────────── */
+.gold-text {
+  color: #f5c518;
+  text-shadow: 0 0 10px rgba(245,197,24,.5);
+}
+
+/* ─── My-turn pulse border ───────────────── */
+@keyframes turn-pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(245,197,24,.55); }
+  50%      { box-shadow: 0 0 0 5px rgba(245,197,24,0); }
+}
+.turn-pulse { animation: turn-pulse 1.8s ease-in-out infinite; }
+
+/* ─── Deck stack visual ──────────────────── */
+.deck-stack {
+  position: relative;
+}
+.deck-stack::before,
+.deck-stack::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.1);
+}
+.deck-stack::before { transform: translate(3px, 3px); z-index: -1; background: rgba(255,255,255,.03); }
+.deck-stack::after  { transform: translate(6px, 6px); z-index: -2; background: rgba(255,255,255,.02); }

@@ -1,0 +1,7 @@
+#!/bin/bash
+# Start the Splendor Online backend (Django + Daphne)
+set -e
+cd "$(dirname "$0")/backend"
+source venv/bin/activate
+python manage.py migrate --run-syncdb
+daphne -b 0.0.0.0 -p 8000 splendor.asgi:application
