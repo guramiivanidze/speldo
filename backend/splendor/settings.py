@@ -94,11 +94,12 @@ else:
 # Channel layers - use Redis in production
 REDIS_URL = os.environ.get('REDIS_URL')
 if REDIS_URL:
+    # channels_redis should handle rediss:// URLs directly
     CHANNEL_LAYERS = {
         'default': {
             'BACKEND': 'channels_redis.core.RedisChannelLayer',
             'CONFIG': {
-                'hosts': [REDIS_URL],
+                'hosts': [{'address': REDIS_URL}],
             },
         },
     }
