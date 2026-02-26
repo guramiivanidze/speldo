@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameHeader } from '@/contexts/GameHeaderContext';
 import { useGameSocket } from '@/hooks/useGameSocket';
-import { startGame } from '@/lib/api';
+import { startGame, getMatchByGame } from '@/lib/api';
 import GameBoard from '@/components/GameBoard';
 import PauseSurveyModal from '@/components/PauseSurveyModal';
+import RatingChangeDisplay from '@/components/RatingChangeDisplay';
+import type { Match, Division } from '@/types/competitive';
 
 const GEM_COLORS_HEX = ['#f1f5f9', '#3b82f6', '#10b981', '#ef4444', '#475569', '#fde047'];
 
@@ -37,6 +39,10 @@ export default function GamePage({ params }: PageProps) {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const { setHeaderState, clearHeaderState } = useGameHeader();
+  
+  // Ranked match state
+  const [rankedMatch, setRankedMatch] = useState<Match | null>(null);
+  const [showRatingChange, setShowRatingChange] = useState(false);
 
   const {
     gameState,
@@ -127,6 +133,20 @@ export default function GamePage({ params }: PageProps) {
       clearPauseEvent();
     }
   }, [pauseEvent, clearPauseEvent, refreshState]);
+
+  // Check for ranked match result when game finishes
+  useEffect(() => {
+    if (gameState?.status === 'finished' && gameState.game_id && !rankedMatch) {
+      getMatchByGame(gameState.game_id)
+        .then((match) => {
+          setRankedMatch(match);
+          setShowRatingChange(true);
+        })
+        .catch(() => {
+          // Not a ranked game, ignore
+        });
+    }
+  }, [gameState?.status, gameState?.game_id, rankedMatch]);
 
   async function handleStart() {
     setStartError('');
@@ -338,6 +358,27 @@ export default function GamePage({ params }: PageProps) {
       {/* ── Finished game ─────────────────────────────── */}
       {gameState?.status === 'finished' && (
         <div className="flex flex-col gap-6">
+
+          {/* Ranked Rating Change Display */}
+          {showRatingChange && rankedMatch && user && (() => {
+            const isPlayer1 = rankedMatch.player1_username === user.username;
+            const oldRating = isPlayer1 ? rankedMatch.player1_rating_before : rankedMatch.player2_rating_before;
+            const newRating = isPlayer1 ? rankedMatch.player1_rating_after : rankedMatch.player2_rating_after;
+            const oldDivision = (isPlayer1 ? rankedMatch.player1_division_before : rankedMatch.player2_division_before) as Division;
+            const newDivision = (isPlayer1 ? rankedMatch.player1_division_after : rankedMatch.player2_division_after) as Division;
+            const won = rankedMatch.winner_username === user.username;
+            
+            return (
+              <RatingChangeDisplay
+                oldRating={oldRating}
+                newRating={newRating}
+                oldDivision={oldDivision}
+                newDivision={newDivision}
+                won={won}
+                onComplete={() => setShowRatingChange(false)}
+              />
+            );
+          })()}
 
           {/* Trophy banner */}
           <div className="glass rounded-2xl p-8 border border-amber-500/20 text-center">

@@ -104,3 +104,53 @@ export async function getGameState(code: string) {
 export async function getMyGames() {
   return apiFetch('/api/games/mine/');
 }
+
+// ─── Competitive API ───────────────────────────────────
+
+export async function getCurrentSeason() {
+  return apiFetch('/api/competitive/season/');
+}
+
+export async function getMyProfile() {
+  return apiFetch('/api/competitive/profile/');
+}
+
+export async function getPlayerProfile(username: string) {
+  return apiFetch(`/api/competitive/profile/${username}/`);
+}
+
+export async function getLeaderboard(page = 1, perPage = 50) {
+  return apiFetch(`/api/competitive/leaderboard/?page=${page}&per_page=${perPage}`);
+}
+
+export async function getLeaderboardByDivision(division: string) {
+  return apiFetch(`/api/competitive/leaderboard/${division.toLowerCase()}/`);
+}
+
+export async function joinMatchmaking() {
+  return apiFetch('/api/competitive/matchmaking/join/', { method: 'POST' });
+}
+
+export async function leaveMatchmaking() {
+  return apiFetch('/api/competitive/matchmaking/leave/', { method: 'POST' });
+}
+
+export async function getMatchmakingStatus() {
+  return apiFetch('/api/competitive/matchmaking/status/');
+}
+
+export async function getMatchHistory(page = 1, perPage = 20) {
+  return apiFetch(`/api/competitive/matches/?page=${page}&per_page=${perPage}`);
+}
+
+export async function getMatchDetail(matchId: number) {
+  return apiFetch(`/api/competitive/matches/${matchId}/`);
+}
+
+export async function getMatchByGame(gameId: string) {
+  return apiFetch(`/api/competitive/matches/by-game/${gameId}/`);
+}
+
+export async function getDivisionInfo() {
+  return apiFetch('/api/competitive/divisions/');
+}

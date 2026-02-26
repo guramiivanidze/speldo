@@ -7,6 +7,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('game.urls')),
     path('api/auth/', include('accounts.urls')),
+    path('api/competitive/', include('competitive.urls')),
 ]
 
 # Serve media files in development

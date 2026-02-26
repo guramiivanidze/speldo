@@ -1,10 +1,13 @@
 'use client';
 
+import Link from 'next/link';
 import { useGameHeader } from '@/contexts/GameHeaderContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Header() {
   const { headerState } = useGameHeader();
   const { showLeaveButton, gameCode, connected, onLeaveGame } = headerState;
+  const { user } = useAuth();
 
   return (
     <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-3 bg-[#0b0f1a]/80 backdrop-blur-md border-b border-white/5">
@@ -15,12 +18,24 @@ export default function Header() {
             <div key={i} className="w-2 h-2 rounded-full" style={{ background: c, opacity: .8 }} />
           ))}
         </div>
-        <h1 className="text-base font-black tracking-widest uppercase gold-text">
+        <Link href="/" className="text-base font-black tracking-widest uppercase gold-text hover:opacity-80 transition-opacity">
           Splendor
-        </h1>
+        </Link>
         <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider hidden sm:block">
           Online
         </span>
+        
+        {/* Navigation links - show when logged in and not in a game */}
+        {user && !gameCode && (
+          <nav className="hidden sm:flex items-center gap-4 ml-6">
+            <Link href="/leaderboard" className="text-xs font-semibold text-slate-400 hover:text-amber-400 transition-colors">
+              Leaderboard
+            </Link>
+            <Link href="/profile" className="text-xs font-semibold text-slate-400 hover:text-amber-400 transition-colors">
+              My Profile
+            </Link>
+          </nav>
+        )}
       </div>
 
       {/* Right side - game controls */}

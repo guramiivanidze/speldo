@@ -7,12 +7,16 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'splendor.settings')
 
 django.setup()
 
-from game.routing import websocket_urlpatterns
+from game.routing import websocket_urlpatterns as game_ws_urlpatterns
+from competitive.routing import websocket_urlpatterns as competitive_ws_urlpatterns
 from accounts.middleware import TokenAuthMiddleware
+
+# Combine all WebSocket URL patterns
+all_websocket_urlpatterns = game_ws_urlpatterns + competitive_ws_urlpatterns
 
 application = ProtocolTypeRouter({
     'http': get_asgi_application(),
     'websocket': TokenAuthMiddleware(
-        URLRouter(websocket_urlpatterns)
+        URLRouter(all_websocket_urlpatterns)
     ),
 })
