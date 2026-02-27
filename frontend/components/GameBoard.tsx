@@ -7,6 +7,7 @@ import NobleDisplay from './NobleDisplay';
 import { TokenRow } from './TokenDisplay';
 import CompactPlayerPanel from './CompactPlayerPanel';
 import PlayerArea from './PlayerArea';
+import DiscardTokensModal from './DiscardTokensModal';
 import { GEM_COLORS, TOKEN_LABEL } from '@/lib/colors';
 import useIsMobile from '@/hooks/useIsMobile';
 import MobileGameBoard from './mobile/MobileGameBoard';
@@ -17,6 +18,7 @@ interface GameBoardProps {
   onTakeTokens: (colors: string[]) => void;
   onReserveCard: (cardId?: number, level?: number) => void;
   onBuyCard: (cardId: number) => void;
+  onDiscardTokens: (tokens: Record<string, number>) => void;
 }
 
 const LEVEL_DOT: Record<string, string> = { '3': 'bg-red-400', '2': 'bg-yellow-400', '1': 'bg-emerald-400' };
@@ -27,6 +29,7 @@ export default function GameBoard({
   onTakeTokens,
   onReserveCard,
   onBuyCard,
+  onDiscardTokens,
 }: GameBoardProps) {
   const isMobile = useIsMobile();
   const [selectedTokens, setSelectedTokens] = useState<TokenColor[]>([]);
@@ -40,6 +43,7 @@ export default function GameBoard({
         onTakeTokens={onTakeTokens}
         onReserveCard={onReserveCard}
         onBuyCard={onBuyCard}
+        onDiscardTokens={onDiscardTokens}
       />
     );
   }
@@ -48,6 +52,9 @@ export default function GameBoard({
   const isMyTurn = currentPlayer?.id === myUserId;
   const me = gameState.players.find((p) => p.id === myUserId);
   const canReserveMore = me ? me.reserved_card_ids.length < 3 : false;
+
+  // Check if I need to discard tokens (pending_discard is true and it's my turn)
+  const showDiscardModal = gameState.pending_discard && isMyTurn && me;
 
   const { cards_data, nobles_data, visible_cards, deck_counts, tokens_in_bank, available_nobles } = gameState;
 
@@ -338,6 +345,15 @@ export default function GameBoard({
         {/* Bottom-right corner */}
         <div />
       </div>
+
+      {/* Discard tokens modal */}
+      {showDiscardModal && me && (
+        <DiscardTokensModal
+          playerTokens={me.tokens}
+          discardCount={gameState.pending_discard_count}
+          onDiscard={onDiscardTokens}
+        />
+      )}
     </div>
   );
 }

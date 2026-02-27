@@ -24,7 +24,11 @@ SURVEY_INTERVAL_MINUTES = 1
 
 def serialize_game_state(game, players):
     players_data = []
+    current_player_tokens = {}
     for gp in players:
+        player_tokens = gp.tokens if isinstance(gp.tokens, dict) else {}
+        if gp.order == game.current_player_index:
+            current_player_tokens = player_tokens
         players_data.append({
             'id': gp.user.id,
             'username': gp.user.username,
@@ -50,6 +54,11 @@ def serialize_game_state(game, players):
     cards_data = {str(c['id']): c for c in get_all_cards()}
     nobles_data = {str(n['id']): n for n in get_all_nobles()}
 
+    # Check if current player needs to discard tokens (has >10)
+    current_player_token_count = sum(current_player_tokens.values()) if current_player_tokens else 0
+    pending_discard = current_player_token_count > 10
+    pending_discard_count = max(0, current_player_token_count - 10) if pending_discard else 0
+
     return {
         'game_id': str(game.id),
         'code': game.code,
@@ -69,6 +78,9 @@ def serialize_game_state(game, players):
         'pause_remaining_seconds': pause_remaining_seconds,
         'left_player_id': game.left_player_id,
         'player_votes': game.player_votes,
+        # Token discard state
+        'pending_discard': pending_discard,
+        'pending_discard_count': pending_discard_count,
     }
 
 
@@ -597,24 +609,32 @@ class GameConsumer(AsyncWebsocketConsumer):
                     game = Game.objects.select_for_update().get(code=self.game_code)
                     players = list(game.players.select_related('user').order_by('order'))
                     if game.status != Game.STATUS_PLAYING:
-                        return "Game is not in progress."
+                        return "Game is not in progress.", False
                     current_gp = self._get_current_player(game, players)
                     if current_gp is None or current_gp.user != self.user:
-                        return "Not your turn."
+                        return "Not your turn.", False
                     game_data = self._game_data_from_game(game)
                     player_data = self._player_data_from_gp(current_gp)
 
-                    new_gd, new_pd, error = apply_take_tokens(game_data, player_data, colors)
+                    new_gd, new_pd, error, needs_discard = apply_take_tokens(game_data, player_data, colors)
                     if error:
-                        return error
+                        return error, False
 
                     self._save_state(game, current_gp, new_gd, new_pd)
-                    self._post_action(game, current_gp, players, new_gd, new_pd)
-                    return None
+                    
+                    # Only advance turn if player doesn't need to discard
+                    if not needs_discard:
+                        self._post_action(game, current_gp, players, new_gd, new_pd)
+                    else:
+                        # Just save without advancing turn
+                        game.save()
+                        current_gp.save()
+                    
+                    return None, needs_discard
             except Game.DoesNotExist:
-                return "Game not found."
+                return "Game not found.", False
 
-        error = await _db()
+        error, needs_discard = await _db()
         if error:
             await self.send_error(error)
         else:
@@ -632,23 +652,28 @@ class GameConsumer(AsyncWebsocketConsumer):
                     players = list(game.players.select_related('user').order_by('order'))
                     current_gp = self._get_current_player(game, players)
                     if current_gp is None or current_gp.user != self.user:
-                        return "Not your turn."
+                        return "Not your turn.", True
                     game_data = self._game_data_from_game(game)
                     player_data = self._player_data_from_gp(current_gp)
 
-                    new_gd, new_pd, error = apply_discard_tokens(game_data, player_data, tokens_to_discard)
+                    new_gd, new_pd, error, still_needs_discard = apply_discard_tokens(game_data, player_data, tokens_to_discard)
                     if error:
-                        return error
+                        return error, True
 
                     self._save_state(game, current_gp, new_gd, new_pd)
-                    # No turn advance on discard; waiting for more tokens
-                    game.save()
-                    current_gp.save()
-                    return None
+                    
+                    # Advance turn only when player is at or below 10 tokens
+                    if not still_needs_discard:
+                        self._post_action(game, current_gp, players, new_gd, new_pd)
+                    else:
+                        game.save()
+                        current_gp.save()
+                    
+                    return None, still_needs_discard
             except Game.DoesNotExist:
-                return "Game not found."
+                return "Game not found.", True
 
-        error = await _db()
+        error, still_needs_discard = await _db()
         if error:
             await self.send_error(error)
         else:
@@ -666,26 +691,34 @@ class GameConsumer(AsyncWebsocketConsumer):
                     game = Game.objects.select_for_update().get(code=self.game_code)
                     players = list(game.players.select_related('user').order_by('order'))
                     if game.status != Game.STATUS_PLAYING:
-                        return "Game is not in progress."
+                        return "Game is not in progress.", False
                     current_gp = self._get_current_player(game, players)
                     if current_gp is None or current_gp.user != self.user:
-                        return "Not your turn."
+                        return "Not your turn.", False
                     game_data = self._game_data_from_game(game)
                     player_data = self._player_data_from_gp(current_gp)
 
-                    new_gd, new_pd, reserved_id, error = apply_reserve_card(
+                    new_gd, new_pd, reserved_id, error, needs_discard = apply_reserve_card(
                         game_data, player_data, card_id=card_id, level=level
                     )
                     if error:
-                        return error
+                        return error, False
 
                     self._save_state(game, current_gp, new_gd, new_pd)
-                    self._post_action(game, current_gp, players, new_gd, new_pd)
-                    return None
+                    
+                    # Only advance turn if player doesn't need to discard
+                    if not needs_discard:
+                        self._post_action(game, current_gp, players, new_gd, new_pd)
+                    else:
+                        # Just save without advancing turn
+                        game.save()
+                        current_gp.save()
+                    
+                    return None, needs_discard
             except Game.DoesNotExist:
-                return "Game not found."
+                return "Game not found.", False
 
-        error = await _db()
+        error, needs_discard = await _db()
         if error:
             await self.send_error(error)
         else:

@@ -50,6 +50,7 @@ export default function GamePage({ params }: PageProps) {
     connected,
     pauseEvent,
     takeTokens,
+    discardTokens,
     reserveCard,
     buyCard,
     leaveGame,
@@ -243,6 +244,7 @@ export default function GamePage({ params }: PageProps) {
             onTakeTokens={takeTokens}
             onReserveCard={reserveCard}
             onBuyCard={buyCard}
+            onDiscardTokens={discardTokens}
           />
         </div>
       </div>
@@ -481,6 +483,7 @@ export default function GamePage({ params }: PageProps) {
             onTakeTokens={() => {}}
             onReserveCard={() => {}}
             onBuyCard={() => {}}
+            onDiscardTokens={() => {}}
           />
         </div>
       )}

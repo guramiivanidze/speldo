@@ -10,6 +10,7 @@ import MobileBoardView from './MobileBoardView';
 import MobilePlayerView from './MobilePlayerView';
 import MobileOpponentsView from './MobileOpponentsView';
 import MobileTokenSelector from './MobileTokenSelector';
+import DiscardTokensModal from '../DiscardTokensModal';
 
 type MobileTab = 'board' | 'me' | 'opponents';
 
@@ -19,6 +20,7 @@ interface MobileGameBoardProps {
   onTakeTokens: (colors: string[]) => void;
   onReserveCard: (cardId?: number, level?: number) => void;
   onBuyCard: (cardId: number) => void;
+  onDiscardTokens: (tokens: Record<string, number>) => void;
 }
 
 export default function MobileGameBoard({
@@ -27,6 +29,7 @@ export default function MobileGameBoard({
   onTakeTokens,
   onReserveCard,
   onBuyCard,
+  onDiscardTokens,
 }: MobileGameBoardProps) {
   const [activeTab, setActiveTab] = useState<MobileTab>('board');
   const [showTokenSelector, setShowTokenSelector] = useState(false);
@@ -37,6 +40,9 @@ export default function MobileGameBoard({
   const me = gameState.players.find((p) => p.id === myUserId);
   const opponents = gameState.players.filter((p) => p.id !== myUserId);
   const canReserveMore = me ? me.reserved_card_ids.length < 3 : false;
+
+  // Check if I need to discard tokens
+  const showDiscardModal = gameState.pending_discard && isMyTurn && me;
 
   const { cards_data, nobles_data, visible_cards, deck_counts, tokens_in_bank, available_nobles } = gameState;
 
@@ -165,6 +171,15 @@ export default function MobileGameBoard({
           onConfirm={handleConfirmTokens}
           onCancel={handleCancelTokens}
           disabledColors={disabledTokenColors}
+        />
+      )}
+
+      {/* Discard Tokens Modal */}
+      {showDiscardModal && me && (
+        <DiscardTokensModal
+          playerTokens={me.tokens}
+          discardCount={gameState.pending_discard_count}
+          onDiscard={onDiscardTokens}
         />
       )}
     </div>

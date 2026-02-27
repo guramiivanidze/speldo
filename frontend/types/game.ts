@@ -49,6 +49,9 @@ export interface GameState {
   pause_remaining_seconds: number | null;
   left_player_id: number | null;
   player_votes: Record<string, 'wait' | 'end'>;
+  // Token discard state
+  pending_discard: boolean;
+  pending_discard_count: number;
 }
 
 export interface WebSocketMessage {

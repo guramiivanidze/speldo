@@ -163,7 +163,8 @@ def apply_take_tokens(game_data, player_data, colors_to_take):
     """
     colors_to_take: list of color strings.
     Either 3 different colors OR 2 of same (if bank has >=4).
-    Returns (updated_game_data, updated_player_data, error_str)
+    Returns (updated_game_data, updated_player_data, error_str, needs_discard)
+    needs_discard is True if player now has >10 tokens and must discard.
     """
     bank = dict(game_data['tokens_in_bank'])
     ptokens = dict(player_data['tokens'])
@@ -171,58 +172,61 @@ def apply_take_tokens(game_data, player_data, colors_to_take):
     if len(colors_to_take) == 2 and colors_to_take[0] == colors_to_take[1]:
         color = colors_to_take[0]
         if bank.get(color, 0) < 4:
-            return None, None, "Need at least 4 tokens of that color to take 2."
+            return None, None, "Need at least 4 tokens of that color to take 2.", False
         bank[color] -= 2
         ptokens[color] = ptokens.get(color, 0) + 2
     elif len(colors_to_take) == 3 and len(set(colors_to_take)) == 3:
         for c in colors_to_take:
             if bank.get(c, 0) < 1:
-                return None, None, f"No {c} tokens in bank."
+                return None, None, f"No {c} tokens in bank.", False
             bank[c] -= 1
             ptokens[c] = ptokens.get(c, 0) + 1
     else:
-        return None, None, "Invalid token selection."
+        return None, None, "Invalid token selection.", False
 
     total = sum(ptokens.values())
-    if total > 10:
-        return None, None, f"Would exceed 10 tokens (have {total})."
+    needs_discard = total > 10
 
     game_data = dict(game_data)
     game_data['tokens_in_bank'] = bank
     player_data = dict(player_data)
     player_data['tokens'] = ptokens
-    return game_data, player_data, None
+    return game_data, player_data, None, needs_discard
 
 
 def apply_discard_tokens(game_data, player_data, tokens_to_discard):
-    """Discard tokens to bring player total to <=10."""
+    """
+    Discard tokens to bring player total to <=10.
+    Returns (updated_game_data, updated_player_data, error_str, still_needs_discard)
+    """
     bank = dict(game_data['tokens_in_bank'])
     ptokens = dict(player_data['tokens'])
 
     for color, amount in tokens_to_discard.items():
         if ptokens.get(color, 0) < amount:
-            return None, None, f"Don't have {amount} {color} tokens."
+            return None, None, f"Don't have {amount} {color} tokens.", True
         ptokens[color] -= amount
         bank[color] = bank.get(color, 0) + amount
 
-    if sum(ptokens.values()) > 10:
-        return None, None, "Still over 10 tokens."
+    total = sum(ptokens.values())
+    still_needs_discard = total > 10
 
     game_data = dict(game_data)
     game_data['tokens_in_bank'] = bank
     player_data = dict(player_data)
     player_data['tokens'] = ptokens
-    return game_data, player_data, None
+    return game_data, player_data, None, still_needs_discard
 
 
 def apply_reserve_card(game_data, player_data, card_id=None, level=None):
     """
     Reserve a face-up card (card_id given) or top of deck (level given).
-    Returns (updated_game_data, updated_player_data, reserved_card_id, error_str)
+    Returns (updated_game_data, updated_player_data, reserved_card_id, error_str, needs_discard)
+    needs_discard is True if player now has >10 tokens and must discard.
     """
     reserved = list(player_data['reserved_card_ids'])
     if len(reserved) >= 3:
-        return None, None, None, "Already have 3 reserved cards."
+        return None, None, None, "Already have 3 reserved cards.", False
 
     visible = {k: list(v) for k, v in game_data['visible_cards'].items()}
     decks = {k: list(v) for k, v in game_data['decks'].items()}
@@ -241,23 +245,24 @@ def apply_reserve_card(game_data, player_data, card_id=None, level=None):
                 visible[lvl] = cards
                 break
         if found_level is None:
-            return None, None, None, "Card not visible on table."
+            return None, None, None, "Card not visible on table.", False
     else:
         # top of deck
         lvl = str(level)
         if not decks.get(lvl):
-            return None, None, None, f"Level {level} deck is empty."
+            return None, None, None, f"Level {level} deck is empty.", False
         card_id = decks[lvl].pop(0)
         decks[lvl] = decks[lvl]
 
     reserved.append(card_id)
 
-    # Give gold if available AND player won't exceed 10 tokens
-    # Per Splendor rules: if player already has 10 tokens, they don't take gold
-    current_token_count = sum(ptokens.values())
-    if bank.get('gold', 0) > 0 and current_token_count < 10:
+    # Give gold if available (player must discard if this puts them over 10)
+    if bank.get('gold', 0) > 0:
         bank['gold'] -= 1
         ptokens['gold'] = ptokens.get('gold', 0) + 1
+
+    total = sum(ptokens.values())
+    needs_discard = total > 10
 
     game_data = dict(game_data)
     game_data['visible_cards'] = visible
@@ -266,7 +271,7 @@ def apply_reserve_card(game_data, player_data, card_id=None, level=None):
     player_data = dict(player_data)
     player_data['tokens'] = ptokens
     player_data['reserved_card_ids'] = reserved
-    return game_data, player_data, card_id, None
+    return game_data, player_data, card_id, None, needs_discard
 
 
 def apply_buy_card(game_data, player_data, card_id):
