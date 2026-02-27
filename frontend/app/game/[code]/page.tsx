@@ -37,6 +37,7 @@ export default function GamePage({ params }: PageProps) {
   const router = useRouter();
   const [startError, setStartError] = useState('');
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const { setHeaderState, clearHeaderState } = useGameHeader();
   
@@ -119,6 +120,10 @@ export default function GamePage({ params }: PageProps) {
       setNotification(`${pauseEvent.rejoinedUsername} has rejoined! Game resumed.`);
       setTimeout(() => setNotification(null), 3000);
       clearPauseEvent();
+    } else if (pauseEvent.type === 'player_rejoined') {
+      setNotification(`${pauseEvent.rejoinedUsername} has rejoined! Waiting for other players...`);
+      setTimeout(() => setNotification(null), 4000);
+      clearPauseEvent();
     } else if (pauseEvent.type === 'game_ended_vote') {
       setNotification('Game ended by vote.');
       clearPauseEvent();
@@ -159,8 +164,9 @@ export default function GamePage({ params }: PageProps) {
   }
 
   function handleLeaveGame() {
-    leaveGame();
+    setIsLeaving(true);
     setShowLeaveConfirm(false);
+    leaveGame();
     router.push('/');
   }
 
@@ -174,7 +180,6 @@ export default function GamePage({ params }: PageProps) {
 
   // Get user's current vote
   const myVote = gameState?.player_votes?.[String(user.id)] || null;
-  const leftPlayer = gameState?.players.find(p => p.id === gameState?.left_player_id);
 
   // Active game - full viewport, no container
   if (gameState?.status === 'playing' || gameState?.status === 'paused') {
@@ -197,9 +202,9 @@ export default function GamePage({ params }: PageProps) {
           </div>
         )}
 
-        {/* Leave confirmation modal */}
+        {/* Leave confirmation modal - higher z-index to show above pause modal */}
         {showLeaveConfirm && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60]">
             <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl">
               <h2 className="text-lg font-bold text-slate-100 mb-2">Leave Game?</h2>
               <p className="text-slate-400 text-sm mb-6">
@@ -226,9 +231,8 @@ export default function GamePage({ params }: PageProps) {
         )}
 
         {/* Pause survey modal */}
-        {gameState?.status === 'paused' && leftPlayer && (
+        {gameState?.status === 'paused' && !isLeaving && (
           <PauseSurveyModal
-            leftUsername={leftPlayer.username}
             pauseRemainingSeconds={gameState.pause_remaining_seconds}
             myVote={myVote as 'wait' | 'end' | null}
             allVotes={gameState.player_votes}

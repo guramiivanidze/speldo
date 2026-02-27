@@ -337,6 +337,7 @@ export default function GameBoard({
                     ? (cid) => onBuyCard(cid)
                     : undefined
                 }
+                canAffordCard={canAfford}
               />
             </div>
           )}

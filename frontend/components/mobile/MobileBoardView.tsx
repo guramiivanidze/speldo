@@ -196,7 +196,7 @@ export default function MobileBoardView({
                         </div>
 
                         {/* Cards - Horizontal scroll */}
-                        <div className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
+                        <div className="flex gap-2 overflow-x-auto py-1 px-1 -mx-1 snap-x snap-mandatory scrollbar-hide">
                             {(visibleCards[level] || []).map((cardId) => {
                                 const card = cardsData[String(cardId)];
                                 if (!card) return null;

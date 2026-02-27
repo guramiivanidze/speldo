@@ -55,7 +55,7 @@ export interface GameState {
 }
 
 export interface WebSocketMessage {
-  type: 'game_state' | 'error' | 'player_left_survey' | 'game_resumed' | 'game_ended_by_vote' | 'game_ended_all_left' | 'all_voted_wait' | 'pause_timeout_ended';
+  type: 'game_state' | 'error' | 'player_left_survey' | 'game_resumed' | 'player_rejoined' | 'game_ended_by_vote' | 'game_ended_all_left' | 'all_voted_wait' | 'pause_timeout_ended';
   state?: GameState;
   message?: string;
   left_user_id?: number;

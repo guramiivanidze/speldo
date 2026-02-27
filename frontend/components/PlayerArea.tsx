@@ -13,6 +13,7 @@ interface PlayerAreaProps {
   cardsData: Record<string, Card>;
   noblesData: Record<string, Noble>;
   onBuyReserved?: (cardId: number) => void;
+  canAffordCard?: (cardId: number) => boolean;
 }
 
 export default function PlayerArea({
@@ -22,6 +23,7 @@ export default function PlayerArea({
   cardsData,
   noblesData,
   onBuyReserved,
+  canAffordCard,
 }: PlayerAreaProps) {
   const bonuses: Record<string, number> = {};
   for (const cid of player.purchased_card_ids) {
@@ -179,7 +181,7 @@ export default function PlayerArea({
                     <CardDisplay
                       card={card}
                       onBuy={onBuyReserved ? () => onBuyReserved(cid) : undefined}
-                      canBuy={!!onBuyReserved}
+                      canBuy={!!onBuyReserved && (canAffordCard ? canAffordCard(cid) : false)}
                       showActions={!!onBuyReserved}
                       compact
                     />

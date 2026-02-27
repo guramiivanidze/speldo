@@ -227,6 +227,19 @@ body {
   animation: mobile-turn-pulse 1.5s ease-in-out infinite;
 }
 
+/* Pulse green animation for affordable reserved card notification */
+@keyframes pulse-green {
+  0%, 100% { 
+    background-color: transparent;
+  }
+  50% { 
+    background-color: rgba(52, 211, 153, 0.2);
+  }
+}
+.animate-pulse-green {
+  animation: pulse-green 1.5s ease-in-out infinite;
+}
+
 /* Safe area padding for notched phones */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .safe-area-bottom {

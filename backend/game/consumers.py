@@ -2,6 +2,7 @@
 WebSocket consumer for Splendor game.
 """
 import json
+import logging
 from datetime import timedelta
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
@@ -16,6 +17,9 @@ from .game_logic import (
     apply_noble_visit, check_nobles,
     check_end_condition, determine_winner,
 )
+
+# Configure game action logger
+logger = logging.getLogger('game.actions')
 
 # Pause timeout constants
 PAUSE_TIMEOUT_MINUTES = 5
@@ -149,16 +153,21 @@ class GameConsumer(AsyncWebsocketConsumer):
                                 game.save()
                                 return 'timeout_ended'
                         
-                        # If game was paused because this player left, resume
-                        if game.status == Game.STATUS_PAUSED and game.left_player_id == self.user.id:
-                            game.status = Game.STATUS_PLAYING
-                            game.paused_at = None
-                            game.pause_expires_at = None
-                            game.left_player_id = None
-                            game.player_votes = {}
-                            game.last_survey_at = None
-                            game.save()
-                            return 'resumed'
+                        # If game was paused, check if all players are now online
+                        if game.status == Game.STATUS_PAUSED:
+                            offline_count = game.players.filter(is_online=False).count()
+                            if offline_count == 0:
+                                # All players are back - resume game
+                                game.status = Game.STATUS_PLAYING
+                                game.paused_at = None
+                                game.pause_expires_at = None
+                                game.left_player_id = None
+                                game.player_votes = {}
+                                game.last_survey_at = None
+                                game.save()
+                                return 'resumed'
+                            # Some players still offline - just notify about rejoin
+                            return 'player_rejoined' if was_offline else None
                         return 'online' if was_offline else None
                     return None
             except Game.DoesNotExist:
@@ -178,6 +187,13 @@ class GameConsumer(AsyncWebsocketConsumer):
                 {'type': 'game_resumed', 'user_id': self.user.id, 'username': self.user.username}
             )
             await self.send_game_state()
+        elif result == 'player_rejoined':
+            # A player rejoined but others are still offline - notify and update state
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {'type': 'player_rejoined', 'user_id': self.user.id, 'username': self.user.username}
+            )
+            await self.send_game_state()
         elif result == 'online':
             await self.send_game_state()
 
@@ -194,6 +210,26 @@ class GameConsumer(AsyncWebsocketConsumer):
             'username': event['username'],
         }))
         # Each consumer sends the updated game state to their client
+        game, players = await self.get_game_and_players()
+        if game:
+            @database_sync_to_async
+            def _serialize():
+                return serialize_game_state(game, players)
+            
+            state = await _serialize()
+            await self.send(text_data=json.dumps({
+                'type': 'game_state',
+                'state': state,
+            }))
+
+    async def player_rejoined(self, event):
+        # Send notification that a player rejoined (but game still paused)
+        await self.send(text_data=json.dumps({
+            'type': 'player_rejoined',
+            'user_id': event['user_id'],
+            'username': event['username'],
+        }))
+        # Update game state for all clients
         game, players = await self.get_game_and_players()
         if game:
             @database_sync_to_async
@@ -227,6 +263,12 @@ class GameConsumer(AsyncWebsocketConsumer):
                     player.left_at = timezone.now()
                     player.save()
                     
+                    # Remove this player's vote if they had one
+                    votes = dict(game.player_votes)
+                    if str(self.user.id) in votes:
+                        del votes[str(self.user.id)]
+                        game.player_votes = votes
+                    
                     # Check if all players have left
                     online_players = game.players.filter(is_online=True).count()
                     
@@ -236,7 +278,12 @@ class GameConsumer(AsyncWebsocketConsumer):
                         game.save()
                         return 'game_ended'
                     
-                    # Pause the game
+                    # If game is already paused, just update state and notify
+                    if game.status == Game.STATUS_PAUSED:
+                        game.save()
+                        return {'additional_leave': True, 'user_id': self.user.id, 'username': self.user.username}
+                    
+                    # Pause the game (first player leaving)
                     game.status = Game.STATUS_PAUSED
                     game.paused_at = timezone.now()
                     game.pause_expires_at = timezone.now() + timedelta(minutes=PAUSE_TIMEOUT_MINUTES)
@@ -259,7 +306,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                 )
             else:
                 await self.send_error(result)
-        elif isinstance(result, dict) and result.get('paused'):
+        elif isinstance(result, dict) and (result.get('paused') or result.get('additional_leave')):
             # Notify all players about pause and show survey
             await self.channel_layer.group_send(
                 self.room_group_name,
@@ -616,9 +663,26 @@ class GameConsumer(AsyncWebsocketConsumer):
                     game_data = self._game_data_from_game(game)
                     player_data = self._player_data_from_gp(current_gp)
 
+                    # Log before action
+                    logger.info(
+                        "[TAKE_TOKENS] Game=%s User=%s | BEFORE | Colors=%s | Bank=%s | PlayerTokens=%s (total=%d)",
+                        self.game_code, self.user.username, colors,
+                        game_data['tokens_in_bank'], player_data['tokens'],
+                        sum(player_data['tokens'].values())
+                    )
+
                     new_gd, new_pd, error, needs_discard = apply_take_tokens(game_data, player_data, colors)
                     if error:
+                        logger.warning("[TAKE_TOKENS] Game=%s User=%s | ERROR: %s", self.game_code, self.user.username, error)
                         return error, False
+
+                    # Log after action
+                    logger.info(
+                        "[TAKE_TOKENS] Game=%s User=%s | AFTER | Bank=%s | PlayerTokens=%s (total=%d) | NeedsDiscard=%s",
+                        self.game_code, self.user.username,
+                        new_gd['tokens_in_bank'], new_pd['tokens'],
+                        sum(new_pd['tokens'].values()), needs_discard
+                    )
 
                     self._save_state(game, current_gp, new_gd, new_pd)
                     
@@ -698,11 +762,32 @@ class GameConsumer(AsyncWebsocketConsumer):
                     game_data = self._game_data_from_game(game)
                     player_data = self._player_data_from_gp(current_gp)
 
+                    # Log before action
+                    logger.info(
+                        "[RESERVE_CARD] Game=%s User=%s | BEFORE | CardID=%s Level=%s | BankGold=%d | PlayerGold=%d | PlayerTokens=%s (total=%d) | Reserved=%s",
+                        self.game_code, self.user.username, card_id, level,
+                        game_data['tokens_in_bank'].get('gold', 0),
+                        player_data['tokens'].get('gold', 0),
+                        player_data['tokens'], sum(player_data['tokens'].values()),
+                        player_data['reserved_card_ids']
+                    )
+
                     new_gd, new_pd, reserved_id, error, needs_discard = apply_reserve_card(
                         game_data, player_data, card_id=card_id, level=level
                     )
                     if error:
+                        logger.warning("[RESERVE_CARD] Game=%s User=%s | ERROR: %s", self.game_code, self.user.username, error)
                         return error, False
+
+                    # Log after action
+                    logger.info(
+                        "[RESERVE_CARD] Game=%s User=%s | AFTER | ReservedCardID=%s | BankGold=%d | PlayerGold=%d | PlayerTokens=%s (total=%d) | Reserved=%s | NeedsDiscard=%s",
+                        self.game_code, self.user.username, reserved_id,
+                        new_gd['tokens_in_bank'].get('gold', 0),
+                        new_pd['tokens'].get('gold', 0),
+                        new_pd['tokens'], sum(new_pd['tokens'].values()),
+                        new_pd['reserved_card_ids'], needs_discard
+                    )
 
                     self._save_state(game, current_gp, new_gd, new_pd)
                     
@@ -742,14 +827,50 @@ class GameConsumer(AsyncWebsocketConsumer):
                     game_data = self._game_data_from_game(game)
                     player_data = self._player_data_from_gp(current_gp)
 
+                    # Get card info for logging
+                    card = get_card(card_id)
+                    card_points = card['points'] if card else 0
+                    card_bonus = card['bonus'] if card else 'unknown'
+
+                    # Log before action
+                    logger.info(
+                        "[BUY_CARD] Game=%s User=%s | BEFORE | CardID=%s (points=%d, bonus=%s) | PrestigePoints=%d | Bank=%s | PlayerTokens=%s (total=%d) | PurchasedCount=%d",
+                        self.game_code, self.user.username, card_id, card_points, card_bonus,
+                        player_data['prestige_points'],
+                        game_data['tokens_in_bank'], player_data['tokens'],
+                        sum(player_data['tokens'].values()),
+                        len(player_data['purchased_card_ids'])
+                    )
+
                     new_gd, new_pd, error = apply_buy_card(game_data, player_data, card_id)
                     if error:
+                        logger.warning("[BUY_CARD] Game=%s User=%s | ERROR: %s", self.game_code, self.user.username, error)
                         return error
+
+                    # Log after buy (before noble check)
+                    logger.info(
+                        "[BUY_CARD] Game=%s User=%s | AFTER_BUY | PrestigePoints=%d | Bank=%s | PlayerTokens=%s (total=%d) | PurchasedCount=%d",
+                        self.game_code, self.user.username,
+                        new_pd['prestige_points'],
+                        new_gd['tokens_in_bank'], new_pd['tokens'],
+                        sum(new_pd['tokens'].values()),
+                        len(new_pd['purchased_card_ids'])
+                    )
 
                     # Check noble visits
                     eligible = check_nobles(new_gd, new_pd)
                     if len(eligible) == 1:
+                        noble = get_noble(eligible[0])
+                        logger.info(
+                            "[BUY_CARD] Game=%s User=%s | NOBLE_VISIT | NobleID=%s (points=%d) | PrestigeBefore=%d",
+                            self.game_code, self.user.username, eligible[0],
+                            noble['points'] if noble else 0, new_pd['prestige_points']
+                        )
                         new_gd, new_pd = apply_noble_visit(new_gd, new_pd, eligible[0])
+                        logger.info(
+                            "[BUY_CARD] Game=%s User=%s | AFTER_NOBLE | PrestigePoints=%d",
+                            self.game_code, self.user.username, new_pd['prestige_points']
+                        )
 
                     self._save_state(game, current_gp, new_gd, new_pd)
                     self._post_action(game, current_gp, players, new_gd, new_pd)

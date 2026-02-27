@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { GameState, GemColor, TokenColor } from '@/types/game';
 import { GEM_COLORS } from '@/lib/colors';
 
@@ -64,6 +64,31 @@ export default function MobileGameBoard({
     }
     return goldNeeded <= (me.tokens.gold || 0);
   }, [me, cards_data]);
+
+  // Check if any reserved card is affordable
+  const hasAffordableReserved = me?.reserved_card_ids.some((cid) => canAfford(cid)) ?? false;
+  
+  // Track if user has seen the affordable reserved card (visited Me tab)
+  const [hasSeenAffordable, setHasSeenAffordable] = useState(false);
+  const prevAffordableRef = useRef(hasAffordableReserved);
+  
+  // Reset "seen" state when a NEW reserved card becomes affordable
+  useEffect(() => {
+    if (hasAffordableReserved && !prevAffordableRef.current) {
+      // A reserved card just became affordable - start flashing
+      setHasSeenAffordable(false);
+    }
+    prevAffordableRef.current = hasAffordableReserved;
+  }, [hasAffordableReserved]);
+  
+  // Stop flashing when user visits Me tab
+  useEffect(() => {
+    if (activeTab === 'me' && hasAffordableReserved) {
+      setHasSeenAffordable(true);
+    }
+  }, [activeTab, hasAffordableReserved]);
+  
+  const shouldFlashMeTab = hasAffordableReserved && !hasSeenAffordable;
 
   // Token selection logic
   const hasTwoSameColor = selectedTokens.length === 2 && selectedTokens[0] === selectedTokens[1];
@@ -160,6 +185,7 @@ export default function MobileGameBoard({
         activeTab={activeTab}
         onTabChange={setActiveTab}
         opponentCount={opponents.length}
+        flashMeTab={shouldFlashMeTab}
       />
 
       {/* Token Selector Modal */}
