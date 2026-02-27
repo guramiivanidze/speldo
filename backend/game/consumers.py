@@ -54,6 +54,7 @@ def serialize_game_state(game, players):
         'game_id': str(game.id),
         'code': game.code,
         'status': game.status,
+        'max_players': game.max_players,
         'current_player_index': game.current_player_index,
         'tokens_in_bank': game.tokens_in_bank,
         'visible_cards': game.visible_cards,

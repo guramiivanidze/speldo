@@ -34,6 +34,7 @@ export interface GameState {
   game_id: string;
   code: string;
   status: 'waiting' | 'playing' | 'paused' | 'finished';
+  max_players: number;
   current_player_index: number;
   tokens_in_bank: Record<TokenColor, number>;
   visible_cards: Record<string, number[]>;

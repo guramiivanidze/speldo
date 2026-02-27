@@ -298,9 +298,7 @@ export default function GamePage({ params }: PageProps) {
               Waiting for players
             </h3>
             <p className="text-slate-500 text-sm mb-6">
-              {gameState.players.length < 2
-                ? 'Need at least 2 players to start'
-                : `${gameState.players.length} player${gameState.players.length > 1 ? 's' : ''} ready`}
+              {gameState.players.length}/{gameState.max_players} players joined
             </p>
 
             {/* Player chips */}
@@ -337,8 +335,8 @@ export default function GamePage({ params }: PageProps) {
               <span className="font-mono font-black text-2xl gold-text tracking-[0.3em]">{code}</span>
             </div>
 
-            {/* Start button */}
-            {gameState.players.length >= 2 && (
+            {/* Start button - only show when room is full */}
+            {gameState.players.length === gameState.max_players && (
               <button
                 className="
                   w-full py-3 rounded-xl font-black text-base
@@ -350,6 +348,13 @@ export default function GamePage({ params }: PageProps) {
               >
                 Start Game
               </button>
+            )}
+
+            {/* Waiting for more players message */}
+            {gameState.players.length < gameState.max_players && (
+              <div className="text-center py-3 text-slate-400 text-sm">
+                Waiting for {gameState.max_players - gameState.players.length} more player{gameState.max_players - gameState.players.length > 1 ? 's' : ''}...
+              </div>
             )}
           </div>
         </div>

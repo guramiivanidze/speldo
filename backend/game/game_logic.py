@@ -312,9 +312,11 @@ def apply_buy_card(game_data, player_data, card_id):
 
     purchased.append(card_id)
 
-    # Compute new prestige
+    # Compute new prestige (cards + nobles)
     card = get_card(card_id)
-    prestige = sum(get_card(cid)['points'] for cid in purchased)
+    card_prestige = sum(get_card(cid)['points'] for cid in purchased)
+    noble_prestige = sum(get_noble(nid)['points'] for nid in player_data['noble_ids'])
+    prestige = card_prestige + noble_prestige
 
     game_data = dict(game_data)
     game_data['visible_cards'] = visible
