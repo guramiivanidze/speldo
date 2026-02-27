@@ -252,13 +252,12 @@ def apply_reserve_card(game_data, player_data, card_id=None, level=None):
 
     reserved.append(card_id)
 
-    # Give gold if available
-    if bank.get('gold', 0) > 0:
+    # Give gold if available AND player won't exceed 10 tokens
+    # Per Splendor rules: if player already has 10 tokens, they don't take gold
+    current_token_count = sum(ptokens.values())
+    if bank.get('gold', 0) > 0 and current_token_count < 10:
         bank['gold'] -= 1
         ptokens['gold'] = ptokens.get('gold', 0) + 1
-
-    if sum(ptokens.values()) > 10:
-        return None, None, None, "Would exceed 10 tokens."
 
     game_data = dict(game_data)
     game_data['visible_cards'] = visible

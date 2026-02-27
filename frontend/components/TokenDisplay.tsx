@@ -9,12 +9,13 @@ interface TokenProps {
   onClick?: () => void;
   selected?: boolean;
   disabled?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   inactive?: boolean;
   selectionCount?: number;
 }
 
 const TOKEN_SIZES = {
+  xs: { outer: 24, inner: 16, text: 9 },
   sm: { outer: 32, inner: 22, text: 11 },
   md: { outer: 44, inner: 30, text: 13 },
   lg: { outer: 54, inner: 38, text: 15 },
@@ -66,9 +67,12 @@ export default function Token({
       {/* Selection count badge */}
       {selectionCount > 0 && (
         <span
-          className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[10px] font-bold
-                     rounded-full min-w-[18px] h-[18px] flex items-center justify-center
-                     border-2 border-slate-900 shadow-lg z-20"
+          className={`
+            absolute -top-1 -right-1 bg-emerald-500 text-white font-bold
+            rounded-full flex items-center justify-center
+            border-2 border-slate-900 shadow-lg z-20
+            ${size === 'xs' ? 'text-[8px] min-w-[14px] h-[14px]' : 'text-[10px] min-w-[18px] h-[18px]'}
+          `}
         >
           {selectionCount}
         </span>
@@ -83,7 +87,7 @@ interface TokenRowProps {
   selectedTokens?: TokenColor[];
   selectionCounts?: Partial<Record<TokenColor, number>>;
   disabledColors?: TokenColor[];
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   showLabel?: boolean;
   vertical?: boolean;
 }
@@ -99,12 +103,13 @@ export function TokenRow({
   vertical = false,
 }: TokenRowProps) {
   const all: TokenColor[] = ['white', 'blue', 'green', 'red', 'black', 'gold'];
+  const gapClass = size === 'xs' ? 'gap-1' : 'gap-2';
   return (
-    <div className={vertical ? 'flex flex-col gap-2 items-center' : 'flex gap-2 flex-wrap items-end'}>
+    <div className={vertical ? `flex flex-col ${gapClass} items-center` : `flex ${gapClass} flex-wrap items-end`}>
       {all.map((color) => {
         const count = tokens[color] ?? 0;
         return (
-          <div key={color} className="flex flex-col items-center gap-1">
+          <div key={color} className="flex flex-col items-center gap-0.5">
             <Token
               color={color}
               count={count}

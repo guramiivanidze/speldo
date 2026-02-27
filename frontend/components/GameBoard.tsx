@@ -141,10 +141,10 @@ export default function GameBoard({
   const levels: ('3' | '2' | '1')[] = ['3', '2', '1'];
 
   return (
-    <div className="h-full w-full flex flex-col overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-2">
+    <div className="h-full w-full flex flex-col overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-1">
 
       {/* Main Board Grid */}
-      <div className="flex-1 grid grid-rows-[auto_1fr_auto] grid-cols-[auto_1fr_auto] gap-2 min-h-0">
+      <div className="flex-1 grid grid-rows-[auto_1fr_auto] grid-cols-[auto_1fr_auto] gap-1 min-h-0">
         
         {/* Top-left corner */}
         <div />
@@ -175,7 +175,7 @@ export default function GameBoard({
         <div />
 
         {/* Left opponent */}
-        <div className="flex items-center justify-center w-44">
+        <div className="flex items-center justify-center w-36">
           {opponents.length >= 2 && opponents[0] && (
             <CompactPlayerPanel
               player={opponents[0]}
@@ -188,19 +188,19 @@ export default function GameBoard({
         </div>
 
         {/* CENTER - Main Game Area */}
-        <div className="glass rounded-xl p-3 flex gap-3 overflow-hidden min-h-0">
+        <div className="glass rounded-xl p-2 flex gap-2 overflow-hidden min-h-0 min-w-0">
           
           {/* Left side - Nobles + Cards */}
-          <div className="flex-1 flex flex-col gap-2 min-h-0">
+          <div className="flex-1 flex flex-col gap-1 min-h-0 min-w-0 overflow-hidden">
             {/* Nobles - Centered */}
-            <div className="flex justify-center items-center gap-3 shrink-0">
+            <div className="flex justify-center items-center gap-2 shrink-0 flex-wrap">
               <span className="text-amber-400 text-sm">♫</span>
-              <div className="flex gap-3">
+              <div className="flex gap-2 flex-wrap justify-center">
                 {available_nobles.map((nid) => {
                   const noble = nobles_data[String(nid)];
                   if (!noble) return null;
                   return (
-                    <div key={nid} className="w-60 h-20">
+                    <div key={nid} className="w-48 h-16">
                       <NobleDisplay noble={noble} compact />
                     </div>
                   );
@@ -211,13 +211,13 @@ export default function GameBoard({
             <div className="h-px bg-white/10 shrink-0" />
 
             {/* Card Rows */}
-            <div className="flex-1 flex flex-col gap-4 min-h-0 justify-center w-full overflow-hidden">
+            <div className="flex-1 flex flex-col gap-1 min-h-0 justify-center w-full overflow-hidden">
             {levels.map((level) => (
-              <div key={level} className="flex items-stretch gap-3 w-full flex-1 min-h-0">
+              <div key={level} className="flex items-stretch gap-1 w-full flex-1 min-h-0 max-h-28">
                 {/* Deck */}
                 <button
                   className={`
-                    shrink-0 w-14 rounded-lg flex flex-col items-center justify-center
+                    shrink-0 w-10 rounded-lg flex flex-col items-center justify-center
                     text-[10px] font-bold transition-all
                     ${isMyTurn && canReserveMore && (deck_counts[level] ?? 0) > 0
                       ? 'bg-slate-700 text-slate-300 hover:bg-slate-600 cursor-pointer border border-slate-600'
@@ -234,7 +234,7 @@ export default function GameBoard({
                 </button>
 
                 {/* Cards - responsive grid */}
-                <div className="flex-1 grid grid-cols-4 gap-4 h-full">
+                <div className="flex-1 grid grid-cols-4 gap-1 h-full min-w-0">
                   {(visible_cards[level] || []).map((cardId) => {
                     const card = cards_data[String(cardId)];
                     if (!card) return null;
@@ -259,28 +259,28 @@ export default function GameBoard({
           </div>
 
           {/* Right side - Gem Bank (inside board) */}
-          <div className="shrink-0 flex flex-col items-center justify-center gap-2 border-l border-white/10 pl-3">
-            <span className="text-slate-400 text-xs">◈ Bank</span>
+          <div className="shrink-0 w-14 flex flex-col items-center justify-center gap-1 border-l border-white/10 pl-1">
+            <span className="text-slate-400 text-[9px]">◈ Bank</span>
             <TokenRow
               tokens={tokens_in_bank}
               onClickToken={isMyTurn && gameState.status === 'playing' ? handleTokenClick : undefined}
               selectedTokens={selectedTokens}
               selectionCounts={selectionCounts}
               disabledColors={disabledTokenColors}
-              size="sm"
+              size="xs"
               showLabel={false}
               vertical
             />
             {selectedTokens.length > 0 && (
-              <div className="flex flex-col items-center gap-1">
+              <div className="flex flex-col items-center gap-0.5">
                 <button
-                  className="px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold w-full"
+                  className="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[9px] font-bold w-full"
                   onClick={confirmTakeTokens}
                 >
                   Take
                 </button>
                 <button
-                  className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-[10px] font-bold w-full"
+                  className="px-1.5 py-0.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-[9px] font-bold w-full"
                   onClick={() => setSelectedTokens([])}
                 >
                   ✕
@@ -291,7 +291,7 @@ export default function GameBoard({
         </div>
 
         {/* Right opponent */}
-        <div className="flex items-center justify-center w-44">
+        <div className="flex items-center justify-center w-36">
           {opponents.length >= 3 && opponents[2] && (
             <CompactPlayerPanel
               player={opponents[2]}
