@@ -10,3 +10,7 @@ python manage.py collectstatic --no-input
 
 # Run migrations
 python manage.py migrate
+
+
+# Create superuser safely
+python manage.py createsu
