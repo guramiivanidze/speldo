@@ -362,8 +362,8 @@ export default function GamePage({ params }: PageProps) {
           {/* Ranked Rating Change Display */}
           {showRatingChange && rankedMatch && user && (() => {
             const isPlayer1 = rankedMatch.player1_username === user.username;
-            const oldRating = isPlayer1 ? rankedMatch.player1_rating_before : rankedMatch.player2_rating_before;
-            const newRating = isPlayer1 ? rankedMatch.player1_rating_after : rankedMatch.player2_rating_after;
+            const oldRating = (isPlayer1 ? rankedMatch.player1_rating_before : rankedMatch.player2_rating_before) ?? 1000;
+            const newRating = (isPlayer1 ? rankedMatch.player1_rating_after : rankedMatch.player2_rating_after) ?? 1000;
             const oldDivision = (isPlayer1 ? rankedMatch.player1_division_before : rankedMatch.player2_division_before) as Division;
             const newDivision = (isPlayer1 ? rankedMatch.player1_division_after : rankedMatch.player2_division_after) as Division;
             const won = rankedMatch.winner_username === user.username;

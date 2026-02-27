@@ -102,7 +102,17 @@ def leaderboard_by_division(request, division):
 def join_matchmaking(request):
     """Join the ranked matchmaking queue."""
     player = get_or_create_player(request.user)
-    success, message, match = MatchmakingService.join_queue(player)
+    
+    # Get player count preference (2, 3, or 4)
+    player_count = request.data.get('player_count', 2)
+    try:
+        player_count = int(player_count)
+        if player_count not in [2, 3, 4]:
+            player_count = 2
+    except (ValueError, TypeError):
+        player_count = 2
+    
+    success, message, match = MatchmakingService.join_queue(player, player_count)
     
     response_data = {'success': success, 'message': message}
     
@@ -141,9 +151,10 @@ def match_history(request):
     page = int(request.query_params.get('page', 1))
     per_page = min(int(request.query_params.get('per_page', 20)), 50)
     
+    # Filter matches where the player participated via MatchPlayer
     matches = Match.objects.filter(
-        Q(player1=player) | Q(player2=player)
-    ).select_related('player1__user', 'player2__user', 'winner__user', 'game')
+        match_players__player=player
+    ).select_related('winner__user', 'game').prefetch_related('match_players__player__user').distinct()
     
     total = matches.count()
     start = (page - 1) * per_page
@@ -163,8 +174,8 @@ def match_detail(request, match_id):
     """Get details of a specific match."""
     try:
         match = Match.objects.select_related(
-            'player1__user', 'player2__user', 'winner__user', 'game'
-        ).get(id=match_id)
+            'winner__user', 'game'
+        ).prefetch_related('match_players__player__user').get(id=match_id)
         return Response(MatchSerializer(match).data)
     except Match.DoesNotExist:
         return Response({'detail': 'Match not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -176,8 +187,8 @@ def match_by_game(request, game_id):
     """Get match result by game ID (for showing rating changes after ranked games)."""
     try:
         match = Match.objects.select_related(
-            'player1__user', 'player2__user', 'winner__user', 'game'
-        ).get(game_id=game_id)
+            'winner__user', 'game'
+        ).prefetch_related('match_players__player__user').get(game_id=game_id)
         return Response(MatchSerializer(match).data)
     except Match.DoesNotExist:
         return Response({'detail': 'No ranked match found for this game.'}, status=status.HTTP_404_NOT_FOUND)

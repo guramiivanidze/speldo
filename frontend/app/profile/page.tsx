@@ -77,8 +77,10 @@ export default function ProfilePage() {
     // Work backwards through matches to estimate past ratings
     for (let i = matches.length - 1; i >= 0; i--) {
       const match = matches[i];
-      const isPlayer1 = match.player1.username === profile.username;
-      const change = isPlayer1 ? match.rating_change_p1 : match.rating_change_p2;
+      // Support both multiplayer (players array) and legacy (player1/player2)
+      const myData = match.players?.find(p => p.username === profile.username) 
+        || (match.player1?.username === profile.username ? { rating_change: match.rating_change_p1 } : { rating_change: match.rating_change_p2 });
+      const change = myData?.rating_change || 0;
       points.unshift(currentRating);
       currentRating -= change;
     }
@@ -217,10 +219,22 @@ export default function ProfilePage() {
         ) : (
           <div className="space-y-3">
             {matches.map((match) => {
-              const isPlayer1 = match.player1.username === profile.username;
-              const opponent = isPlayer1 ? match.player2 : match.player1;
-              const ratingChange = isPlayer1 ? match.rating_change_p1 : match.rating_change_p2;
-              const won = match.winner?.id === (isPlayer1 ? match.player1.id : match.player2.id);
+              // Support both multiplayer (players array) and legacy (player1/player2)
+              const myData = match.players?.find(p => p.username === profile.username);
+              const opponents = match.players?.filter(p => p.username !== profile.username) || [];
+              
+              // Fallback to legacy fields
+              const isPlayer1 = match.player1?.username === profile.username;
+              const legacyOpponent = isPlayer1 ? match.player2 : match.player1;
+              const ratingChange = myData?.rating_change 
+                || (isPlayer1 ? match.rating_change_p1 : match.rating_change_p2) 
+                || 0;
+              
+              // Determine win: placement 1 is a win for multiplayer, or positive rating change
+              const won = myData ? myData.placement === 1 : ratingChange > 0;
+              
+              // Get display opponent(s)
+              const displayOpponents = opponents.length > 0 ? opponents : (legacyOpponent ? [legacyOpponent] : []);
               
               return (
                 <div 
@@ -236,12 +250,28 @@ export default function ProfilePage() {
                     </div>
                     <div>
                       <div className="font-medium text-slate-100">
-                        vs {opponent.username}
+                        vs {displayOpponents.map(o => o.username).join(', ') || 'Unknown'}
+                        {match.player_count && match.player_count > 2 && (
+                          <span className="ml-2 text-xs text-slate-500">({match.player_count}p)</span>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-slate-400">
-                        <DivisionBadge division={opponent.division} size="sm" showLabel={false} />
-                        <span>{opponent.rating}</span>
-                      </div>
+                      {displayOpponents[0] && (
+                        <div className="flex items-center gap-2 text-xs text-slate-400">
+                          <DivisionBadge 
+                            division={'division' in displayOpponents[0] 
+                              ? displayOpponents[0].division 
+                              : (displayOpponents[0] as { division_before?: Division }).division_before ?? 'Bronze'} 
+                            size="sm" 
+                            showLabel={false} 
+                          />
+                          <span>
+                            {'rating' in displayOpponents[0] 
+                              ? displayOpponents[0].rating 
+                              : (displayOpponents[0] as { rating_before?: number }).rating_before ?? 1000}
+                          </span>
+                          {displayOpponents.length > 1 && <span>+{displayOpponents.length - 1} more</span>}
+                        </div>
+                      )}
                     </div>
                   </div>
                   

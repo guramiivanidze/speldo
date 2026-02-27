@@ -11,6 +11,7 @@ interface TokenProps {
   disabled?: boolean;
   size?: 'sm' | 'md' | 'lg';
   inactive?: boolean;
+  selectionCount?: number;
 }
 
 const TOKEN_SIZES = {
@@ -21,7 +22,7 @@ const TOKEN_SIZES = {
 
 export default function Token({
   color, count, onClick, selected, disabled,
-  size = 'md', inactive = false,
+  size = 'md', inactive = false, selectionCount = 0,
 }: TokenProps) {
   const s = TOKEN_SIZES[size];
   const isClickable = !!onClick && !disabled && count > 0 && !inactive;
@@ -61,6 +62,17 @@ export default function Token({
         }}
       />
       <span className="relative z-10 leading-none">{count}</span>
+      
+      {/* Selection count badge */}
+      {selectionCount > 0 && (
+        <span
+          className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[10px] font-bold
+                     rounded-full min-w-[18px] h-[18px] flex items-center justify-center
+                     border-2 border-slate-900 shadow-lg z-20"
+        >
+          {selectionCount}
+        </span>
+      )}
     </button>
   );
 }
@@ -69,6 +81,7 @@ interface TokenRowProps {
   tokens: Partial<Record<TokenColor, number>>;
   onClickToken?: (color: TokenColor) => void;
   selectedTokens?: TokenColor[];
+  selectionCounts?: Partial<Record<TokenColor, number>>;
   disabledColors?: TokenColor[];
   size?: 'sm' | 'md' | 'lg';
   showLabel?: boolean;
@@ -79,6 +92,7 @@ export function TokenRow({
   tokens,
   onClickToken,
   selectedTokens = [],
+  selectionCounts = {},
   disabledColors = [],
   size = 'md',
   showLabel = true,
@@ -96,6 +110,7 @@ export function TokenRow({
               count={count}
               onClick={onClickToken ? () => onClickToken(color) : undefined}
               selected={selectedTokens.includes(color)}
+              selectionCount={selectionCounts[color] || 0}
               disabled={disabledColors.includes(color)}
               size={size}
             />

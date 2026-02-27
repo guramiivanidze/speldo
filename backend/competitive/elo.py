@@ -147,6 +147,66 @@ def get_division(rating: int) -> str:
     return 'Bronze'
 
 
+# Alias for serializer use
+def get_division_for_rating(rating: int) -> str:
+    """Get division name for a given rating (alias)."""
+    return get_division(rating)
+
+
+def calculate_multiplayer_elo_changes(placements: list, k_factor: int = 32) -> list[int]:
+    """
+    Calculate ELO changes for a multiplayer match (2-4 players).
+    
+    Uses a placement-based scoring system:
+    - 2 players: 1st = 1.0, 2nd = 0.0
+    - 3 players: 1st = 1.0, 2nd = 0.5, 3rd = 0.0
+    - 4 players: 1st = 1.0, 2nd = 0.67, 3rd = 0.33, 4th = 0.0
+    
+    Each player's expected score is calculated against all opponents,
+    then averaged.
+    
+    Args:
+        placements: List of Player objects ordered by placement (1st, 2nd, 3rd, 4th)
+        k_factor: K-factor (default: 32)
+    
+    Returns:
+        List of rating changes in the same order as placements
+    """
+    n = len(placements)
+    if n < 2 or n > 4:
+        raise ValueError("Placements must contain 2-4 players")
+    
+    # Get ratings
+    ratings = [p.rating for p in placements]
+    
+    # Calculate actual scores based on placement
+    # Score is normalized so total = n (averaging effect)
+    if n == 2:
+        actual_scores = [1.0, 0.0]
+    elif n == 3:
+        actual_scores = [1.0, 0.5, 0.0]
+    else:  # n == 4
+        actual_scores = [1.0, 0.67, 0.33, 0.0]
+    
+    rating_changes = []
+    
+    for i, player in enumerate(placements):
+        # Calculate expected score against each opponent, then average
+        expected_total = 0.0
+        for j, opponent in enumerate(placements):
+            if i != j:
+                expected_total += calculate_expected_score(ratings[i], ratings[j])
+        
+        # Average expected score (normalized to 0-1 scale)
+        expected_avg = expected_total / (n - 1)
+        
+        # Calculate rating change
+        change = round(k_factor * (actual_scores[i] - expected_avg))
+        rating_changes.append(change)
+    
+    return rating_changes
+
+
 def get_rating_to_next_division(rating: int) -> tuple[str, int]:
     """
     Get the next division and points needed to reach it.

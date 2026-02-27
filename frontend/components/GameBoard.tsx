@@ -57,15 +57,61 @@ export default function GameBoard({
     return goldNeeded <= (me.tokens.gold || 0);
   }
 
+  // Check if 2 same-color tokens are selected
+  const hasTwoSameColor = selectedTokens.length === 2 && selectedTokens[0] === selectedTokens[1];
+  const selectedSameColor = hasTwoSameColor ? selectedTokens[0] : null;
+
+  // Compute disabled colors: when 2 same-color selected, disable all other colors
+  const disabledTokenColors: TokenColor[] = hasTwoSameColor
+    ? (['white', 'blue', 'green', 'red', 'black', 'gold'] as TokenColor[]).filter(c => c !== selectedSameColor)
+    : ['gold'];
+
+  // Count selections per color for display
+  const selectionCounts: Partial<Record<TokenColor, number>> = {};
+  for (const t of selectedTokens) {
+    selectionCounts[t] = (selectionCounts[t] || 0) + 1;
+  }
+
   function handleTokenClick(color: TokenColor) {
     if (!isMyTurn || color === 'gold') return;
     const gem = color as GemColor;
     setSelectedTokens((prev) => {
-      if (prev.length === 2 && prev[0] === gem && prev[1] === gem) return [];
-      if (prev.includes(gem) && new Set(prev).size > 1) return prev.filter(c => c !== gem);
-      if (prev.length === 1 && prev[0] === gem && tokens_in_bank[gem] >= 4) return [gem, gem];
-      if (prev.length < 3 && !prev.includes(gem)) return [...prev, gem];
-      if (prev.length === 3) return [gem];
+      const countOfColor = prev.filter(c => c === gem).length;
+      const uniqueColors = new Set(prev);
+      const isAllSameColor = uniqueColors.size === 1 && prev.length === 2 && prev[0] === gem;
+      
+      // If 2 same-color selected and clicking that color again -> reset
+      if (isAllSameColor) {
+        return [];
+      }
+      
+      // If 2 same-color selected (different from clicked) -> ignore (disabled)
+      if (prev.length === 2 && prev[0] === prev[1] && prev[0] !== gem) {
+        return prev;
+      }
+      
+      // If clicking a color already in selection (mixed colors) -> deselect it
+      if (prev.includes(gem) && uniqueColors.size > 1) {
+        return prev.filter(c => c !== gem);
+      }
+      
+      // If 1 same-color selected and clicking it again -> try to take 2 (if 4+ available)
+      if (prev.length === 1 && prev[0] === gem && tokens_in_bank[gem] >= 4) {
+        return [gem, gem];
+      }
+      
+      // If trying to add a different color when we already have 1 of same color
+      // and there are 4+ of that color, we could do 2 same OR continue with different
+      // But if prev is 1 token and clicking different color, add it
+      if (prev.length < 3 && !prev.includes(gem)) {
+        return [...prev, gem];
+      }
+      
+      // If already 3 different colors selected, start fresh with this color
+      if (prev.length === 3) {
+        return [gem];
+      }
+      
       return prev;
     });
   }
@@ -203,6 +249,8 @@ export default function GameBoard({
               tokens={tokens_in_bank}
               onClickToken={isMyTurn && gameState.status === 'playing' ? handleTokenClick : undefined}
               selectedTokens={selectedTokens}
+              selectionCounts={selectionCounts}
+              disabledColors={disabledTokenColors}
               size="sm"
               showLabel={false}
               vertical

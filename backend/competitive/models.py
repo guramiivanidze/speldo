@@ -118,16 +118,11 @@ class Player(models.Model):
 
 
 class Match(models.Model):
-    """Record of a competitive match."""
-    player1 = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='matches_as_p1')
-    player2 = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='matches_as_p2')
-    winner = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='won_matches')
+    """Record of a competitive match (supports 2-4 players)."""
     game = models.ForeignKey('game.Game', on_delete=models.SET_NULL, null=True, blank=True, related_name='ranked_match')
+    player_count = models.IntegerField(default=2)  # 2, 3, or 4 players
+    winner = models.ForeignKey(Player, on_delete=models.SET_NULL, null=True, blank=True, related_name='won_matches')
     is_ranked = models.BooleanField(default=True)
-    rating_change_p1 = models.IntegerField(default=0)
-    rating_change_p2 = models.IntegerField(default=0)
-    p1_rating_before = models.IntegerField(default=0)  # Track rating at match time
-    p2_rating_before = models.IntegerField(default=0)
     season = models.ForeignKey(Season, on_delete=models.SET_NULL, null=True, blank=True, related_name='matches')
     created_at = models.DateTimeField(auto_now_add=True)
     finished_at = models.DateTimeField(null=True, blank=True)
@@ -137,33 +132,107 @@ class Match(models.Model):
         verbose_name_plural = 'Matches'
 
     def __str__(self):
-        return f"{self.player1.user.username} vs {self.player2.user.username}"
+        players = self.match_players.all()
+        names = [mp.player.user.username for mp in players]
+        return ' vs '.join(names) if names else f'Match #{self.id}'
 
-    def finalize(self, winner_player):
-        """Finalize the match with results and calculate rating changes."""
-        from .elo import calculate_elo_change
+    def get_players(self):
+        """Get all players in this match."""
+        return [mp.player for mp in self.match_players.select_related('player__user').all()]
+
+    def get_match_player(self, player):
+        """Get the MatchPlayer entry for a specific player."""
+        return self.match_players.filter(player=player).first()
+
+    def finalize(self, placements):
+        """
+        Finalize the match with results and calculate rating changes.
         
-        self.winner = winner_player
+        Args:
+            placements: List of Player objects ordered by placement (1st, 2nd, 3rd, 4th)
+        """
+        from .elo import calculate_multiplayer_elo_changes
+        
         self.finished_at = timezone.now()
         
-        if self.is_ranked:
+        if placements:
+            self.winner = placements[0]  # 1st place is the winner
+        
+        if self.is_ranked and placements:
+            # Get all match players
+            match_players = {mp.player.id: mp for mp in self.match_players.all()}
+            
             # Store ratings before change
-            self.p1_rating_before = self.player1.rating
-            self.p2_rating_before = self.player2.rating
+            ratings_before = {p.id: p.rating for p in placements}
+            for mp in match_players.values():
+                mp.rating_before = mp.player.rating
             
-            # Calculate ELO changes
-            p1_won = winner_player == self.player1
-            self.rating_change_p1, self.rating_change_p2 = calculate_elo_change(
-                self.player1.rating,
-                self.player2.rating,
-                p1_won
-            )
+            # Calculate ELO changes based on placements
+            rating_changes = calculate_multiplayer_elo_changes(placements)
             
-            # Update player stats
-            self.player1.update_stats_after_match(p1_won, self.rating_change_p1)
-            self.player2.update_stats_after_match(not p1_won, self.rating_change_p2)
+            # Update each player
+            for i, player in enumerate(placements):
+                mp = match_players[player.id]
+                mp.placement = i + 1
+                mp.rating_change = rating_changes[i]
+                mp.save()
+                
+                # Win = 1st place, Loss = not 1st place
+                won = (i == 0)
+                player.update_stats_after_match(won, rating_changes[i])
         
         self.save()
+
+    # Legacy compatibility properties for 2-player matches
+    @property
+    def player1(self):
+        mp = self.match_players.order_by('id').first()
+        return mp.player if mp else None
+    
+    @property
+    def player2(self):
+        mp = self.match_players.order_by('id')[1:2].first()
+        return mp.player if mp else None
+    
+    @property
+    def rating_change_p1(self):
+        mp = self.match_players.order_by('id').first()
+        return mp.rating_change if mp else 0
+    
+    @property
+    def rating_change_p2(self):
+        mp = self.match_players.order_by('id')[1:2].first()
+        return mp.rating_change if mp else 0
+    
+    @property
+    def p1_rating_before(self):
+        mp = self.match_players.order_by('id').first()
+        return mp.rating_before if mp else 0
+    
+    @property
+    def p2_rating_before(self):
+        mp = self.match_players.order_by('id')[1:2].first()
+        return mp.rating_before if mp else 0
+
+
+class MatchPlayer(models.Model):
+    """A player's participation in a match (supports multiplayer)."""
+    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='match_players')
+    player = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='match_participations')
+    placement = models.IntegerField(null=True, blank=True)  # 1 = 1st place, 2 = 2nd, etc.
+    rating_before = models.IntegerField(default=0)
+    rating_change = models.IntegerField(default=0)
+    
+    class Meta:
+        unique_together = ['match', 'player']
+        ordering = ['placement']
+    
+    def __str__(self):
+        return f"{self.player.user.username} in Match #{self.match.id}"
+    
+    @property
+    def rating_after(self):
+        return self.rating_before + self.rating_change
 
 
 class LeaderboardCache(models.Model):
@@ -225,6 +294,7 @@ class MatchmakingQueue(models.Model):
     """Queue for players waiting for ranked matches."""
     player = models.OneToOneField(Player, on_delete=models.CASCADE, related_name='queue_entry')
     rating_at_queue = models.IntegerField()  # Rating when joined queue
+    player_count_preference = models.IntegerField(default=2)  # 2, 3, or 4 players
     search_range = models.IntegerField(default=50)  # Current search range
     joined_at = models.DateTimeField(auto_now_add=True)
     last_expanded_at = models.DateTimeField(auto_now_add=True)
@@ -233,7 +303,7 @@ class MatchmakingQueue(models.Model):
         ordering = ['joined_at']
 
     def __str__(self):
-        return f"{self.player.user.username} in queue (±{self.search_range})"
+        return f"{self.player.user.username} in queue ({self.player_count_preference}p, ±{self.search_range})"
 
     def expand_search_range(self, max_range=500):
         """Expand the search range for finding opponents."""
@@ -242,23 +312,37 @@ class MatchmakingQueue(models.Model):
             self.last_expanded_at = timezone.now()
             self.save()
 
-    def find_opponent(self):
-        """Find a suitable opponent in the queue."""
-        # Look for players within rating range
+    def find_opponents(self):
+        """Find suitable opponents in the queue for multiplayer match."""
+        # Look for players within rating range with same player count preference
         min_rating = self.rating_at_queue - self.search_range
         max_rating = self.rating_at_queue + self.search_range
         
         potential_opponents = MatchmakingQueue.objects.filter(
+            player_count_preference=self.player_count_preference,
             rating_at_queue__gte=min_rating,
             rating_at_queue__lte=max_rating
         ).exclude(player=self.player).order_by('joined_at')
         
-        # Find opponent whose range also includes us
+        # Find opponents whose range also includes us
+        valid_opponents = []
         for opponent_entry in potential_opponents:
             opponent_min = opponent_entry.rating_at_queue - opponent_entry.search_range
             opponent_max = opponent_entry.rating_at_queue + opponent_entry.search_range
             
             if opponent_min <= self.rating_at_queue <= opponent_max:
-                return opponent_entry
+                valid_opponents.append(opponent_entry)
+                if len(valid_opponents) >= self.player_count_preference - 1:
+                    break  # Found enough opponents
         
-        return None
+        # Return opponents only if we have enough for the match
+        if len(valid_opponents) >= self.player_count_preference - 1:
+            return valid_opponents[:self.player_count_preference - 1]
+        
+        return []
+    
+    # Legacy compatibility
+    def find_opponent(self):
+        """Find a single opponent (for 2-player matches)."""
+        opponents = self.find_opponents()
+        return opponents[0] if opponents else None

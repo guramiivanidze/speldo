@@ -39,6 +39,7 @@ export default function Home() {
   // Competitive state
   const [rankedProfile, setRankedProfile] = useState<PlayerProfile | null>(null);
   const [currentSeason, setCurrentSeason] = useState<Season | null>(null);
+  const [rankedPlayerCount, setRankedPlayerCount] = useState(2);
   
   // Matchmaking
   const { 
@@ -387,19 +388,41 @@ export default function Home() {
         
         {/* Find Match Button */}
         <div className="mb-4">
+          {/* Player Count Selector */}
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xs text-slate-400">Players:</span>
+            {[2, 3, 4].map((n) => (
+              <button
+                key={n}
+                disabled={matchmakingStatus?.in_queue}
+                className={`
+                  w-9 h-9 rounded-xl text-sm font-bold transition-all active:scale-95
+                  ${rankedPlayerCount === n
+                    ? 'bg-amber-600 text-white shadow-lg shadow-amber-500/25'
+                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700'}
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                `}
+                onClick={() => setRankedPlayerCount(n)}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
           {matchmakingStatus?.in_queue ? (
             <div className="bg-slate-800/80 rounded-xl p-4 border border-amber-500/30">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 rounded-full bg-amber-400 animate-pulse" />
-                  <span className="text-amber-300 font-semibold text-sm">Searching for opponent...</span>
+                  <span className="text-amber-300 font-semibold text-sm">
+                    Searching for {(matchmakingStatus.player_count || rankedPlayerCount) - 1} opponent{(matchmakingStatus.player_count || rankedPlayerCount) > 2 ? 's' : ''}...
+                  </span>
                 </div>
                 <span className="text-slate-500 text-xs">
                   {matchmakingStatus.wait_time_seconds ? `${Math.floor(matchmakingStatus.wait_time_seconds / 60)}:${String(matchmakingStatus.wait_time_seconds % 60).padStart(2, '0')}` : '0:00'}
                 </span>
               </div>
               <div className="text-[10px] text-slate-500 mb-3">
-                Search range: ±{matchmakingStatus.search_range || 50} rating
+                {(matchmakingStatus.player_count || rankedPlayerCount)}-player match &bull; Search range: ±{matchmakingStatus.search_range || 50} rating
               </div>
               <button
                 onClick={leaveQueue}
@@ -410,7 +433,7 @@ export default function Home() {
             </div>
           ) : (
             <button
-              onClick={joinQueue}
+              onClick={() => joinQueue(rankedPlayerCount)}
               disabled={!currentSeason}
               className="
                 w-full py-4 rounded-xl font-black text-base
@@ -421,7 +444,7 @@ export default function Home() {
                 disabled:opacity-50 disabled:cursor-not-allowed
               "
             >
-              {currentSeason ? '⚔️ Find Ranked Match' : 'No Active Season'}
+              {currentSeason ? `⚔️ Find ${rankedPlayerCount}-Player Ranked Match` : 'No Active Season'}
             </button>
           )}
           {matchmakingError && (

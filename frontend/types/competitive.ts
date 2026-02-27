@@ -35,31 +35,43 @@ export interface PlayerPublic {
   ranked_wins: number;
 }
 
+export interface MatchPlayer {
+  player_id: number;
+  username: string;
+  placement: number | null;
+  rating_before: number;
+  rating_change: number;
+  rating_after: number;
+  division: Division;
+  division_before: Division;
+  division_after: Division;
+  current_rating: number;
+}
+
 export interface Match {
   id: number;
-  player1: PlayerPublic;
-  player2: PlayerPublic;
-  winner: PlayerPublic | null;
+  player_count: number;
+  players: MatchPlayer[];
+  winner_username: string | null;
   game_code: string | null;
   is_ranked: boolean;
-  rating_change_p1: number;
-  rating_change_p2: number;
-  p1_rating_before: number;
-  p2_rating_before: number;
-  // Computed fields for easy access
-  player1_username: string;
-  player2_username: string;
-  winner_username: string | null;
-  player1_rating_before: number;
-  player2_rating_before: number;
-  player1_rating_after: number;
-  player2_rating_after: number;
-  player1_division_before: Division;
-  player2_division_before: Division;
-  player1_division_after: Division;
-  player2_division_after: Division;
   created_at: string;
   finished_at: string | null;
+  // Legacy 2-player compatibility fields
+  player1?: PlayerPublic;
+  player2?: PlayerPublic;
+  rating_change_p1?: number;
+  rating_change_p2?: number;
+  player1_username?: string;
+  player2_username?: string;
+  player1_rating_before?: number;
+  player2_rating_before?: number;
+  player1_rating_after?: number;
+  player2_rating_after?: number;
+  player1_division_before?: Division;
+  player2_division_before?: Division;
+  player1_division_after?: Division;
+  player2_division_after?: Division;
 }
 
 export interface LeaderboardEntry {
@@ -86,15 +98,21 @@ export interface MatchmakingStatus {
   wait_time_seconds?: number;
   search_range?: number;
   rating?: number;
+  player_count?: number;
+}
+
+export interface OpponentInfo {
+  username: string;
+  rating: number;
+  division: Division;
 }
 
 export interface MatchFoundData {
   game_code: string;
-  opponent: {
-    username: string;
-    rating: number;
-    division: Division;
-  };
+  player_count: number;
+  opponents: OpponentInfo[];
+  // Legacy single opponent for 2-player matches
+  opponent?: OpponentInfo;
 }
 
 export interface DivisionInfo {

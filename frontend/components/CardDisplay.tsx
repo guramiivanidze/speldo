@@ -96,7 +96,7 @@ export default function CardDisplay({
           {/* Points (top right) - Golden circle badge */}
           <div className="flex justify-end">
             {card.points > 0 ? (
-              <div 
+              <div
                 className="w-7 h-7 rounded-full flex items-center justify-center
                            font-black text-sm text-amber-900 drop-shadow-lg
                            border-2 border-amber-300 shadow-inner"

@@ -11,7 +11,7 @@ export interface UseMatchmakingResult {
   matchFound: MatchFoundData | null;
   error: string | null;
   connected: boolean;
-  joinQueue: () => void;
+  joinQueue: (playerCount?: number) => void;
   leaveQueue: () => void;
   refreshStatus: () => void;
   clearMatchFound: () => void;
@@ -47,16 +47,19 @@ export function useMatchmaking(): UseMatchmakingResult {
                 wait_time_seconds: data.wait_time_seconds,
                 search_range: data.search_range,
                 rating: data.rating,
+                player_count: data.player_count,
               });
               break;
             
             case 'queue_join_result':
               if (data.success) {
-                setStatus({ in_queue: true, ...data });
+                setStatus({ in_queue: true, player_count: data.player_count, ...data });
                 if (data.match) {
                   setMatchFound({
                     game_code: data.match.game?.code || data.match.game_code,
                     opponent: data.match.player2 || data.match.opponent,
+                    opponents: data.match.opponents,
+                    player_count: data.match.player_count || 2,
                   });
                 }
               } else {
@@ -74,6 +77,8 @@ export function useMatchmaking(): UseMatchmakingResult {
               setMatchFound({
                 game_code: data.game_code,
                 opponent: data.opponent,
+                opponents: data.opponents,
+                player_count: data.player_count || 2,
               });
               setStatus({ in_queue: false });
               break;
@@ -124,14 +129,14 @@ export function useMatchmaking(): UseMatchmakingResult {
     };
   }, [connect]);
 
-  const sendMessage = useCallback((action: string) => {
+  const sendMessage = useCallback((action: string, data?: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ action }));
+      wsRef.current.send(JSON.stringify({ action, ...data }));
     }
   }, []);
 
-  const joinQueue = useCallback(() => {
-    sendMessage('join_queue');
+  const joinQueue = useCallback((playerCount: number = 2) => {
+    sendMessage('join_queue', { player_count: playerCount });
   }, [sendMessage]);
 
   const leaveQueue = useCallback(() => {

@@ -54,7 +54,8 @@ class MatchmakingConsumer(AsyncWebsocketConsumer):
             action = data.get('action')
             
             if action == 'join_queue':
-                result = await self.handle_join_queue()
+                player_count = data.get('player_count', 2)
+                result = await self.handle_join_queue(player_count)
                 await self.send(json.dumps(result))
             
             elif action == 'leave_queue':
@@ -81,12 +82,20 @@ class MatchmakingConsumer(AsyncWebsocketConsumer):
         return MatchmakingService.get_queue_status(player)
     
     @database_sync_to_async
-    def handle_join_queue(self):
+    def handle_join_queue(self, player_count=2):
         from .matchmaking import MatchmakingService, get_or_create_player
         from .serializers import MatchSerializer
         
+        # Validate player count
+        try:
+            player_count = int(player_count)
+            if player_count not in [2, 3, 4]:
+                player_count = 2
+        except (ValueError, TypeError):
+            player_count = 2
+        
         player = get_or_create_player(self.user)
-        success, message, match = MatchmakingService.join_queue(player)
+        success, message, match = MatchmakingService.join_queue(player, player_count)
         
         result = {
             'type': 'queue_join_result',
@@ -116,11 +125,16 @@ class MatchmakingConsumer(AsyncWebsocketConsumer):
     
     async def match_found(self, event):
         """Notify client that a match has been found."""
-        await self.send(json.dumps({
+        message = {
             'type': 'match_found',
             'game_code': event['game_code'],
-            'opponent': event['opponent']
-        }))
+            'player_count': event.get('player_count', 2),
+            'opponents': event.get('opponents', []),
+        }
+        # Legacy support for 2-player matches
+        if event.get('opponent'):
+            message['opponent'] = event['opponent']
+        await self.send(json.dumps(message))
     
     async def queue_update(self, event):
         """Send queue status update to client."""

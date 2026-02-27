@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Season, Player, Match, LeaderboardCache, MatchmakingQueue
+from .models import Season, Player, Match, MatchPlayer, LeaderboardCache, MatchmakingQueue
 
 
 @admin.register(Season)
@@ -19,13 +19,33 @@ class PlayerAdmin(admin.ModelAdmin):
     readonly_fields = ['created_at', 'updated_at']
 
 
+class MatchPlayerInline(admin.TabularInline):
+    model = MatchPlayer
+    extra = 0
+    readonly_fields = ['player', 'placement', 'rating_before', 'rating_change']
+    can_delete = False
+
+
 @admin.register(Match)
 class MatchAdmin(admin.ModelAdmin):
-    list_display = ['id', 'player1', 'player2', 'winner', 'is_ranked', 'rating_change_p1', 'rating_change_p2', 'created_at']
-    list_filter = ['is_ranked', 'season', 'created_at']
-    search_fields = ['player1__user__username', 'player2__user__username']
+    list_display = ['id', 'player_count', 'get_players', 'winner', 'is_ranked', 'created_at']
+    list_filter = ['is_ranked', 'player_count', 'season', 'created_at']
+    search_fields = ['match_players__player__user__username']
     ordering = ['-created_at']
-    readonly_fields = ['p1_rating_before', 'p2_rating_before', 'finished_at']
+    readonly_fields = ['finished_at']
+    inlines = [MatchPlayerInline]
+    
+    def get_players(self, obj):
+        players = obj.match_players.all()
+        return ', '.join([mp.player.user.username for mp in players])
+    get_players.short_description = 'Players'
+
+
+@admin.register(MatchPlayer)
+class MatchPlayerAdmin(admin.ModelAdmin):
+    list_display = ['match', 'player', 'placement', 'rating_before', 'rating_change']
+    list_filter = ['placement']
+    search_fields = ['player__user__username']
 
 
 @admin.register(LeaderboardCache)
@@ -45,5 +65,6 @@ class LeaderboardCacheAdmin(admin.ModelAdmin):
 
 @admin.register(MatchmakingQueue)
 class MatchmakingQueueAdmin(admin.ModelAdmin):
-    list_display = ['player', 'rating_at_queue', 'search_range', 'joined_at']
+    list_display = ['player', 'rating_at_queue', 'player_count_preference', 'search_range', 'joined_at']
+    list_filter = ['player_count_preference']
     ordering = ['joined_at']
