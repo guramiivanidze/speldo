@@ -302,7 +302,7 @@ export default function GameBoard({
         {/* Bottom - My Player Area */}
         <div className="flex justify-center">
           {me && (
-            <div className="w-full max-w-xl">
+            <div className="w-full max-w-3xl">
               <PlayerArea
                 player={me}
                 isCurrentTurn={me.id === currentPlayer?.id}

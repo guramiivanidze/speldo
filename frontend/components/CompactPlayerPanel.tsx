@@ -95,28 +95,30 @@ export default function CompactPlayerPanel({
 
             {/* Tokens Detail Row */}
             {totalTokens > 0 && (
-                <div className={`mt-2 flex gap-1 ${isVertical ? 'flex-wrap justify-center' : ''}`}>
-                    {GEM_COLORS.map((color) => {
-                        const count = player.tokens[color] || 0;
-                        if (count === 0) return null;
-                        return (
+                <div className={`mt-2 ${totalTokens >= 10 ? 'token-limit-warning p-1' : ''}`}>
+                    <div className={`flex gap-1 ${isVertical ? 'flex-wrap justify-center' : ''}`}>
+                        {GEM_COLORS.map((color) => {
+                            const count = player.tokens[color] || 0;
+                            if (count === 0) return null;
+                            return (
+                                <div
+                                    key={color}
+                                    className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shadow-sm"
+                                    style={{ background: TOKEN_GRADIENT[color] }}
+                                >
+                                    {count}
+                                </div>
+                            );
+                        })}
+                        {(player.tokens.gold || 0) > 0 && (
                             <div
-                                key={color}
-                                className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shadow-sm"
-                                style={{ background: TOKEN_GRADIENT[color] }}
+                                className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shadow-sm text-slate-900"
+                                style={{ background: TOKEN_GRADIENT.gold }}
                             >
-                                {count}
+                                {player.tokens.gold}
                             </div>
-                        );
-                    })}
-                    {(player.tokens.gold || 0) > 0 && (
-                        <div
-                            className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shadow-sm text-slate-900"
-                            style={{ background: TOKEN_GRADIENT.gold }}
-                        >
-                            {player.tokens.gold}
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -128,7 +130,7 @@ export default function CompactPlayerPanel({
                         <div key={color} className="flex flex-col items-center gap-0.5">
                             <div
                                 className="rounded-sm shadow-sm border border-white/20"
-                                style={{ width: 16, height: 16, background: GEM_DOT_STYLE[color] }}
+                                style={{ width: 16, height: 20, background: GEM_DOT_STYLE[color] }}
                             />
                             <span className={`text-[10px] font-bold ${count > 0 ? 'text-slate-200' : 'text-slate-600'}`}>
                                 {count}

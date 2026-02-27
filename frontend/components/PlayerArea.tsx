@@ -99,9 +99,13 @@ export default function PlayerArea({
           <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
             Tokens
           </span>
-          <span className="text-[10px] text-slate-400 font-bold">{totalTokens}/10</span>
+          <span className={`text-[10px] font-bold ${totalTokens >= 10 ? 'text-red-400' : 'text-slate-400'}`}>
+            {totalTokens}/10
+          </span>
         </div>
-        <TokenRow tokens={player.tokens} size="sm" showLabel={false} />
+        <div className={totalTokens >= 10 ? 'token-limit-warning p-1 -m-1' : ''}>
+          <TokenRow tokens={player.tokens} size="sm" showLabel={false} />
+        </div>
       </div>
 
       {/* ── Bonuses ────────────────────────────────── */}
@@ -110,7 +114,7 @@ export default function PlayerArea({
           <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
             Bonuses
           </span>
-          <span className="text-[10px] text-slate-400 font-bold">
+          <span className="text-[12px] text-slate-400 font-bold">
             {player.purchased_card_ids.length} cards
           </span>
         </div>
@@ -121,7 +125,7 @@ export default function PlayerArea({
               <div key={color} className="flex flex-col items-center gap-1">
                 <div
                   className="rounded-sm shadow-md border border-white/20"
-                  style={{ width: 22, height: 22, background: GEM_DOT_STYLE[color] }}
+                  style={{ width: 22, height: 30, background: GEM_DOT_STYLE[color] }}
                 />
                 <span className={`text-xs font-black ${count > 0 ? 'text-slate-200' : 'text-slate-600'}`}>
                   {count}
@@ -166,12 +170,12 @@ export default function PlayerArea({
             <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-2">
               Reserved ({player.reserved_card_ids.length}/3)
             </span>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               {player.reserved_card_ids.map((cid) => {
                 const card = cardsData[String(cid)];
                 if (!card) return null;
                 return (
-                  <div key={cid} className="w-20 h-28">
+                  <div key={cid} className="w-28 h-36">
                     <CardDisplay
                       card={card}
                       onBuy={onBuyReserved ? () => onBuyReserved(cid) : undefined}

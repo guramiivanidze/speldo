@@ -93,32 +93,50 @@ export default function CardDisplay({
 
         {/* Right section - Points + Cost */}
         <div className="flex-1 flex flex-col justify-between py-2 pr-2">
-          {/* Points (top right) - Golden circle badge */}
+          {/* Points (top right) - Crown badge */}
           <div className="flex justify-end">
             {card.points > 0 ? (
               <div
-                className="w-7 h-7 rounded-full flex items-center justify-center
-                           font-black text-sm text-amber-900 drop-shadow-lg
-                           border-2 border-amber-300 shadow-inner"
-                style={{
-                  background: 'linear-gradient(135deg, #fde047 0%, #fbbf24 50%, #f59e0b 100%)',
-                }}
+                className="relative flex items-center justify-center
+                           font-black text-sm text-amber-900 drop-shadow-lg"
               >
-                {card.points}
+                {/* Crown shape */}
+                <svg viewBox="0 0 32 28" className="w-9 h-8" style={{ filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.4))' }}>
+                  <defs>
+                    <linearGradient id="crownGradCard" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#fde047" />
+                      {/* <stop offset="50%" stopColor="#fbbf24" /> */}
+                      {/* <stop offset="100%" stopColor="#f59e0b" /> */}
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d="M2 24 L6 10 L10 16 L16 4 L22 16 L26 10 L30 24 Z"
+                    fill="url(#crownGradCard)"
+                    // stroke="#fcd34d"
+                    // strokeWidth="1.5"
+                  />
+                  <circle cx="6" cy="9" r="2.5" fill="#fcd34d" />
+                  <circle cx="16" cy="3" r="2.5" fill="#fcd34d" />
+                  <circle cx="26" cy="9" r="2.5" fill="#fcd34d" />
+                </svg>
+                
+                <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[35%] text-amber-900 font-black text-sm">
+                  {card.points}
+                </span>
               </div>
-            ) : <div className="w-7 h-7" />}
+            ) : <div className="w-9 h-8" />}
           </div>
 
           {/* Cost circles (bottom right) */}
-          <div className="flex flex-wrap gap-1 justify-end">
+          <div className="flex flex-wrap gap-1.5 justify-end">
             {costColors.map((color) => {
               const c = card.cost[color as GemColor];
               if (!c) return null;
               return (
                 <div
                   key={color}
-                  className={`w-5 h-5 rounded-full flex items-center justify-center
-                             text-[10px] font-bold shadow-sm border border-white/30
+                  className={`w-6 h-6 rounded-full flex items-center justify-center
+                             text-sm font-bold shadow-sm border-1 border-white/0
                              ${COST_CHIP[color as GemColor]}`}
                 >
                   {c}
