@@ -13,4 +13,4 @@ python manage.py migrate
 
 
 # Create superuser safely
-python manage.py create_superuser_if_none
+python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.create_superuser('gurami', 'gurami@gurami.ge', 'gurami)"
