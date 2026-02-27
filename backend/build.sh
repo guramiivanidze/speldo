@@ -13,4 +13,4 @@ python manage.py migrate
 
 
 # Create superuser safely
-python manage.py createsu
+python manage.py create_superuser_if_none
