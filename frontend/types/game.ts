@@ -7,12 +7,15 @@ export interface Card {
   bonus: GemColor;
   points: number;
   cost: Record<GemColor, number>;
+  background_image?: string;
 }
 
 export interface Noble {
   id: number;
   points: number;
   requirements: Record<GemColor, number>;
+  background_image?: string;
+  name?: string;
 }
 
 export interface PlayerState {

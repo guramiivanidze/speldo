@@ -2,10 +2,19 @@
 
 import { Noble, GemColor } from '@/types/game';
 import { GEM_GRADIENT, GEM_COLORS } from '@/lib/colors';
+import { API_BASE } from '@/lib/api';
 
 interface NobleZoomModalProps {
     noble: Noble;
     onClose: () => void;
+}
+
+function getNobleImageUrl(noble: Noble): string | null {
+    if (noble.background_image) {
+        if (noble.background_image.startsWith('http')) return noble.background_image;
+        return `${API_BASE}${noble.background_image}`;
+    }
+    return null;
 }
 
 export default function NobleZoomModal({
@@ -20,9 +29,22 @@ export default function NobleZoomModal({
             onClick={onClose}
         >
             <div
-                className="bg-gradient-to-br from-amber-950 via-slate-800 to-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-amber-500/30"
+                className="bg-gradient-to-br from-amber-950 via-slate-800 to-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-amber-500/30 relative overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
             >
+                {/* Background Image if exists */}
+                {getNobleImageUrl(noble) && (
+                    <>
+                        <div
+                            className="absolute inset-0 bg-cover bg-center opacity-30"
+                            style={{ backgroundImage: `url(${getNobleImageUrl(noble)})` }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-900/90" />
+                    </>
+                )}
+                
+                {/* Content */}
+                <div className="relative z-10">
                 {/* Noble Header */}
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -94,6 +116,7 @@ export default function NobleZoomModal({
                 <p className="text-slate-500 text-xs mt-4 text-center">
                     Nobles visit you automatically when you have the required card bonuses.
                 </p>
+                </div>
             </div>
         </div>
     );

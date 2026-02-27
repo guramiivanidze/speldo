@@ -3,8 +3,34 @@
 import { useState } from 'react';
 import { Card, Noble, GemColor, TokenColor } from '@/types/game';
 import { GEM_GRADIENT, TOKEN_GRADIENT, TOKEN_LABEL, LEVEL_COLOR, GEM_COLORS } from '@/lib/colors';
+import { API_BASE } from '@/lib/api';
 import CardZoomModal from './CardZoomModal';
 import NobleZoomModal from './NobleZoomModal';
+
+// Fallback gem images
+const GEM_IMAGES: Record<string, string> = {
+    white: 'https://images.pexels.com/photos/2529148/pexels-photo-2529148.jpeg?auto=compress&w=400',
+    blue: 'https://images.pexels.com/photos/1458867/pexels-photo-1458867.jpeg?auto=compress&w=400',
+    green: 'https://images.pexels.com/photos/1573236/pexels-photo-1573236.jpeg?auto=compress&w=400',
+    red: 'https://images.pexels.com/photos/4040567/pexels-photo-4040567.jpeg?auto=compress&w=400',
+    black: 'https://images.pexels.com/photos/2166456/pexels-photo-2166456.jpeg?auto=compress&w=400',
+};
+
+function getImageUrl(card: Card): string {
+    if (card.background_image) {
+        if (card.background_image.startsWith('http')) return card.background_image;
+        return `${API_BASE}${card.background_image}`;
+    }
+    return GEM_IMAGES[card.bonus];
+}
+
+function getNobleImageUrl(noble: Noble): string | null {
+    if (noble.background_image) {
+        if (noble.background_image.startsWith('http')) return noble.background_image;
+        return `${API_BASE}${noble.background_image}`;
+    }
+    return null;
+}
 
 interface MobileBoardViewProps {
     visibleCards: Record<string, number[]>;
@@ -99,12 +125,27 @@ export default function MobileBoardView({
                     {nobles.map((nid) => {
                         const noble = noblesData[String(nid)];
                         if (!noble) return null;
+                        const nobleImage = getNobleImageUrl(noble);
                         return (
                             <button
                                 key={nid}
-                                className="shrink-0 w-24 h-16 snap-start rounded-lg overflow-hidden border border-amber-500/30 bg-gradient-to-br from-amber-950 to-slate-900 p-2 flex flex-col justify-between transition-transform active:scale-95"
+                                className="shrink-0 w-24 h-16 snap-start rounded-lg overflow-hidden border border-amber-500/30 relative transition-transform active:scale-95"
                                 onClick={() => setZoomedNoble(noble)}
                             >
+                                {/* Background: image or gradient */}
+                                {nobleImage ? (
+                                    <>
+                                        <div
+                                            className="absolute inset-0 bg-cover bg-center"
+                                            style={{ backgroundImage: `url(${nobleImage})` }}
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-amber-950/80 to-transparent" />
+                                    </>
+                                ) : (
+                                    <div className="absolute inset-0 bg-gradient-to-br from-amber-950 to-slate-900" />
+                                )}
+                                {/* Content */}
+                                <div className="relative z-10 h-full p-2 flex flex-col justify-between">
                                 <div className="flex justify-between items-start">
                                     <span className="text-amber-400 text-xs">♛</span>
                                     <div className="bg-amber-500 text-amber-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
@@ -128,6 +169,7 @@ export default function MobileBoardView({
                                             </div>
                                         );
                                     })}
+                                </div>
                                 </div>
                             </button>
                         );
@@ -173,14 +215,22 @@ export default function MobileBoardView({
                                     <button
                                         key={cardId}
                                         className={`
-                      shrink-0 w-20 h-28 snap-start rounded-lg overflow-hidden
+                      shrink-0 w-20 h-28 snap-start rounded-lg overflow-hidden relative
                       transition-transform active:scale-95
                       ${affordable ? 'ring-2 ring-emerald-400' : ''}
                     `}
-                                        style={{ background: GEM_GRADIENT[card.bonus] }}
                                         onClick={() => setZoomedCard(card)}
                                     >
-                                        <div className="h-full flex flex-col justify-between p-1.5 bg-black/20">
+                                        {/* Background image */}
+                                        <div
+                                            className="absolute inset-0 bg-cover bg-center"
+                                            style={{ backgroundImage: `url(${getImageUrl(card)})` }}
+                                        />
+                                        <div
+                                            className="absolute inset-0"
+                                            style={{ background: GEM_GRADIENT[card.bonus], opacity: 0.6 }}
+                                        />
+                                        <div className="h-full flex flex-col justify-between p-1.5 relative z-10">
                                             {/* Points & Level */}
                                             <div className="flex justify-between items-start">
                                                 <div className={`text-[8px] font-bold px-1 py-0.5 rounded ${LEVEL_COLOR[card.level]}`}>

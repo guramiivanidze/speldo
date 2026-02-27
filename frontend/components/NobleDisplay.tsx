@@ -2,13 +2,14 @@
 
 import { Noble } from '@/types/game';
 import { GEM_COLORS, GEM_DOT_STYLE } from '@/lib/colors';
+import { API_BASE } from '@/lib/api';
 
 interface NobleDisplayProps {
   noble: Noble;
   compact?: boolean;
 }
 
-// Noble portrait images - elegant royal/historical themed backgrounds
+// Fallback noble portrait images
 const NOBLE_IMAGES: string[] = [
   'https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=200&h=300&fit=crop', // Royal texture
   'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=300&fit=crop', // Portrait style
@@ -17,10 +18,19 @@ const NOBLE_IMAGES: string[] = [
   'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200&h=300&fit=crop', // Royal person
 ];
 
-export default function NobleDisplay({ noble, compact = false }: NobleDisplayProps) {
-  // Use noble id to pick consistent image
+// Helper to get noble image URL
+function getNobleImageUrl(noble: Noble): string {
+  if (noble.background_image) {
+    if (noble.background_image.startsWith('http')) return noble.background_image;
+    return `${API_BASE}${noble.background_image}`;
+  }
+  // Fallback to default images based on ID
   const imageIndex = noble.id % NOBLE_IMAGES.length;
-  const bgImage = NOBLE_IMAGES[imageIndex];
+  return NOBLE_IMAGES[imageIndex];
+}
+
+export default function NobleDisplay({ noble, compact = false }: NobleDisplayProps) {
+  const bgImage = getNobleImageUrl(noble);
 
   if (compact) {
     return (

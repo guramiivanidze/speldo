@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import Game, GamePlayer, DevelopmentCard, Noble
+from .game_logic import clear_card_cache
 
 
 @admin.register(DevelopmentCard)
@@ -35,6 +36,10 @@ class DevelopmentCardAdmin(admin.ModelAdmin):
             return format_html('<img src="{}" style="max-height: 200px;" />', obj.background_image.url)
         return 'No image uploaded'
     image_preview.short_description = 'Preview'
+    
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        clear_card_cache()  # Clear cache so new images are picked up
 
 
 @admin.register(Noble)
@@ -68,6 +73,10 @@ class NobleAdmin(admin.ModelAdmin):
             return format_html('<img src="{}" style="max-height: 200px;" />', obj.background_image.url)
         return 'No image uploaded'
     image_preview.short_description = 'Preview'
+    
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        clear_card_cache()  # Clear cache so new images are picked up
 
 
 @admin.register(Game)

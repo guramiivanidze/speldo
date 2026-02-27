@@ -2,6 +2,7 @@
 
 import { Card, GemColor } from '@/types/game';
 import { GEM_GRADIENT, COST_CHIP, TOKEN_LABEL, LEVEL_COLOR, GEM_COLORS } from '@/lib/colors';
+import { API_BASE } from '@/lib/api';
 
 interface CardZoomModalProps {
   card: Card;
@@ -13,6 +14,23 @@ interface CardZoomModalProps {
 }
 
 const ROMAN: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
+
+// Fallback gem images
+const GEM_IMAGES: Record<string, string> = {
+  white: 'https://images.pexels.com/photos/2529148/pexels-photo-2529148.jpeg?auto=compress&w=400',
+  blue: 'https://images.pexels.com/photos/1458867/pexels-photo-1458867.jpeg?auto=compress&w=400',
+  green: 'https://images.pexels.com/photos/1573236/pexels-photo-1573236.jpeg?auto=compress&w=400',
+  red: 'https://images.pexels.com/photos/4040567/pexels-photo-4040567.jpeg?auto=compress&w=400',
+  black: 'https://images.pexels.com/photos/2166456/pexels-photo-2166456.jpeg?auto=compress&w=400',
+};
+
+function getImageUrl(card: Card): string {
+  if (card.background_image) {
+    if (card.background_image.startsWith('http')) return card.background_image;
+    return `${API_BASE}${card.background_image}`;
+  }
+  return GEM_IMAGES[card.bonus];
+}
 
 export default function CardZoomModal({
   card,
@@ -30,9 +48,18 @@ export default function CardZoomModal({
       onClick={onClose}
     >
       <div
-        className="bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-white/10"
+        className="bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-white/10 relative overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Background Image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-20"
+          style={{ backgroundImage: `url(${getImageUrl(card)})` }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-800" />
+        
+        {/* Content */}
+        <div className="relative z-10">
         {/* Card Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -159,6 +186,7 @@ export default function CardZoomModal({
               {canReserve ? '📌 Reserve' : 'Max Reserved'}
             </button>
           )}
+        </div>
         </div>
       </div>
     </div>

@@ -3,7 +3,25 @@
 import { useState } from 'react';
 import { PlayerState, Card, Noble, GemColor } from '@/types/game';
 import { GEM_GRADIENT, TOKEN_GRADIENT, GEM_COLORS, TOKEN_LABEL } from '@/lib/colors';
+import { API_BASE } from '@/lib/api';
 import CardZoomModal from './CardZoomModal';
+
+// Fallback gem images
+const GEM_IMAGES: Record<string, string> = {
+    white: 'https://images.pexels.com/photos/2529148/pexels-photo-2529148.jpeg?auto=compress&w=400',
+    blue: 'https://images.pexels.com/photos/1458867/pexels-photo-1458867.jpeg?auto=compress&w=400',
+    green: 'https://images.pexels.com/photos/1573236/pexels-photo-1573236.jpeg?auto=compress&w=400',
+    red: 'https://images.pexels.com/photos/4040567/pexels-photo-4040567.jpeg?auto=compress&w=400',
+    black: 'https://images.pexels.com/photos/2166456/pexels-photo-2166456.jpeg?auto=compress&w=400',
+};
+
+function getImageUrl(card: Card): string {
+    if (card.background_image) {
+        if (card.background_image.startsWith('http')) return card.background_image;
+        return `${API_BASE}${card.background_image}`;
+    }
+    return GEM_IMAGES[card.bonus];
+}
 
 interface MobilePlayerViewProps {
   player: PlayerState;
@@ -127,14 +145,22 @@ export default function MobilePlayerView({
                 <button
                   key={cid}
                   className={`
-                    aspect-[3/4] rounded-xl overflow-hidden
+                    aspect-[3/4] rounded-xl overflow-hidden relative
                     transition-transform active:scale-95
                     ${affordable ? 'ring-2 ring-emerald-400' : ''}
                   `}
-                  style={{ background: GEM_GRADIENT[card.bonus] }}
                   onClick={() => setZoomedCard(card)}
                 >
-                  <div className="h-full flex flex-col justify-between p-2 bg-black/20">
+                  {/* Background image */}
+                  <div
+                    className="absolute inset-0 bg-cover bg-center"
+                    style={{ backgroundImage: `url(${getImageUrl(card)})` }}
+                  />
+                  <div
+                    className="absolute inset-0"
+                    style={{ background: GEM_GRADIENT[card.bonus], opacity: 0.6 }}
+                  />
+                  <div className="h-full flex flex-col justify-between p-2 relative z-10">
                     <div className="flex justify-end">
                       {card.points > 0 && (
                         <div className="bg-amber-400 text-amber-900 text-sm font-bold w-6 h-6 rounded-full flex items-center justify-center">
