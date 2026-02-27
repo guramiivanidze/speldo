@@ -85,6 +85,7 @@ export default function MobileTokenSelector({
                   ${selected > 0 
                     ? 'ring-4 ring-amber-400 ring-offset-2 ring-offset-slate-900' 
                     : ''}
+                  ${color === 'white' ? 'text-slate-800' : ''}
                 `}
                 style={{ background: TOKEN_GRADIENT[color] }}
                 onClick={() => !disabled && onSelectToken(color)}

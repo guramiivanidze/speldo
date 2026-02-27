@@ -20,12 +20,12 @@ export default function MobileNavTabs({
   ];
 
   return (
-    <div className="flex bg-slate-900 border-t border-white/10">
+    <div className="flex bg-slate-900 border-t border-white/10 safe-area-bottom">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           className={`
-            flex-1 py-3 flex flex-col items-center gap-1
+            flex-1 py-1.5 flex items-center justify-center gap-1.5
             transition-colors
             ${activeTab === tab.id
               ? 'bg-slate-700 text-white'
@@ -33,7 +33,7 @@ export default function MobileNavTabs({
           `}
           onClick={() => onTabChange(tab.id)}
         >
-          <span className="text-lg">{tab.icon}</span>
+          <span className="text-base">{tab.icon}</span>
           <span className="text-[10px] font-semibold uppercase tracking-wide">{tab.label}</span>
         </button>
       ))}

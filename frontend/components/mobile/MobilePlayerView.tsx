@@ -76,7 +76,9 @@ export default function MobilePlayerView({
           {[...GEM_COLORS, 'gold' as const].map((color) => (
             <div key={color} className="flex flex-col items-center gap-1">
               <div
-                className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold shadow-lg"
+                className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold shadow-lg
+                  ${color === 'white' ? 'text-slate-800' : ''}
+                  ${color === 'gold' ? 'text-slate-900' : ''}`}
                 style={{ background: TOKEN_GRADIENT[color] }}
               >
                 {player.tokens[color] || 0}

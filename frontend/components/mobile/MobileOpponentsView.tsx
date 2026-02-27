@@ -100,7 +100,9 @@ function OpponentPanel({
                 return (
                   <div
                     key={color}
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-sm"
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shadow-sm
+                      ${color === 'white' ? 'text-slate-800' : ''}
+                      ${color === 'gold' ? 'text-slate-900' : ''}`}
                     style={{ background: TOKEN_GRADIENT[color] }}
                   >
                     {count}
