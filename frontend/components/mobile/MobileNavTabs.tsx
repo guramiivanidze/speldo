@@ -25,7 +25,7 @@ export default function MobileNavTabs({
         <button
           key={tab.id}
           className={`
-            flex-1 py-1.5 flex items-center justify-center gap-1.5
+            flex-1 py-3 flex items-center justify-center gap-1.5
             transition-colors
             ${activeTab === tab.id
               ? 'bg-slate-700 text-white'

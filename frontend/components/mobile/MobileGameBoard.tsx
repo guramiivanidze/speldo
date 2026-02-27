@@ -98,7 +98,7 @@ export default function MobileGameBoard({
   }
 
   return (
-    <div className="h-full w-full flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pt-14">
+    <div className="h-full w-full flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pt-4">
       {/* Turn Banner */}
       <MobileTurnBanner
         isMyTurn={isMyTurn}

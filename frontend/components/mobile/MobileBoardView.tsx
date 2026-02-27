@@ -146,30 +146,30 @@ export default function MobileBoardView({
                                 )}
                                 {/* Content */}
                                 <div className="relative z-10 h-full p-2 flex flex-col justify-between">
-                                <div className="flex justify-between items-start">
-                                    <span className="text-amber-400 text-xs">♛</span>
-                                    <div className="bg-amber-500 text-amber-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
-                                        {noble.points}
+                                    <div className="flex justify-between items-start">
+                                        <span className="text-amber-400 text-xs">♛</span>
+                                        <div className="bg-amber-500 text-amber-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                                            {noble.points}
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="flex gap-1 flex-wrap">
-                                    {GEM_COLORS.map((color) => {
-                                        const req = noble.requirements[color];
-                                        if (!req) return null;
-                                        return (
-                                            <div
-                                                key={color}
-                                                className="flex items-center gap-0.5 bg-black/40 rounded px-1 py-0.5"
-                                            >
+                                    <div className="flex gap-1 flex-wrap">
+                                        {GEM_COLORS.map((color) => {
+                                            const req = noble.requirements[color];
+                                            if (!req) return null;
+                                            return (
                                                 <div
-                                                    className="w-2 h-2 rounded-full"
-                                                    style={{ background: GEM_GRADIENT[color] }}
-                                                />
-                                                <span className="text-[8px] font-bold text-white">{req}</span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                                                    key={color}
+                                                    className="flex items-center gap-0.5 bg-black/40 rounded px-1 py-0.5"
+                                                >
+                                                    <div
+                                                        className="w-2 h-3 rounded-0"
+                                                        style={{ background: GEM_GRADIENT[color] }}
+                                                    />
+                                                    <span className="text-[8px] font-bold text-white">{req}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             </button>
                         );
@@ -178,11 +178,11 @@ export default function MobileBoardView({
             </div>
 
             {/* Card Tiers - Vertical scroll, horizontal per tier */}
-            <div className="flex-1 overflow-y-auto p-2 space-y-3">
+            <div className="flex-1 overflow-y-auto p-2 space-y-0">
                 {levels.map((level) => (
                     <div key={level} className="bg-slate-800/50 rounded-xl p-2">
                         {/* Tier header */}
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center gap-2 mb-0.5">
                             <div className={`w-2 h-2 rounded-full ${LEVEL_DOT[level]}`} />
                             <span className={`text-xs font-bold ${LEVEL_COLOR[Number(level) as 1 | 2 | 3].replace('bg-', 'text-')}`}>
                                 Tier {ROMAN[Number(level)]}
@@ -215,7 +215,7 @@ export default function MobileBoardView({
                                     <button
                                         key={cardId}
                                         className={`
-                      shrink-0 w-20 h-28 snap-start rounded-lg overflow-hidden relative
+                      shrink-0 w-20 h-30 snap-start rounded-lg overflow-hidden relative
                       transition-transform active:scale-95
                       ${affordable ? 'ring-2 ring-emerald-400' : ''}
                     `}
