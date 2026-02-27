@@ -8,6 +8,8 @@ import { TokenRow } from './TokenDisplay';
 import CompactPlayerPanel from './CompactPlayerPanel';
 import PlayerArea from './PlayerArea';
 import { GEM_COLORS, TOKEN_LABEL } from '@/lib/colors';
+import useIsMobile from '@/hooks/useIsMobile';
+import MobileGameBoard from './mobile/MobileGameBoard';
 
 interface GameBoardProps {
   gameState: GameState;
@@ -26,7 +28,21 @@ export default function GameBoard({
   onReserveCard,
   onBuyCard,
 }: GameBoardProps) {
+  const isMobile = useIsMobile();
   const [selectedTokens, setSelectedTokens] = useState<TokenColor[]>([]);
+
+  // Render mobile layout
+  if (isMobile) {
+    return (
+      <MobileGameBoard
+        gameState={gameState}
+        myUserId={myUserId}
+        onTakeTokens={onTakeTokens}
+        onReserveCard={onReserveCard}
+        onBuyCard={onBuyCard}
+      />
+    );
+  }
 
   const currentPlayer = gameState.players[gameState.current_player_index];
   const isMyTurn = currentPlayer?.id === myUserId;
