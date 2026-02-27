@@ -7,21 +7,12 @@ import { API_BASE } from '@/lib/api';
 import CardZoomModal from './CardZoomModal';
 import NobleZoomModal from './NobleZoomModal';
 
-// Fallback gem images
-const GEM_IMAGES: Record<string, string> = {
-    white: 'https://images.pexels.com/photos/2529148/pexels-photo-2529148.jpeg?auto=compress&w=400',
-    blue: 'https://images.pexels.com/photos/1458867/pexels-photo-1458867.jpeg?auto=compress&w=400',
-    green: 'https://images.pexels.com/photos/1573236/pexels-photo-1573236.jpeg?auto=compress&w=400',
-    red: 'https://images.pexels.com/photos/4040567/pexels-photo-4040567.jpeg?auto=compress&w=400',
-    black: 'https://images.pexels.com/photos/2166456/pexels-photo-2166456.jpeg?auto=compress&w=400',
-};
-
-function getImageUrl(card: Card): string {
+function getImageUrl(card: Card): string | null {
     if (card.background_image) {
         if (card.background_image.startsWith('http')) return card.background_image;
         return `${API_BASE}${card.background_image}`;
     }
-    return GEM_IMAGES[card.bonus];
+    return null; // Return null to show color gradient instead
 }
 
 function getNobleImageUrl(noble: Noble): string | null {
@@ -210,6 +201,7 @@ export default function MobileBoardView({
                                 const card = cardsData[String(cardId)];
                                 if (!card) return null;
                                 const affordable = canAfford(cardId);
+                                const cardImage = getImageUrl(card);
 
                                 return (
                                     <button
@@ -221,15 +213,24 @@ export default function MobileBoardView({
                     `}
                                         onClick={() => setZoomedCard(card)}
                                     >
-                                        {/* Background image */}
-                                        <div
-                                            className="absolute inset-0 bg-cover bg-center"
-                                            style={{ backgroundImage: `url(${getImageUrl(card)})` }}
-                                        />
-                                        <div
-                                            className="absolute inset-0"
-                                            style={{ background: GEM_GRADIENT[card.bonus], opacity: 0.6 }}
-                                        />
+                                        {/* Background: image or color gradient */}
+                                        {cardImage ? (
+                                            <>
+                                                <div
+                                                    className="absolute inset-0 bg-cover bg-center"
+                                                    style={{ backgroundImage: `url(${cardImage})` }}
+                                                />
+                                                <div
+                                                    className="absolute inset-0"
+                                                    style={{ background: GEM_GRADIENT[card.bonus], opacity: 0.5 }}
+                                                />
+                                            </>
+                                        ) : (
+                                            <div
+                                                className="absolute inset-0"
+                                                style={{ background: GEM_GRADIENT[card.bonus] }}
+                                            />
+                                        )}
                                         <div className="h-full flex flex-col justify-between p-1.5 relative z-10">
                                             {/* Points & Level */}
                                             <div className="flex justify-between items-start">

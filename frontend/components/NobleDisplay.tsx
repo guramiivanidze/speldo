@@ -9,24 +9,14 @@ interface NobleDisplayProps {
   compact?: boolean;
 }
 
-// Fallback noble portrait images
-const NOBLE_IMAGES: string[] = [
-  'https://images.unsplash.com/photo-1518998053901-5348d3961a04?w=200&h=300&fit=crop', // Royal texture
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=300&fit=crop', // Portrait style
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&h=300&fit=crop', // Noble portrait
-  'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200&h=300&fit=crop', // Elegant figure
-  'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=200&h=300&fit=crop', // Royal person
-];
-
 // Helper to get noble image URL
-function getNobleImageUrl(noble: Noble): string {
+function getNobleImageUrl(noble: Noble): string | null {
   if (noble.background_image) {
     if (noble.background_image.startsWith('http')) return noble.background_image;
     return `${API_BASE}${noble.background_image}`;
   }
-  // Fallback to default images based on ID
-  const imageIndex = noble.id % NOBLE_IMAGES.length;
-  return NOBLE_IMAGES[imageIndex];
+  // Return null to show amber gradient instead
+  return null;
 }
 
 export default function NobleDisplay({ noble, compact = false }: NobleDisplayProps) {
@@ -37,11 +27,15 @@ export default function NobleDisplay({ noble, compact = false }: NobleDisplayPro
       <div
         className="relative rounded-xl overflow-hidden border border-amber-500/50 shadow-lg group h-full w-full"
       >
-        {/* Background image */}
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${bgImage})` }}
-        />
+        {/* Background: image or amber gradient */}
+        {bgImage ? (
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url(${bgImage})` }}
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-700 via-amber-800 to-amber-950" />
+        )}
         {/* Dark overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-amber-950/90 via-amber-900/50 to-amber-800/30" />
         
@@ -101,11 +95,15 @@ export default function NobleDisplay({ noble, compact = false }: NobleDisplayPro
     <div
       className="relative rounded-xl overflow-hidden border border-amber-500/40 shadow-xl group h-full w-full"
     >
-      {/* Background image */}
-      <div
-        className="absolute inset-0 bg-cover bg-center transition-transform duration-300 group-hover:scale-110"
-        style={{ backgroundImage: `url(${bgImage})` }}
-      />
+      {/* Background: image or amber gradient */}
+      {bgImage ? (
+        <div
+          className="absolute inset-0 bg-cover bg-center transition-transform duration-300 group-hover:scale-110"
+          style={{ backgroundImage: `url(${bgImage})` }}
+        />
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-amber-700 via-amber-800 to-amber-950" />
+      )}
       {/* Elegant overlay */}
       <div className="absolute inset-0 bg-gradient-to-t from-amber-950/95 via-amber-900/60 to-transparent" />
       

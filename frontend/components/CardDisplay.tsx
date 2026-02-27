@@ -19,17 +19,8 @@ interface CardDisplayProps {
 
 const ROMAN: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
 
-// Fallback gem images for cards without custom images
-const GEM_IMAGES: Record<string, string> = {
-  white: 'https://images.pexels.com/photos/2529148/pexels-photo-2529148.jpeg?auto=compress&w=400', // Diamond/crystal
-  blue: 'https://images.pexels.com/photos/1458867/pexels-photo-1458867.jpeg?auto=compress&w=400', // Blue gem
-  green: 'https://images.pexels.com/photos/1573236/pexels-photo-1573236.jpeg?auto=compress&w=400', // Green gem
-  red: 'https://images.pexels.com/photos/4040567/pexels-photo-4040567.jpeg?auto=compress&w=400', // Red crystal
-  black: 'https://images.pexels.com/photos/2166456/pexels-photo-2166456.jpeg?auto=compress&w=400', // Black stone
-};
-
 // Helper to get full image URL (handles relative media URLs)
-function getImageUrl(card: Card): string {
+function getImageUrl(card: Card): string | null {
   if (card.background_image) {
     // If it's already an absolute URL, use it directly
     if (card.background_image.startsWith('http')) {
@@ -38,8 +29,8 @@ function getImageUrl(card: Card): string {
     // Otherwise, prepend the API base URL
     return `${API_BASE}${card.background_image}`;
   }
-  // Fallback to default gem images
-  return GEM_IMAGES[card.bonus];
+  // Return null to show color gradient instead
+  return null;
 }
 
 export default function CardDisplay({
@@ -53,6 +44,7 @@ export default function CardDisplay({
 }: CardDisplayProps) {
   const textCls = CARD_TEXT[card.bonus];
   const costColors = GEM_COLORS.filter((color) => card.cost[color as GemColor]);
+  const cardImage = getImageUrl(card);
 
   return (
     <div
@@ -64,16 +56,18 @@ export default function CardDisplay({
       `}
       style={{ background: CARD_GRADIENT[card.bonus] }}
     >
-      {/* Background gem image */}
-      <div
-        className="absolute inset-0 bg-cover bg-center"
-        style={{ backgroundImage: `url(${getImageUrl(card)})` }}
-      />
+      {/* Background: image or just color gradient */}
+      {cardImage && (
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${cardImage})` }}
+        />
+      )}
 
       {/* Gradient overlay for readability */}
       <div
         className="absolute inset-0"
-        style={{ background: `${CARD_GRADIENT[card.bonus]}`, opacity: 0.7 }}
+        style={{ background: `${CARD_GRADIENT[card.bonus]}`, opacity: cardImage ? 0.7 : 0 }}
       />
 
       {/* Main content - horizontal layout */}

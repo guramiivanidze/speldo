@@ -15,21 +15,12 @@ interface CardZoomModalProps {
 
 const ROMAN: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
 
-// Fallback gem images
-const GEM_IMAGES: Record<string, string> = {
-  white: 'https://images.pexels.com/photos/2529148/pexels-photo-2529148.jpeg?auto=compress&w=400',
-  blue: 'https://images.pexels.com/photos/1458867/pexels-photo-1458867.jpeg?auto=compress&w=400',
-  green: 'https://images.pexels.com/photos/1573236/pexels-photo-1573236.jpeg?auto=compress&w=400',
-  red: 'https://images.pexels.com/photos/4040567/pexels-photo-4040567.jpeg?auto=compress&w=400',
-  black: 'https://images.pexels.com/photos/2166456/pexels-photo-2166456.jpeg?auto=compress&w=400',
-};
-
-function getImageUrl(card: Card): string {
+function getImageUrl(card: Card): string | null {
   if (card.background_image) {
     if (card.background_image.startsWith('http')) return card.background_image;
     return `${API_BASE}${card.background_image}`;
   }
-  return GEM_IMAGES[card.bonus];
+  return null; // Return null to show color gradient instead
 }
 
 export default function CardZoomModal({
@@ -41,6 +32,7 @@ export default function CardZoomModal({
   canReserve = false,
 }: CardZoomModalProps) {
   const costColors = GEM_COLORS.filter((color) => card.cost[color as GemColor]);
+  const cardImage = getImageUrl(card);
 
   return (
     <div
@@ -51,11 +43,18 @@ export default function CardZoomModal({
         className="bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-white/10 relative overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Background Image */}
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-20"
-          style={{ backgroundImage: `url(${getImageUrl(card)})` }}
-        />
+        {/* Background: Image or Color Gradient */}
+        {cardImage ? (
+          <div
+            className="absolute inset-0 bg-cover bg-center opacity-20"
+            style={{ backgroundImage: `url(${cardImage})` }}
+          />
+        ) : (
+          <div
+            className="absolute inset-0 opacity-30"
+            style={{ background: GEM_GRADIENT[card.bonus] }}
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-800" />
         
         {/* Content */}
