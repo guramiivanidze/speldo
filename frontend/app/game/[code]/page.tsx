@@ -56,6 +56,7 @@ export default function GamePage({ params }: PageProps) {
     buyCard,
     leaveGame,
     voteResponse,
+    cancelPendingDiscard,
     refreshState,
     clearError,
     clearPauseEvent,
@@ -249,6 +250,7 @@ export default function GamePage({ params }: PageProps) {
             onReserveCard={reserveCard}
             onBuyCard={buyCard}
             onDiscardTokens={discardTokens}
+            onCancelPendingDiscard={cancelPendingDiscard}
           />
         </div>
       </div>

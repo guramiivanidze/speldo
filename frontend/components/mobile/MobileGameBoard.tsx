@@ -21,6 +21,7 @@ interface MobileGameBoardProps {
   onReserveCard: (cardId?: number, level?: number) => void;
   onBuyCard: (cardId: number) => void;
   onDiscardTokens: (tokens: Record<string, number>) => void;
+  onCancelPendingDiscard?: () => void;
 }
 
 export default function MobileGameBoard({
@@ -30,6 +31,7 @@ export default function MobileGameBoard({
   onReserveCard,
   onBuyCard,
   onDiscardTokens,
+  onCancelPendingDiscard,
 }: MobileGameBoardProps) {
   const [activeTab, setActiveTab] = useState<MobileTab>('board');
   const [showTokenSelector, setShowTokenSelector] = useState(false);
@@ -206,6 +208,7 @@ export default function MobileGameBoard({
           playerTokens={me.tokens}
           discardCount={gameState.pending_discard_count}
           onDiscard={onDiscardTokens}
+          onCancel={onCancelPendingDiscard}
         />
       )}
     </div>

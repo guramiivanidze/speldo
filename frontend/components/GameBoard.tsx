@@ -19,6 +19,7 @@ interface GameBoardProps {
   onReserveCard: (cardId?: number, level?: number) => void;
   onBuyCard: (cardId: number) => void;
   onDiscardTokens: (tokens: Record<string, number>) => void;
+  onCancelPendingDiscard?: () => void;
 }
 
 const LEVEL_DOT: Record<string, string> = { '3': 'bg-red-400', '2': 'bg-yellow-400', '1': 'bg-emerald-400' };
@@ -30,6 +31,7 @@ export default function GameBoard({
   onReserveCard,
   onBuyCard,
   onDiscardTokens,
+  onCancelPendingDiscard,
 }: GameBoardProps) {
   const isMobile = useIsMobile();
   const [selectedTokens, setSelectedTokens] = useState<TokenColor[]>([]);
@@ -44,6 +46,7 @@ export default function GameBoard({
         onReserveCard={onReserveCard}
         onBuyCard={onBuyCard}
         onDiscardTokens={onDiscardTokens}
+        onCancelPendingDiscard={onCancelPendingDiscard}
       />
     );
   }
@@ -353,6 +356,7 @@ export default function GameBoard({
           playerTokens={me.tokens}
           discardCount={gameState.pending_discard_count}
           onDiscard={onDiscardTokens}
+          onCancel={onCancelPendingDiscard}
         />
       )}
     </div>

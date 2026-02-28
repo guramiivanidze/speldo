@@ -159,6 +159,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             'leave_game': self.handle_leave_game,
             'vote_response': self.handle_vote_response,
             'refresh_state': self.handle_refresh_state,
+            'cancel_pending_discard': self.handle_cancel_pending_discard,
         }
 
         handler = handlers.get(action)
@@ -734,9 +735,14 @@ class GameConsumer(AsyncWebsocketConsumer):
                     
                     # Only advance turn if player doesn't need to discard
                     if not needs_discard:
+                        current_gp.pending_action_data = None
                         self._post_action(game, current_gp, players, new_gd, new_pd)
                     else:
-                        # Just save without advancing turn
+                        # Save pending action data for cancel support
+                        current_gp.pending_action_data = {
+                            'type': 'take_tokens',
+                            'colors': colors,
+                        }
                         game.save()
                         current_gp.save()
                     
@@ -774,6 +780,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                     
                     # Advance turn only when player is at or below 10 tokens
                     if not still_needs_discard:
+                        current_gp.pending_action_data = None
                         self._post_action(game, current_gp, players, new_gd, new_pd)
                     else:
                         game.save()
@@ -784,6 +791,72 @@ class GameConsumer(AsyncWebsocketConsumer):
                 return "Game not found.", True
 
         error, still_needs_discard = await _db()
+        if error:
+            await self.send_error(error)
+        else:
+            await self.send_game_state()
+
+    async def handle_cancel_pending_discard(self, payload):
+        """Cancel the pending action that triggered the discard requirement."""
+        from .game_logic import apply_cancel_pending_discard
+
+        @database_sync_to_async
+        def _db():
+            from django.db import transaction
+            try:
+                with transaction.atomic():
+                    game = Game.objects.select_for_update().get(code=self.game_code)
+                    players = list(game.players.select_related('user').order_by('order'))
+                    if game.status != Game.STATUS_PLAYING:
+                        return "Game is not in progress."
+                    current_gp = self._get_current_player(game, players)
+                    if current_gp is None or current_gp.user != self.user:
+                        return "Not your turn."
+                    
+                    pending_data = current_gp.pending_action_data
+                    if not pending_data:
+                        return "No pending action to cancel."
+                    
+                    game_data = self._game_data_from_game(game)
+                    player_data = self._player_data_from_gp(current_gp)
+
+                    logger.info(
+                        "[CANCEL_PENDING] Game=%s User=%s | PendingAction=%s",
+                        self.game_code, self.user.username, pending_data
+                    )
+
+                    new_gd, new_pd, error = apply_cancel_pending_discard(
+                        game_data, player_data, pending_data
+                    )
+                    if error:
+                        logger.warning("[CANCEL_PENDING] Game=%s User=%s | ERROR: %s", self.game_code, self.user.username, error)
+                        return error
+
+                    # Update game state
+                    game.tokens_in_bank = new_gd['tokens_in_bank']
+                    game.visible_cards = new_gd['visible_cards']
+                    
+                    # Update player state
+                    current_gp.tokens = new_pd['tokens']
+                    current_gp.reserved_card_ids = new_pd['reserved_card_ids']
+                    current_gp.pending_action_data = None
+                    
+                    # Don't advance turn - player's turn was never "completed"
+                    game.save()
+                    current_gp.save()
+                    
+                    logger.info(
+                        "[CANCEL_PENDING] Game=%s User=%s | SUCCESS | PlayerTokens=%s (total=%d) | Reserved=%s",
+                        self.game_code, self.user.username,
+                        new_pd['tokens'], sum(new_pd['tokens'].values()),
+                        new_pd['reserved_card_ids']
+                    )
+                    
+                    return None
+            except Game.DoesNotExist:
+                return "Game not found."
+
+        error = await _db()
         if error:
             await self.send_error(error)
         else:
@@ -839,9 +912,26 @@ class GameConsumer(AsyncWebsocketConsumer):
                     
                     # Only advance turn if player doesn't need to discard
                     if not needs_discard:
+                        current_gp.pending_action_data = None
                         self._post_action(game, current_gp, players, new_gd, new_pd)
                     else:
-                        # Just save without advancing turn
+                        # Determine if gold was received (compare before/after gold)
+                        gold_before = player_data['tokens'].get('gold', 0)
+                        gold_after = new_pd['tokens'].get('gold', 0)
+                        gold_received = gold_after > gold_before
+                        
+                        # Determine the card's level
+                        reserved_card = get_card(reserved_id)
+                        card_level = reserved_card['level'] if reserved_card else None
+                        
+                        # Save pending action data for cancel support
+                        current_gp.pending_action_data = {
+                            'type': 'reserve',
+                            'card_id': reserved_id,
+                            'gold_received': gold_received,
+                            'level': card_level,
+                            'from_visible': card_id is not None,  # True if card_id was provided
+                        }
                         game.save()
                         current_gp.save()
                     

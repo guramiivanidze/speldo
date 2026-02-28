@@ -218,6 +218,78 @@ def apply_discard_tokens(game_data, player_data, tokens_to_discard):
     return game_data, player_data, None, still_needs_discard
 
 
+def apply_cancel_pending_discard(game_data, player_data, pending_action_data):
+    """
+    Cancel the pending action that caused the discard requirement.
+    Returns (updated_game_data, updated_player_data, error_str)
+    """
+    if not pending_action_data:
+        return None, None, "No pending action to cancel."
+    
+    action_type = pending_action_data.get('type')
+    
+    if action_type == 'reserve':
+        # Undo a reserve action:
+        # 1. Remove card from reserved_card_ids
+        # 2. Return gold to bank if received
+        # 3. Put card back to visible (at end of appropriate level)
+        card_id = pending_action_data.get('card_id')
+        gold_received = pending_action_data.get('gold_received', False)
+        card_level = pending_action_data.get('level')  # The level of the card
+        from_visible = pending_action_data.get('from_visible', True)
+        
+        reserved = list(player_data['reserved_card_ids'])
+        if card_id not in reserved:
+            return None, None, "Card not in reserved cards."
+        reserved.remove(card_id)
+        
+        visible = {k: list(v) for k, v in game_data['visible_cards'].items()}
+        bank = dict(game_data['tokens_in_bank'])
+        ptokens = dict(player_data['tokens'])
+        
+        # Return gold if received
+        if gold_received:
+            ptokens['gold'] = max(0, ptokens.get('gold', 0) - 1)
+            bank['gold'] = bank.get('gold', 0) + 1
+        
+        # Put card back to visible if it came from visible
+        # (if from deck, we don't put it back - it's lost, but that's acceptable UX)
+        if from_visible and card_level:
+            lvl = str(card_level)
+            if len(visible.get(lvl, [])) < 4:
+                visible[lvl].append(card_id)
+        
+        game_data = dict(game_data)
+        game_data['visible_cards'] = visible
+        game_data['tokens_in_bank'] = bank
+        player_data = dict(player_data)
+        player_data['tokens'] = ptokens
+        player_data['reserved_card_ids'] = reserved
+        player_data['pending_action_data'] = None
+        return game_data, player_data, None
+    
+    elif action_type == 'take_tokens':
+        # Undo take_tokens action:
+        # Return the tokens back to bank
+        colors_taken = pending_action_data.get('colors', [])
+        
+        bank = dict(game_data['tokens_in_bank'])
+        ptokens = dict(player_data['tokens'])
+        
+        for color in colors_taken:
+            ptokens[color] = max(0, ptokens.get(color, 0) - 1)
+            bank[color] = bank.get(color, 0) + 1
+        
+        game_data = dict(game_data)
+        game_data['tokens_in_bank'] = bank
+        player_data = dict(player_data)
+        player_data['tokens'] = ptokens
+        player_data['pending_action_data'] = None
+        return game_data, player_data, None
+    
+    return None, None, f"Unknown pending action type: {action_type}"
+
+
 def apply_reserve_card(game_data, player_data, card_id=None, level=None):
     """
     Reserve a face-up card (card_id given) or top of deck (level given).

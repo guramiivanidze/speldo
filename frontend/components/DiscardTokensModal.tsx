@@ -8,6 +8,7 @@ interface DiscardTokensModalProps {
   playerTokens: Record<TokenColor, number>;
   discardCount: number;
   onDiscard: (tokens: Record<string, number>) => void;
+  onCancel?: () => void;
 }
 
 const ALL_TOKEN_COLORS: TokenColor[] = [...GEM_COLORS, 'gold'];
@@ -16,6 +17,7 @@ export default function DiscardTokensModal({
   playerTokens,
   discardCount,
   onDiscard,
+  onCancel,
 }: DiscardTokensModalProps) {
   const [selectedToDiscard, setSelectedToDiscard] = useState<Record<TokenColor, number>>({
     white: 0,
@@ -140,18 +142,28 @@ export default function DiscardTokensModal({
           </span>
         </div>
 
-        {/* Confirm button */}
-        <button
-          onClick={handleConfirm}
-          disabled={!canConfirm}
-          className={`w-full py-3 rounded-lg font-bold transition-all ${
-            canConfirm
-              ? 'bg-amber-500 hover:bg-amber-400 text-slate-900'
-              : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-          }`}
-        >
-          Confirm Return
-        </button>
+        {/* Action buttons */}
+        <div className="flex gap-3">
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              className="flex-1 py-3 rounded-lg font-bold transition-all bg-slate-600 hover:bg-slate-500 text-slate-200"
+            >
+              Cancel
+            </button>
+          )}
+          <button
+            onClick={handleConfirm}
+            disabled={!canConfirm}
+            className={`${onCancel ? 'flex-1' : 'w-full'} py-3 rounded-lg font-bold transition-all ${
+              canConfirm
+                ? 'bg-amber-500 hover:bg-amber-400 text-slate-900'
+                : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+            }`}
+          >
+            Confirm Return
+          </button>
+        </div>
       </div>
     </div>
   );

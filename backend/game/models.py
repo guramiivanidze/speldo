@@ -151,6 +151,11 @@ class GamePlayer(models.Model):
     # Online/connection status
     is_online = models.BooleanField(default=True)
     left_at = models.DateTimeField(null=True, blank=True)
+    
+    # Pending action data for cancel support during discard
+    # Format: {"type": "reserve", "card_id": X, "gold_received": true} 
+    #      or {"type": "take_tokens", "colors": [...], "previous_tokens": {...}}
+    pending_action_data = models.JSONField(null=True, blank=True)
 
     class Meta:
         ordering = ['order']

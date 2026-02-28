@@ -178,6 +178,11 @@ export function useGameSocket(gameCode: string | null) {
     sendAction('vote_response', { vote });
   }, [sendAction]);
 
+  // Cancel the pending action that triggered discard requirement
+  const cancelPendingDiscard = useCallback(() => {
+    sendAction('cancel_pending_discard', {});
+  }, [sendAction]);
+
   // Request fresh game state (triggers pause checks on backend)
   const refreshState = useCallback(() => {
     sendAction('refresh_state', {});
@@ -195,6 +200,7 @@ export function useGameSocket(gameCode: string | null) {
     chooseNoble,
     leaveGame,
     voteResponse,
+    cancelPendingDiscard,
     refreshState,
     clearError: () => setError(null),
     clearPauseEvent: () => setPauseEvent(null),
