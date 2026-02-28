@@ -1,3 +1,4 @@
+import random
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
@@ -93,6 +94,7 @@ class GameStartView(APIView):
         game.decks = decks
         game.visible_cards = visible
         game.available_nobles = nobles
+        game.current_player_index = random.randint(0, player_count - 1)
         game.status = Game.STATUS_PLAYING
         game.save()
 
