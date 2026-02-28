@@ -16,5 +16,9 @@ psycopg2-binary==2.9.10
 whitenoise==6.8.2
 Pillow==11.1.0
 
+# Cloud storage
+cloudinary==1.40.0
+django-cloudinary-storage==0.3.0
+
 # Development
 python-dotenv==1.0.1

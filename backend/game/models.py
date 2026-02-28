@@ -2,7 +2,7 @@ import uuid
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
-
+from cloudinary.models import CloudinaryField   
 
 class DevelopmentCard(models.Model):
     """Development cards that can be purchased or reserved."""
@@ -27,7 +27,7 @@ class DevelopmentCard(models.Model):
     cost_black = models.IntegerField(default=0)
     
     # Visual customization
-    background_image = models.ImageField(upload_to='cards/', blank=True, null=True, help_text="Card background image")
+    background_image = models.CloudinaryField(upload_to='cards/', blank=True, null=True, help_text="Card background image")
     
     class Meta:
         ordering = ['level', 'bonus', 'id']
@@ -59,7 +59,7 @@ class Noble(models.Model):
     req_black = models.IntegerField(default=0)
     
     # Visual customization
-    background_image = models.ImageField(upload_to='nobles/', blank=True, null=True, help_text="Noble background image")
+    background_image = models.CloudinaryField(upload_to='nobles/', blank=True, null=True, help_text="Noble background image")
     name = models.CharField(max_length=100, blank=True, help_text="Optional noble name")
 
     def __str__(self):
