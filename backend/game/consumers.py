@@ -283,7 +283,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             }))
 
     async def handle_leave_game(self, payload):
-        """Handle player leaving the game - pause for others."""
+        """Handle player leaving the game - pause for others or close waiting room."""
         @database_sync_to_async
         def _db():
             from django.db import transaction
@@ -294,6 +294,16 @@ class GameConsumer(AsyncWebsocketConsumer):
                     
                     if not player:
                         return "You are not in this game."
+                    
+                    # Handle leaving a waiting game
+                    if game.status == Game.STATUS_WAITING:
+                        player.delete()
+                        remaining_players = game.players.count()
+                        if remaining_players == 0:
+                            # No players left - delete the game
+                            game.delete()
+                            return {'waiting_room_closed': True}
+                        return {'left_waiting_room': True, 'user_id': self.user.id, 'username': self.user.username}
                     
                     if game.status not in [Game.STATUS_PLAYING, Game.STATUS_PAUSED]:
                         return "Game is not in progress."
@@ -312,17 +322,12 @@ class GameConsumer(AsyncWebsocketConsumer):
                     # Check if all players have left
                     online_players = game.players.filter(is_online=True).count()
                     
-                    if online_players == 0:
-                        # All players left - end game
-                        game.status = Game.STATUS_FINISHED
-                        players = list(game.players.select_related('user').all())
-                        finalize_ranked_match(game, players)
-                        game.save()
-                        return 'game_ended'
-                    
                     # If game is already paused, just update state and notify
                     if game.status == Game.STATUS_PAUSED:
                         game.save()
+                        # If all players offline, just keep the pause timer running
+                        if online_players == 0:
+                            return {'all_left': True, 'user_id': self.user.id, 'username': self.user.username}
                         return {'additional_leave': True, 'user_id': self.user.id, 'username': self.user.username}
                     
                     # Pause the game (first player leaving)
@@ -334,6 +339,10 @@ class GameConsumer(AsyncWebsocketConsumer):
                     game.last_survey_at = timezone.now()
                     game.save()
                     
+                    # If all players left at the same time, just pause with timeout
+                    if online_players == 0:
+                        return {'all_left': True, 'user_id': self.user.id, 'username': self.user.username}
+                    
                     return {'paused': True, 'user_id': self.user.id, 'username': self.user.username}
             except Game.DoesNotExist:
                 return "Game not found."
@@ -341,24 +350,67 @@ class GameConsumer(AsyncWebsocketConsumer):
         result = await _db()
         
         if isinstance(result, str):
-            if result == 'game_ended':
+            await self.send_error(result)
+        elif isinstance(result, dict):
+            if result.get('waiting_room_closed'):
+                # Game was deleted, notify anyone still connected
                 await self.channel_layer.group_send(
                     self.room_group_name,
-                    {'type': 'game_ended_all_left'}
+                    {'type': 'waiting_room_closed'}
                 )
-            else:
-                await self.send_error(result)
-        elif isinstance(result, dict) and (result.get('paused') or result.get('additional_leave')):
-            # Notify all players about pause and show survey
-            await self.channel_layer.group_send(
-                self.room_group_name,
-                {
-                    'type': 'player_left_survey',
-                    'left_user_id': result['user_id'],
-                    'left_username': result['username'],
-                }
-            )
-            await self.send_game_state()
+            elif result.get('left_waiting_room'):
+                # Player left waiting room, notify others and update state
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'player_left_waiting',
+                        'user_id': result['user_id'],
+                        'username': result['username'],
+                    }
+                )
+            elif result.get('all_left'):
+                # All players left - game is paused with timeout, just send state update
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {'type': 'all_players_left'}
+                )
+            elif result.get('paused') or result.get('additional_leave'):
+                # Notify all players about pause and show survey
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'player_left_survey',
+                        'left_user_id': result['user_id'],
+                        'left_username': result['username'],
+                    }
+                )
+                await self.send_game_state()
+
+    async def waiting_room_closed(self, event):
+        """Notify that the waiting room was closed (all players left)."""
+        await self.send(text_data=json.dumps({
+            'type': 'waiting_room_closed',
+        }))
+
+    async def player_left_waiting(self, event):
+        """Notify that a player left the waiting room."""
+        await self.send(text_data=json.dumps({
+            'type': 'player_left_waiting',
+            'user_id': event['user_id'],
+            'username': event['username'],
+        }))
+        # Send updated game state to remaining players
+        game, players = await self.get_game_and_players()
+        if game:
+            @database_sync_to_async
+            def _serialize():
+                return serialize_game_state(game, players)
+            
+            state = await _serialize()
+            await self.send(text_data=json.dumps({
+                'type': 'game_state',
+                'state': state,
+            }))
 
     async def player_left_survey(self, event):
         # Send the survey notification
@@ -383,6 +435,12 @@ class GameConsumer(AsyncWebsocketConsumer):
     async def game_ended_all_left(self, event):
         await self.send(text_data=json.dumps({
             'type': 'game_ended_all_left',
+        }))
+
+    async def all_players_left(self, event):
+        """Notify that all players have left - game will auto-close after timeout."""
+        await self.send(text_data=json.dumps({
+            'type': 'all_players_left',
         }))
 
     async def handle_vote_response(self, payload):

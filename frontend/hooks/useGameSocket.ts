@@ -8,7 +8,7 @@ const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000]; // Exponential backoff
 
 export interface PauseEvent {
-  type: 'player_left' | 'game_resumed' | 'game_ended_vote' | 'game_ended_all_left' | 'all_voted_wait' | 'pause_timeout' | 'player_rejoined';
+  type: 'player_left' | 'game_resumed' | 'game_ended_vote' | 'game_ended_all_left' | 'all_voted_wait' | 'pause_timeout' | 'player_rejoined' | 'waiting_room_closed' | 'player_left_waiting';
   leftUserId?: number;
   leftUsername?: string;
   rejoinedUserId?: number;
@@ -75,6 +75,14 @@ export function useGameSocket(gameCode: string | null) {
           setPauseEvent({ type: 'all_voted_wait' });
         } else if (msg.type === 'pause_timeout_ended') {
           setPauseEvent({ type: 'pause_timeout' });
+        } else if (msg.type === 'waiting_room_closed') {
+          setPauseEvent({ type: 'waiting_room_closed' });
+        } else if (msg.type === 'player_left_waiting') {
+          setPauseEvent({
+            type: 'player_left_waiting',
+            leftUserId: msg.user_id,
+            leftUsername: msg.username,
+          });
         }
       };
 

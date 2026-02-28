@@ -64,11 +64,17 @@ export default function GamePage({ params }: PageProps) {
 
   // Set up header with Leave button when in game
   const handleLeaveClick = useCallback(() => {
-    setShowLeaveConfirm(true);
-  }, []);
+    // For waiting rooms, leave immediately without confirmation
+    if (gameState?.status === 'waiting') {
+      leaveGame();
+      router.push('/');
+    } else {
+      setShowLeaveConfirm(true);
+    }
+  }, [gameState?.status, leaveGame, router]);
 
   useEffect(() => {
-    if (gameState?.status === 'playing' || gameState?.status === 'paused') {
+    if (gameState?.status === 'playing' || gameState?.status === 'paused' || gameState?.status === 'waiting') {
       setHeaderState({
         showLeaveButton: true,
         gameCode: code,
@@ -138,8 +144,17 @@ export default function GamePage({ params }: PageProps) {
     } else if (pauseEvent.type === 'pause_timeout') {
       setNotification('Pause timeout expired. Game ended.');
       clearPauseEvent();
+    } else if (pauseEvent.type === 'waiting_room_closed') {
+      setNotification('Room closed.');
+      clearPauseEvent();
+      router.push('/');
+    } else if (pauseEvent.type === 'player_left_waiting') {
+      setNotification(`${pauseEvent.leftUsername} left the room.`);
+      setTimeout(() => setNotification(null), 3000);
+      refreshState();
+      clearPauseEvent();
     }
-  }, [pauseEvent, clearPauseEvent, refreshState]);
+  }, [pauseEvent, clearPauseEvent, refreshState, router]);
 
   // Check for ranked match result when game finishes
   useEffect(() => {
@@ -262,12 +277,7 @@ export default function GamePage({ params }: PageProps) {
 
       {/* ── Top bar ───────────────────────────────────── */}
       <div className="flex items-center gap-3 mb-5">
-        <button
-          className="text-xs text-slate-500 hover:text-indigo-300 transition-colors font-semibold"
-          onClick={() => router.push('/')}
-        >
-          ← Lobby
-        </button>
+        
         <div className="h-4 w-px bg-slate-700" />
         <span className="font-mono font-black text-slate-100 tracking-widest text-sm">{code}</span>
         <div
@@ -364,6 +374,19 @@ export default function GamePage({ params }: PageProps) {
                 Waiting for {gameState.max_players - gameState.players.length} more player{gameState.max_players - gameState.players.length > 1 ? 's' : ''}...
               </div>
             )}
+
+            {/* Back to lobby button */}
+            <button
+              className="
+                mt-4 w-full py-2.5 rounded-xl font-semibold text-sm
+                bg-slate-700/50 hover:bg-slate-600/50
+                border border-slate-600/50
+                text-slate-300 transition-all active:scale-[.98]
+              "
+              onClick={handleLeaveGame}
+            >
+              Back to Lobby
+            </button>
           </div>
         </div>
       )}
