@@ -18,6 +18,43 @@ from .game_logic import (
     check_end_condition, determine_winner,
 )
 
+
+def finalize_ranked_match(game, players):
+    """
+    Finalize a ranked match when the game ends.
+    
+    Args:
+        game: The Game object that just finished
+        players: List of GamePlayer objects with prestige_points data
+    """
+    # Check if this game has an associated ranked match
+    ranked_match = game.ranked_match.first()
+    if not ranked_match:
+        return  # Not a ranked game
+    
+    # Build placements - sort players by prestige points (desc), then by fewest cards (asc)
+    sorted_players = sorted(
+        players,
+        key=lambda gp: (-gp.prestige_points, len(gp.purchased_card_ids or []))
+    )
+    
+    # Convert GamePlayer objects to competitive Player objects
+    from competitive.models import Player
+    placements = []
+    for gp in sorted_players:
+        try:
+            player = Player.objects.get(user=gp.user)
+            placements.append(player)
+        except Player.DoesNotExist:
+            logger.warning(f"Player not found for user {gp.user.id} in ranked match")
+            continue
+    
+    if placements:
+        ranked_match.finalize(placements)
+        logger.info(
+            f"[RANKED] Finalized match {ranked_match.id} - Winner: {placements[0].user.username}"
+        )
+
 # Configure game action logger
 logger = logging.getLogger('game.actions')
 
@@ -150,6 +187,8 @@ class GameConsumer(AsyncWebsocketConsumer):
                             if timezone.now() > game.pause_expires_at:
                                 # Pause expired - end the game
                                 game.status = Game.STATUS_FINISHED
+                                players = list(game.players.select_related('user').all())
+                                finalize_ranked_match(game, players)
                                 game.save()
                                 return 'timeout_ended'
                         
@@ -275,6 +314,8 @@ class GameConsumer(AsyncWebsocketConsumer):
                     if online_players == 0:
                         # All players left - end game
                         game.status = Game.STATUS_FINISHED
+                        players = list(game.players.select_related('user').all())
+                        finalize_ranked_match(game, players)
                         game.save()
                         return 'game_ended'
                     
@@ -383,6 +424,8 @@ class GameConsumer(AsyncWebsocketConsumer):
                         if end_votes > 0:
                             # At least one player wants to end - end the game
                             game.status = Game.STATUS_FINISHED
+                            players = list(game.players.select_related('user').all())
+                            finalize_ranked_match(game, players)
                             game.save()
                             return 'game_ended_by_vote'
                         else:
@@ -465,6 +508,8 @@ class GameConsumer(AsyncWebsocketConsumer):
                     # Check if pause has expired
                     if game.pause_expires_at and now > game.pause_expires_at:
                         game.status = Game.STATUS_FINISHED
+                        players = list(game.players.select_related('user').all())
+                        finalize_ranked_match(game, players)
                         game.save()
                         return 'timeout_ended'
                     
@@ -637,6 +682,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                     winner_gp = next(gp for gp in players if gp.order == winner_data['order'])
                     game.status = Game.STATUS_FINISHED
                     game.winner = winner_gp.user
+                    finalize_ranked_match(game, players)
 
             game.current_player_index = (game.current_player_index + 1) % len(players)
             game.save()
@@ -957,6 +1003,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                 winner_gp = next(gp for gp in players if gp.order == winner_data['order'])
                 game.status = Game.STATUS_FINISHED
                 game.winner = winner_gp.user
+                finalize_ranked_match(game, players)
 
         game.current_player_index = (game.current_player_index + 1) % len(players)
         game.save()

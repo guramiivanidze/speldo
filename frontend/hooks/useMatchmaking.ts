@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { getWebSocketToken } from '@/lib/api';
-import { MatchmakingStatus, MatchFoundData, Match } from '@/types/competitive';
+import { MatchmakingStatus, MatchFoundData, Match, LobbyPlayer } from '@/types/competitive';
 
 const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
 
@@ -88,6 +88,13 @@ export function useMatchmaking(): UseMatchmakingResult {
                 ...prev,
                 wait_time_seconds: data.wait_time_seconds,
                 search_range: data.search_range,
+              } : null);
+              break;
+            
+            case 'lobby_update':
+              setStatus(prev => prev ? {
+                ...prev,
+                lobby_players: data.lobby_players,
               } : null);
               break;
             

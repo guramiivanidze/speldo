@@ -93,12 +93,19 @@ export interface LeaderboardResponse {
   entries: LeaderboardEntry[];
 }
 
+export interface LobbyPlayer {
+  username: string;
+  rating: number;
+  division: Division;
+}
+
 export interface MatchmakingStatus {
   in_queue: boolean;
   wait_time_seconds?: number;
   search_range?: number;
   rating?: number;
   player_count?: number;
+  lobby_players?: LobbyPlayer[];
 }
 
 export interface OpponentInfo {

@@ -305,14 +305,19 @@ class MatchModelTests(TestCase):
         self.player2 = Player.objects.create(user=self.user2, rating=1500)
     
     def test_finalize_match(self):
-        match = Match.objects.create(
-            player1=self.player1,
-            player2=self.player2,
-            is_ranked=True,
-            season=self.season
-        )
+        from competitive.models import MatchPlayer
         
-        match.finalize(winner_player=self.player1)
+        match = Match.objects.create(
+            is_ranked=True,
+            season=self.season,
+            player_count=2
+        )
+        # Create MatchPlayer entries
+        MatchPlayer.objects.create(match=match, player=self.player1)
+        MatchPlayer.objects.create(match=match, player=self.player2)
+        
+        # Finalize with placements (winner first)
+        match.finalize(placements=[self.player1, self.player2])
         
         self.assertEqual(match.winner, self.player1)
         self.assertIsNotNone(match.finished_at)

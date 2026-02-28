@@ -132,12 +132,28 @@ class MatchmakingService:
         try:
             queue_entry = MatchmakingQueue.objects.get(player=player)
             wait_time = timezone.now() - queue_entry.joined_at
+            
+            # Get all players in the same queue (lobby players)
+            lobby_entries = MatchmakingQueue.objects.filter(
+                player_count_preference=queue_entry.player_count_preference
+            ).select_related('player__user').order_by('joined_at')
+            
+            lobby_players = [
+                {
+                    'username': entry.player.user.username,
+                    'rating': entry.player.rating,
+                    'division': entry.player.division,
+                }
+                for entry in lobby_entries
+            ]
+            
             return {
                 'in_queue': True,
                 'wait_time_seconds': int(wait_time.total_seconds()),
                 'search_range': queue_entry.search_range,
                 'rating': queue_entry.rating_at_queue,
                 'player_count': queue_entry.player_count_preference,
+                'lobby_players': lobby_players,
             }
         except MatchmakingQueue.DoesNotExist:
             return {'in_queue': False}
@@ -194,7 +210,8 @@ class MatchmakingService:
     @classmethod
     def _create_match(cls, entries: list[MatchmakingQueue]) -> Match:
         """Create a match from queue entries (2-4 players)."""
-        from game.models import Game
+        from game.models import Game, GamePlayer
+        from game.game_logic import initial_bank, initial_decks_and_nobles
         import random
         import string
         
@@ -221,11 +238,29 @@ class MatchmakingService:
         while Game.objects.filter(code=code).exists():
             code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
         
+        # Initialize game state for immediate start
+        bank = initial_bank(player_count)
+        decks, visible, nobles = initial_decks_and_nobles(player_count)
+        
         game = Game.objects.create(
             code=code,
-            status='waiting',
+            status='playing',  # Start immediately
             max_players=player_count,
+            tokens_in_bank=bank,
+            decks=decks,
+            visible_cards=visible,
+            available_nobles=nobles,
+            current_player_index=random.randint(0, player_count - 1),
         )
+        
+        # Create GamePlayer entries for each matched player
+        for i, entry in enumerate(entries):
+            GamePlayer.objects.create(
+                game=game,
+                user=entry.player.user,
+                order=i,
+                tokens={c: 0 for c in ['white', 'blue', 'green', 'red', 'black', 'gold']},
+            )
         
         # Link match to game
         match.game = game

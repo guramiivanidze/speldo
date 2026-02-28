@@ -421,6 +421,42 @@ export default function Home() {
                   {matchmakingStatus.wait_time_seconds ? `${Math.floor(matchmakingStatus.wait_time_seconds / 60)}:${String(matchmakingStatus.wait_time_seconds % 60).padStart(2, '0')}` : '0:00'}
                 </span>
               </div>
+              
+              {/* Lobby Players Display */}
+              <div className="mb-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs text-slate-400">
+                    Players in lobby ({matchmakingStatus.lobby_players?.length || 1}/{matchmakingStatus.player_count || rankedPlayerCount})
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {matchmakingStatus.lobby_players?.map((player, idx) => (
+                    <div 
+                      key={idx}
+                      className="flex items-center gap-2 bg-slate-700/50 rounded-lg px-3 py-1.5 border border-slate-600/50"
+                    >
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-xs font-bold text-white">
+                        {player.username.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-xs text-slate-200 font-medium">{player.username}</span>
+                      <span className="text-[10px] text-slate-500">{player.rating}</span>
+                    </div>
+                  ))}
+                  {/* Empty slots */}
+                  {Array.from({ length: (matchmakingStatus.player_count || rankedPlayerCount) - (matchmakingStatus.lobby_players?.length || 1) }).map((_, idx) => (
+                    <div 
+                      key={`empty-${idx}`}
+                      className="flex items-center gap-2 bg-slate-800/30 rounded-lg px-3 py-1.5 border border-dashed border-slate-700"
+                    >
+                      <div className="w-6 h-6 rounded-full bg-slate-700/50 flex items-center justify-center">
+                        <span className="text-slate-500 text-xs">?</span>
+                      </div>
+                      <span className="text-xs text-slate-500 italic">Waiting...</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
               <div className="text-[10px] text-slate-500 mb-3">
                 {(matchmakingStatus.player_count || rankedPlayerCount)}-player match &bull; Search range: ±{matchmakingStatus.search_range || 50} rating
               </div>

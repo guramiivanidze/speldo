@@ -1,7 +1,7 @@
 'use client';
 
 import { PlayerState, Card, Noble } from '@/types/game';
-import { GEM_COLORS, GEM_DOT_STYLE, TOKEN_GRADIENT } from '@/lib/colors';
+import { GEM_COLORS, GEM_DOT_STYLE, TOKEN_GRADIENT, TOKEN_TEXT } from '@/lib/colors';
 
 interface CompactPlayerPanelProps {
     player: PlayerState;
@@ -103,7 +103,7 @@ export default function CompactPlayerPanel({
                             return (
                                 <div
                                     key={color}
-                                    className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shadow-sm"
+                                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shadow-sm ${TOKEN_TEXT[color]}`}
                                     style={{ background: TOKEN_GRADIENT[color] }}
                                 >
                                     {count}

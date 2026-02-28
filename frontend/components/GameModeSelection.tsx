@@ -224,8 +224,25 @@ export default function GameModeSelection({ onCasualClick }: GameModeSelectionPr
               <div className="text-sm text-slate-300">
                 <div className="flex items-center justify-center gap-2 mb-2">
                   <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                  Searching for opponent...
+                  Searching for {(status.player_count || 2) - 1} opponent{(status.player_count || 2) > 2 ? 's' : ''}...
                 </div>
+                
+                {/* Lobby Players */}
+                {status.lobby_players && status.lobby_players.length > 0 && (
+                  <div className="flex flex-wrap justify-center gap-1 mb-2">
+                    {status.lobby_players.map((player, idx) => (
+                      <span key={idx} className="text-xs bg-slate-700/50 px-2 py-0.5 rounded-full text-slate-200">
+                        {player.username}
+                      </span>
+                    ))}
+                    {Array.from({ length: (status.player_count || 2) - (status.lobby_players?.length || 1) }).map((_, idx) => (
+                      <span key={`empty-${idx}`} className="text-xs bg-slate-800/30 px-2 py-0.5 rounded-full text-slate-500 border border-dashed border-slate-600">
+                        ?
+                      </span>
+                    ))}
+                  </div>
+                )}
+                
                 <div className="text-xs text-slate-400">
                   {status.wait_time_seconds !== undefined && (
                     <span>{Math.floor(status.wait_time_seconds)}s • </span>

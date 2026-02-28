@@ -26,7 +26,6 @@ export default function MatchFoundModal({ matchData, onClose }: MatchFoundModalP
       setCountdown(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          router.push(`/game/${game_code}`);
           return 0;
         }
         return prev - 1;
@@ -34,7 +33,14 @@ export default function MatchFoundModal({ matchData, onClose }: MatchFoundModalP
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [game_code, router]);
+  }, []);
+
+  // Navigate when countdown reaches 0
+  useEffect(() => {
+    if (countdown === 0) {
+      router.push(`/game/${game_code}`);
+    }
+  }, [countdown, game_code, router]);
 
   const handleJoinNow = () => {
     router.push(`/game/${game_code}`);
