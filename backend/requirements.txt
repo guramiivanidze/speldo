@@ -20,5 +20,8 @@ Pillow==11.1.0
 cloudinary==1.40.0
 django-cloudinary-storage==0.3.0
 
+# Admin utilities
+django-import-export==4.0.0
+
 # Development
 python-dotenv==1.0.1

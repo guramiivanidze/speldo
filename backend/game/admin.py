@@ -1,11 +1,38 @@
 from django.contrib import admin
 from django.utils.html import format_html
+from import_export import resources, fields
+from import_export.admin import ImportExportModelAdmin
 from .models import Game, GamePlayer, DevelopmentCard, Noble
 from .game_logic import clear_card_cache
 
 
+class DevelopmentCardResource(resources.ModelResource):
+    """Resource for importing/exporting DevelopmentCard via CSV."""
+    
+    class Meta:
+        model = DevelopmentCard
+        fields = ('id', 'level', 'bonus', 'points', 'cost_white', 'cost_blue', 'cost_green', 'cost_red', 'cost_black')
+        export_order = ('id', 'level', 'bonus', 'points', 'cost_white', 'cost_blue', 'cost_green', 'cost_red', 'cost_black')
+        import_id_fields = ('id',)
+        skip_unchanged = True
+        report_skipped = True
+
+
+class NobleResource(resources.ModelResource):
+    """Resource for importing/exporting Noble via CSV."""
+    
+    class Meta:
+        model = Noble
+        fields = ('id', 'name', 'points', 'req_white', 'req_blue', 'req_green', 'req_red', 'req_black')
+        export_order = ('id', 'name', 'points', 'req_white', 'req_blue', 'req_green', 'req_red', 'req_black')
+        import_id_fields = ('id',)
+        skip_unchanged = True
+        report_skipped = True
+
+
 @admin.register(DevelopmentCard)
-class DevelopmentCardAdmin(admin.ModelAdmin):
+class DevelopmentCardAdmin(ImportExportModelAdmin):
+    resource_class = DevelopmentCardResource
     list_display = ['id', 'level', 'bonus', 'points', 'cost_white', 'cost_blue', 'cost_green', 'cost_red', 'cost_black', 'image_preview_small']
     list_filter = ['level', 'bonus', 'points']
     list_editable = ['level', 'bonus', 'points', 'cost_white', 'cost_blue', 'cost_green', 'cost_red', 'cost_black']
@@ -43,7 +70,8 @@ class DevelopmentCardAdmin(admin.ModelAdmin):
 
 
 @admin.register(Noble)
-class NobleAdmin(admin.ModelAdmin):
+class NobleAdmin(ImportExportModelAdmin):
+    resource_class = NobleResource
     list_display = ['id', 'name', 'points', 'req_white', 'req_blue', 'req_green', 'req_red', 'req_black', 'image_preview_small']
     list_filter = ['points']
     list_editable = ['name', 'points', 'req_white', 'req_blue', 'req_green', 'req_red', 'req_black']
