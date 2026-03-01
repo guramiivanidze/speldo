@@ -1,0 +1,180 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:game_developmentcard_changelist' %}">Development Cards</a>
+    &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+    .bulk-upload-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    .card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+        margin-top: 20px;
+    }
+    .card-item {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 15px;
+        background: #f8f9fa;
+    }
+    .card-item.has-image {
+        background: #e8f5e9;
+        border-color: #4caf50;
+    }
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #ddd;
+    }
+    .card-info {
+        font-size: 14px;
+    }
+    .card-info strong {
+        font-size: 16px;
+    }
+    .level-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        color: white;
+    }
+    .level-1 { background: #4caf50; }
+    .level-2 { background: #ff9800; }
+    .level-3 { background: #f44336; }
+    .bonus-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+    .bonus-white { background: #e0e0e0; color: #333; }
+    .bonus-blue { background: #2196f3; color: white; }
+    .bonus-green { background: #4caf50; color: white; }
+    .bonus-red { background: #f44336; color: white; }
+    .bonus-black { background: #212121; color: white; }
+    .current-image {
+        margin: 10px 0;
+        text-align: center;
+    }
+    .current-image img {
+        max-width: 100%;
+        max-height: 150px;
+        border-radius: 4px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .no-image {
+        padding: 40px;
+        background: #eee;
+        border-radius: 4px;
+        color: #666;
+        text-align: center;
+    }
+    .file-input {
+        width: 100%;
+        padding: 8px;
+        border: 2px dashed #ccc;
+        border-radius: 4px;
+        background: white;
+    }
+    .file-input:hover {
+        border-color: #2196f3;
+    }
+    .submit-row {
+        margin-top: 30px;
+        padding: 20px;
+        background: #f5f5f5;
+        border-radius: 8px;
+        text-align: center;
+    }
+    .submit-row input[type="submit"] {
+        padding: 12px 40px;
+        font-size: 16px;
+        background: #417690;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .submit-row input[type="submit"]:hover {
+        background: #205067;
+    }
+    .cancel-link {
+        margin-left: 20px;
+        color: #666;
+    }
+    .stats {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #e3f2fd;
+        border-radius: 8px;
+    }
+</style>
+
+<div class="bulk-upload-container">
+    <h1>{{ title }}</h1>
+    
+    {% if cards %}
+    <div class="stats">
+        <strong>{{ cards|length }} cards selected</strong> - Upload images for each card below.
+        Images with existing uploads are highlighted in green.
+    </div>
+    
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        
+        <div class="card-grid">
+            {% for card in cards %}
+            <div class="card-item {% if card.background_image %}has-image{% endif %}">
+                <div class="card-header">
+                    <div class="card-info">
+                        <strong>Card #{{ card.id }}</strong><br>
+                        <span class="level-badge level-{{ card.level }}">Level {{ card.level }}</span>
+                        <span class="bonus-badge bonus-{{ card.bonus }}">{{ card.bonus }}</span>
+                        {% if card.points %}<span style="margin-left: 5px;">{{ card.points }} pts</span>{% endif %}
+                    </div>
+                </div>
+                
+                <div class="current-image">
+                    {% if card.background_image %}
+                        <img src="{{ card.background_image.url }}" alt="Card {{ card.id }}">
+                    {% else %}
+                        <div class="no-image">No image</div>
+                    {% endif %}
+                </div>
+                
+                <input type="file" name="image_{{ card.id }}" accept="image/*" class="file-input">
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="submit-row">
+            <input type="submit" value="Upload Images">
+            <a href="{% url 'admin:game_developmentcard_changelist' %}" class="cancel-link">Cancel</a>
+        </div>
+    </form>
+    {% else %}
+    <p>No cards selected. Please go back and select cards first.</p>
+    <p><a href="{% url 'admin:game_developmentcard_changelist' %}">← Back to card list</a></p>
+    {% endif %}
+</div>
+{% endblock %}
