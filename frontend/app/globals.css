@@ -62,6 +62,39 @@ body {
   box-shadow: 0 0 0 2px #22c55e, 0 0 14px rgba(34,197,94,.35);
 }
 
+/* ─── Crystal card shimmer ───────────────── */
+@keyframes crystal-shimmer {
+  0%   { opacity: 0.3; transform: translateX(-120%) rotate(30deg); }
+  100% { opacity: 0; transform: translateX(300%) rotate(30deg); }
+}
+.crystal-shimmer::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -30%;
+  width: 40%;
+  height: 200%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(180, 220, 255, 0.12) 40%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(180, 220, 255, 0.12) 60%,
+    transparent 100%
+  );
+  animation: crystal-shimmer 3.5s ease-in-out infinite;
+}
+
+/* ─── Level 3 card sparkle animations ───── */
+@keyframes sparkle-twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+.l3-sparkle-1 { animation: sparkle-twinkle 2s ease-in-out infinite; }
+.l3-sparkle-2 { animation: sparkle-twinkle 2.3s ease-in-out 0.5s infinite; }
+.l3-sparkle-3 { animation: sparkle-twinkle 1.8s ease-in-out 1s infinite; }
+.l3-sparkle-4 { animation: sparkle-twinkle 2.5s ease-in-out 0.3s infinite; }
+
 /* ─── Gem orb ────────────────────────────── */
 .gem-orb {
   position: relative;

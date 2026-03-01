@@ -6,6 +6,7 @@ import {
   GEM_COLORS, LEVEL_COLOR, TOKEN_LABEL,
 } from '@/lib/colors';
 import { API_BASE } from '@/lib/api';
+import CardCrystalBg from './CardCrystalBg';
 
 interface CardDisplayProps {
   card: Card;
@@ -21,16 +22,17 @@ const ROMAN: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
 
 // Helper to get full image URL (handles relative media URLs)
 function getImageUrl(card: Card): string | null {
-  if (card.background_image) {
-    // If it's already an absolute URL, use it directly
-    if (card.background_image.startsWith('http')) {
-      return card.background_image;
-    }
-    // Otherwise, prepend the API base URL
-    return `${API_BASE}${card.background_image}`;
+  const img = card.background_image;
+  // Check for truthy AND non-empty string AND not a Cloudinary "Null" placeholder
+  if (!img || img.trim() === '' || img.endsWith('/Null') || img.endsWith('/null')) {
+    return null; // Show crystal background
   }
-  // Return null to show color gradient instead
-  return null;
+  // If it's already an absolute URL, use it directly
+  if (img.startsWith('http')) {
+    return img;
+  }
+  // Otherwise, prepend the API base URL
+  return `${API_BASE}${img}`;
 }
 
 export default function CardDisplay({
@@ -57,19 +59,23 @@ export default function CardDisplay({
       `}
       style={{ background: CARD_GRADIENT[card.bonus] }}
     >
-      {/* Background: image or just color gradient */}
-      {cardImage && (
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${cardImage})` }}
-        />
+      {/* Background: image or crystal art fallback */}
+      {cardImage ? (
+        <>
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url(${cardImage})` }}
+          />
+          {/* Gradient overlay for readability */}
+          <div
+            className="absolute inset-0"
+            style={{ background: CARD_GRADIENT[card.bonus], opacity: 0.7 }}
+          />
+        </>
+      ) : (
+        /* Crystal art fallback when no image uploaded */
+        <CardCrystalBg bonus={card.bonus} level={card.level} />
       )}
-
-      {/* Gradient overlay for readability */}
-      <div
-        className="absolute inset-0"
-        style={{ background: `${CARD_GRADIENT[card.bonus]}`, opacity: cardImage ? 0.7 : 0 }}
-      />
 
       {/* Main content - horizontal layout */}
       <div className="h-full flex relative z-10">
