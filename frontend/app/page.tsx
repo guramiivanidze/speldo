@@ -26,9 +26,20 @@ export default function Home() {
 
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(false);
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
+  
+  // Field-specific errors for inline validation
+  const [nicknameError, setNicknameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState('');
+  const [termsError, setTermsError] = useState('');
 
   const [openGames, setOpenGames] = useState<GameInfo[]>([]);
   const [myGames, setMyGames] = useState<GameInfo[]>([]);
@@ -78,14 +89,157 @@ export default function Home() {
     }
   }, [user]);
 
+  // Password validation helper
+  const validatePassword = (pass: string): string | null => {
+    if (!pass) return 'Password is required.';
+    if (pass.length < 8) return 'Password must be at least 8 characters.';
+    if (!/[a-z]/.test(pass)) return 'Password must contain a lowercase letter.';
+    if (!/[A-Z]/.test(pass)) return 'Password must contain an uppercase letter.';
+    if (!/\d/.test(pass)) return 'Password must contain a number.';
+    if (!/[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;'`~]/.test(pass)) return 'Password must contain a special character.';
+    return null;
+  };
+  
+  // Inline validation helpers
+  const validateNickname = (value: string): string => {
+    if (!value.trim()) return 'Nickname is required.';
+    if (value.length > 40) return 'Nickname must be 40 characters or less.';
+    if (/\s/.test(value)) return 'Nickname cannot contain spaces.';
+    return '';
+  };
+  
+  const validateEmail = (value: string): string => {
+    if (!value.trim()) return 'Email is required.';
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(value)) return 'Invalid email format.';
+    return '';
+  };
+  
+  const validateConfirmPassword = (value: string, pass: string): string => {
+    if (!value) return 'Please confirm your password.';
+    if (value !== pass) return 'Passwords do not match.';
+    return '';
+  };
+  
+  // Real-time field validation handlers
+  const handleNicknameChange = (value: string) => {
+    setUsername(value);
+    if (nicknameError) {
+      const err = validateNickname(value);
+      setNicknameError(err);
+    }
+  };
+  
+  const handleNicknameBlur = () => {
+    if (authMode === 'register') {
+      setNicknameError(validateNickname(username));
+    }
+  };
+  
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    if (emailError && authMode === 'register') {
+      const err = validateEmail(value);
+      setEmailError(err);
+    } else if (emailError && authMode === 'login') {
+      // For login, just check not empty
+      setEmailError(value.trim() ? '' : 'Email or username is required.');
+    }
+  };
+  
+  const handleEmailBlur = () => {
+    if (authMode === 'register') {
+      setEmailError(validateEmail(email));
+    }
+  };
+  
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    if (passwordError && authMode === 'register') {
+      const err = validatePassword(value);
+      setPasswordError(err || '');
+    }
+    // Also revalidate confirm password if it has content
+    if (confirmPasswordError && confirmPassword) {
+      setConfirmPasswordError(validateConfirmPassword(confirmPassword, value));
+    }
+  };
+  
+  const handlePasswordBlur = () => {
+    if (authMode === 'register') {
+      const err = validatePassword(password);
+      setPasswordError(err || '');
+    }
+  };
+  
+  const handleConfirmPasswordChange = (value: string) => {
+    setConfirmPassword(value);
+    if (confirmPasswordError) {
+      setConfirmPasswordError(validateConfirmPassword(value, password));
+    }
+  };
+  
+  const handleConfirmPasswordBlur = () => {
+    if (authMode === 'register') {
+      setConfirmPasswordError(validateConfirmPassword(confirmPassword, password));
+    }
+  };
+  
+  const handleTermsChange = (checked: boolean) => {
+    setAgreeTerms(checked);
+    if (checked) {
+      setTermsError('');
+    }
+  };
+  
+  const clearFieldErrors = () => {
+    setNicknameError('');
+    setEmailError('');
+    setPasswordError('');
+    setConfirmPasswordError('');
+    setTermsError('');
+  };
+
   async function handleAuth(e: React.FormEvent) {
     e.preventDefault();
     setAuthError('');
     setAuthLoading(true);
+    
     try {
-      const fn = authMode === 'login' ? login : register;
-      const u = await fn(username, password);
-      setUser(u);
+      if (authMode === 'register') {
+        // Validate all fields and show inline errors
+        const nickErr = validateNickname(username);
+        const emailErr = validateEmail(email);
+        const passErr = validatePassword(password);
+        const confirmErr = validateConfirmPassword(confirmPassword, password);
+        const termsErr = !agreeTerms ? 'You must agree to the terms.' : '';
+        
+        setNicknameError(nickErr);
+        setEmailError(emailErr);
+        setPasswordError(passErr || '');
+        setConfirmPasswordError(confirmErr);
+        setTermsError(termsErr);
+        
+        if (nickErr || emailErr || passErr || confirmErr || termsErr) {
+          setAuthLoading(false);
+          return;
+        }
+        
+        const u = await register(username, email, password);
+        setUser(u);
+      } else {
+        // Login validation - only check email is not empty (could be username for old users)
+        const emailErr = !email.trim() ? 'Email or username is required.' : '';
+        setEmailError(emailErr);
+        
+        if (emailErr) {
+          setAuthLoading(false);
+          return;
+        }
+        
+        const u = await login(email, password, rememberMe);
+        setUser(u);
+      }
     } catch (err: unknown) {
       setAuthError(err instanceof Error ? err.message : 'Error');
     } finally {
@@ -165,7 +319,17 @@ export default function Home() {
                     ? 'bg-indigo-600 text-white shadow-md'
                     : 'text-slate-400 hover:text-slate-200'}
                 `}
-                onClick={() => setAuthMode(mode)}
+                onClick={() => {
+                  setAuthMode(mode);
+                  setAuthError('');
+                  setUsername('');
+                  setEmail('');
+                  setPassword('');
+                  setConfirmPassword('');
+                  setRememberMe(false);
+                  setAgreeTerms(false);
+                  clearFieldErrors();
+                }}
               >
                 {mode === 'login' ? 'Sign in' : 'Register'}
               </button>
@@ -173,39 +337,162 @@ export default function Home() {
           </div>
 
           <form onSubmit={handleAuth} className="flex flex-col gap-3">
-            <input
-              className="
-                w-full px-4 py-2.5 rounded-xl
-                bg-slate-800 border border-slate-700
-                text-slate-100 placeholder-slate-500
-                focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50
-                transition-colors text-sm
-              "
-              placeholder="Username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              autoComplete="username"
-            />
-            <input
-              type="password"
-              className="
-                w-full px-4 py-2.5 rounded-xl
-                bg-slate-800 border border-slate-700
-                text-slate-100 placeholder-slate-500
-                focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50
-                transition-colors text-sm
-              "
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
-            />
+            {/* Nickname - only for registration */}
+            {authMode === 'register' && (
+              <div>
+                <input
+                  className={`
+                    w-full px-4 py-2.5 rounded-xl
+                    bg-slate-800 border text-slate-100 placeholder-slate-500
+                    focus:outline-none focus:ring-1 transition-colors text-sm
+                    ${nicknameError 
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/50' 
+                      : 'border-slate-700 focus:border-indigo-500 focus:ring-indigo-500/50'}
+                  `}
+                  placeholder="Nickname (how others will see you)"
+                  value={username}
+                  onChange={(e) => handleNicknameChange(e.target.value)}
+                  onBlur={handleNicknameBlur}
+                  maxLength={40}
+                  autoComplete="username"
+                />
+                {nicknameError ? (
+                  <p className="text-[10px] text-red-400 mt-1 ml-1">{nicknameError}</p>
+                ) : (
+                  <p className="text-[10px] text-slate-500 mt-1 ml-1">Max 40 characters, no spaces</p>
+                )}
+              </div>
+            )}
+            
+            {/* Email - for both login and registration */}
+            <div>
+              <input
+                type={authMode === 'register' ? 'email' : 'text'}
+                className={`
+                  w-full px-4 py-2.5 rounded-xl
+                  bg-slate-800 border text-slate-100 placeholder-slate-500
+                  focus:outline-none focus:ring-1 transition-colors text-sm
+                  ${emailError 
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500/50' 
+                    : 'border-slate-700 focus:border-indigo-500 focus:ring-indigo-500/50'}
+                `}
+                placeholder={authMode === 'register' ? 'Email' : 'Email or username'}
+                value={email}
+                onChange={(e) => handleEmailChange(e.target.value)}
+                onBlur={handleEmailBlur}
+                autoComplete={authMode === 'register' ? 'email' : 'username'}
+              />
+              {emailError && (
+                <p className="text-[10px] text-red-400 mt-1 ml-1">{emailError}</p>
+              )}
+            </div>
+            
+            <div>
+              <input
+                type="password"
+                className={`
+                  w-full px-4 py-2.5 rounded-xl
+                  bg-slate-800 border text-slate-100 placeholder-slate-500
+                  focus:outline-none focus:ring-1 transition-colors text-sm
+                  ${passwordError 
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500/50' 
+                    : 'border-slate-700 focus:border-indigo-500 focus:ring-indigo-500/50'}
+                `}
+                placeholder="Password"
+                value={password}
+                onChange={(e) => handlePasswordChange(e.target.value)}
+                onBlur={handlePasswordBlur}
+                autoComplete={authMode === 'login' ? 'current-password' : 'new-password'}
+              />
+              {passwordError ? (
+                <p className="text-[10px] text-red-400 mt-1 ml-1">{passwordError}</p>
+              ) : authMode === 'register' && (
+                <p className="text-[10px] text-slate-500 mt-1 ml-1">
+                  8+ chars, upper &amp; lowercase, number, special character
+                </p>
+              )}
+            </div>
+            
+            {authMode === 'register' && (
+              <div>
+                <input
+                  type="password"
+                  className={`
+                    w-full px-4 py-2.5 rounded-xl
+                    bg-slate-800 border text-slate-100 placeholder-slate-500
+                    focus:outline-none focus:ring-1 transition-colors text-sm
+                    ${confirmPasswordError 
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/50' 
+                      : 'border-slate-700 focus:border-indigo-500 focus:ring-indigo-500/50'}
+                  `}
+                  placeholder="Confirm Password"
+                  value={confirmPassword}
+                  onChange={(e) => handleConfirmPasswordChange(e.target.value)}
+                  onBlur={handleConfirmPasswordBlur}
+                  autoComplete="new-password"
+                />
+                {confirmPasswordError && (
+                  <p className="text-[10px] text-red-400 mt-1 ml-1">{confirmPasswordError}</p>
+                )}
+              </div>
+            )}
+
+            {/* Remember Me - only for login */}
+            {authMode === 'login' && (
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="
+                    w-4 h-4 rounded border-slate-600 bg-slate-800
+                    text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0
+                    cursor-pointer
+                  "
+                />
+                <span className="text-sm text-slate-400">Remember me for 30 days</span>
+              </label>
+            )}
 
             {authError && (
               <div className="px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-xs">
                 {authError}
+              </div>
+            )}
+
+            {/* Terms and Conditions - only for registration */}
+            {authMode === 'register' && (
+              <div>
+                <label className={`
+                  flex items-start gap-2 cursor-pointer select-none p-2 rounded-lg transition-colors
+                  ${termsError ? 'bg-red-500/10 border border-red-500/30' : ''}
+                `}>
+                  <input
+                    type="checkbox"
+                    checked={agreeTerms}
+                    onChange={(e) => handleTermsChange(e.target.checked)}
+                    className={`
+                      w-4 h-4 mt-0.5 rounded bg-slate-800
+                      focus:ring-offset-0 cursor-pointer
+                      ${termsError 
+                        ? 'border-red-500 text-red-500 focus:ring-red-500' 
+                        : 'border-slate-600 text-indigo-500 focus:ring-indigo-500'}
+                    `}
+                  />
+                  <span className="text-xs text-slate-400 leading-relaxed">
+                    I agree to the{' '}
+                    <a href="/terms" target="_blank" className="text-indigo-400 hover:text-indigo-300 underline">
+                      Terms of Service
+                    </a>{' '}
+                    and{' '}
+                    <a href="/privacy" target="_blank" className="text-indigo-400 hover:text-indigo-300 underline">
+                      Privacy Policy
+                    </a>
+                  </span>
+                </label>
+                {termsError && (
+                  <p className="text-[10px] text-red-400 mt-1 ml-1">{termsError}</p>
+                )}
               </div>
             )}
 

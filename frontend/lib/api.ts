@@ -1,18 +1,32 @@
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 const AUTH_TOKEN_KEY = 'speldo_auth_token';
+const REMEMBER_ME_KEY = 'speldo_remember_me';
 
 export function getStoredToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(AUTH_TOKEN_KEY);
+  // Check localStorage first (remember me), then sessionStorage
+  return localStorage.getItem(AUTH_TOKEN_KEY) || sessionStorage.getItem(AUTH_TOKEN_KEY);
 }
 
-export function setStoredToken(token: string | null) {
+export function setStoredToken(token: string | null, rememberMe?: boolean) {
   if (typeof window === 'undefined') return;
   if (token) {
-    localStorage.setItem(AUTH_TOKEN_KEY, token);
+    // If rememberMe is explicitly passed, use it; otherwise check if we're already remembered
+    const shouldRemember = rememberMe ?? localStorage.getItem(REMEMBER_ME_KEY) === 'true';
+    if (shouldRemember) {
+      localStorage.setItem(AUTH_TOKEN_KEY, token);
+      localStorage.setItem(REMEMBER_ME_KEY, 'true');
+      sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    } else {
+      sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(REMEMBER_ME_KEY);
+    }
   } else {
     localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(REMEMBER_ME_KEY);
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
   }
 }
 
@@ -37,10 +51,10 @@ async function apiFetch(path: string, options: RequestInit = {}) {
   return data;
 }
 
-export async function register(username: string, password: string) {
+export async function register(username: string, email: string, password: string) {
   const data = await apiFetch('/api/auth/register/', {
     method: 'POST',
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, email, password }),
   });
   if (data.token) {
     setStoredToken(data.token);
@@ -48,13 +62,13 @@ export async function register(username: string, password: string) {
   return data;
 }
 
-export async function login(username: string, password: string) {
+export async function login(email: string, password: string, rememberMe: boolean = false) {
   const data = await apiFetch('/api/auth/login/', {
     method: 'POST',
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ email, password, remember_me: rememberMe }),
   });
   if (data.token) {
-    setStoredToken(data.token);
+    setStoredToken(data.token, rememberMe);
   }
   return data;
 }

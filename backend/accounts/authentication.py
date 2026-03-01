@@ -1,6 +1,7 @@
 """
 Token authentication for REST API using signed tokens.
 """
+import time
 from django.contrib.auth.models import User, AnonymousUser
 from django.core import signing
 from rest_framework.authentication import BaseAuthentication
@@ -23,14 +24,22 @@ class SignedTokenAuthentication(BaseAuthentication):
         token = auth_header[7:]  # Remove 'Bearer ' prefix
         
         try:
-            # Token expires after 7 days
-            data = signing.loads(token, salt='api-auth', max_age=60 * 60 * 24 * 7)
+            # Max age is 31 days to allow for clock skew, actual expiration is in the payload
+            data = signing.loads(token, salt='api-auth', max_age=60 * 60 * 24 * 31)
+            
+            # Check custom expiration if present
+            exp = data.get('exp')
+            if exp and time.time() > exp:
+                raise AuthenticationFailed('Token expired')
+            
             user_id = data.get('user_id')
             if user_id:
                 user = User.objects.get(id=user_id)
                 return (user, token)
-        except (signing.BadSignature, signing.SignatureExpired):
-            raise AuthenticationFailed('Invalid or expired token')
+        except signing.SignatureExpired:
+            raise AuthenticationFailed('Token expired')
+        except signing.BadSignature:
+            raise AuthenticationFailed('Invalid token')
         except User.DoesNotExist:
             raise AuthenticationFailed('User not found')
         
