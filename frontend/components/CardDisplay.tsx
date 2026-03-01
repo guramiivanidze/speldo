@@ -53,6 +53,7 @@ export default function CardDisplay({
         h-full w-full
         ${canBuy ? 'afford-glow' : ''}
         cursor-default shadow-lg
+        hover:z-50 transition-transform hover:scale-[1.02]
       `}
       style={{ background: CARD_GRADIENT[card.bonus] }}
     >

@@ -1,17 +1,16 @@
 'use client';
 
-import { PlayerState, Card, Noble } from '@/types/game';
-import CardDisplay from './CardDisplay';
-import NobleDisplay from './NobleDisplay';
+import { useState } from 'react';
+import { PlayerState, Card } from '@/types/game';
 import { TokenRow } from './TokenDisplay';
-import { GEM_COLORS, GEM_DOT_STYLE, TOKEN_GRADIENT } from '@/lib/colors';
+import { GEM_COLORS, GEM_DOT_STYLE } from '@/lib/colors';
+import ReservedCardsModal from './ReservedCardsModal';
 
 interface PlayerAreaProps {
   player: PlayerState;
   isCurrentTurn: boolean;
   isMe: boolean;
   cardsData: Record<string, Card>;
-  noblesData: Record<string, Noble>;
   onBuyReserved?: (cardId: number) => void;
   canAffordCard?: (cardId: number) => boolean;
 }
@@ -21,10 +20,11 @@ export default function PlayerArea({
   isCurrentTurn,
   isMe,
   cardsData,
-  noblesData,
   onBuyReserved,
   canAffordCard,
 }: PlayerAreaProps) {
+  const [showReservedModal, setShowReservedModal] = useState(false);
+
   const bonuses: Record<string, number> = {};
   for (const cid of player.purchased_card_ids) {
     const card = cardsData[String(cid)];
@@ -32,170 +32,150 @@ export default function PlayerArea({
   }
 
   const totalTokens = Object.values(player.tokens).reduce((a, b) => a + b, 0);
-  const progressPct = Math.min((player.prestige_points / 15) * 100, 100);
   const initials = player.username.slice(0, 2).toUpperCase();
 
   const hasReserved = isMe && player.reserved_card_ids.length > 0;
+  
+  // Check if any reserved card can be bought
+  const canBuyAnyReserved = hasReserved && player.reserved_card_ids.some(
+    (cid) => canAffordCard ? canAffordCard(cid) : false
+  );
 
   return (
     <div
       className={`
-        glass rounded-xl p-3 transition-all duration-200
+        glass rounded-xl p-2 transition-all duration-200
         ${isCurrentTurn
           ? 'border-4 border-amber-500 turn-pulse'
           : 'border border-white/5'}
       `}
     >
-      <div className={hasReserved ? 'flex gap-4' : ''}>
+      <div className={hasReserved ? 'flex gap-3 items-center' : ''}>
         {/* Left side - Main player info */}
         <div className={hasReserved ? 'flex-1' : ''}>
-          {/* ── Header ─────────────────────────────────── */}
-          <div className="flex items-center gap-2 mb-3">
-        {/* Avatar */}
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0 shadow-md"
-          style={{ background: isMe ? 'linear-gradient(135deg,#6366f1,#4338ca)' : 'linear-gradient(135deg,#475569,#1e293b)' }}
-        >
-          {initials}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            {isCurrentTurn && (
-              <span className="text-amber-400 text-xs leading-none">▶</span>
-            )}
-            <span className="font-bold text-sm text-slate-100 truncate">
-              {player.username}
-            </span>
-            {isMe && (
-              <span className="text-[9px] bg-indigo-500/30 text-indigo-300 rounded-full px-1.5 py-0.5 font-semibold shrink-0">
-                you
-              </span>
-            )}
-          </div>
-
-          {/* Progress bar to 15 */}
-          <div className="mt-1 h-1 bg-slate-700 rounded-full overflow-hidden">
+          {/* ── Header with stats inline ─────────────────────────────────── */}
+          <div className="flex items-center gap-3 mb-2">
+            {/* Avatar */}
             <div
-              className="h-full rounded-full transition-all duration-500"
-              style={{
-                width: `${progressPct}%`,
-                background: 'linear-gradient(90deg,#6366f1,#f5c518)',
-              }}
-            />
-          </div>
-        </div>
+              className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 shadow-md"
+              style={{ background: isMe ? 'linear-gradient(135deg,#6366f1,#4338ca)' : 'linear-gradient(135deg,#475569,#1e293b)' }}
+            >
+              {initials}
+            </div>
 
-        {/* Points badge */}
-        <div className="shrink-0 flex flex-col items-center">
-          <span className="text-xl font-black gold-text leading-none">
-            {player.prestige_points}
-          </span>
-          <span className="text-[8px] text-slate-500 font-semibold">/15</span>
-        </div>
-      </div>
-
-      {/* ── Tokens ─────────────────────────────────── */}
-      <div className="mb-2.5">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
-            Tokens
-          </span>
-          <span className={`text-[10px] font-bold ${totalTokens >= 10 ? 'text-red-400' : 'text-slate-400'}`}>
-            {totalTokens}/10
-          </span>
-        </div>
-        <div className={totalTokens >= 10 ? 'token-limit-warning p-1 -m-1' : ''}>
-          <TokenRow tokens={player.tokens} size="sm" showLabel={false} />
-        </div>
-      </div>
-
-      {/* ── Bonuses ────────────────────────────────── */}
-      <div className="mb-2.5">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
-            Bonuses
-          </span>
-          <span className="text-[12px] text-slate-400 font-bold">
-            {player.purchased_card_ids.length} cards
-          </span>
-        </div>
-        <div className="flex gap-3">
-          {GEM_COLORS.map((color) => {
-            const count = bonuses[color] || 0;
-            return (
-              <div key={color} className="flex flex-col items-center gap-1">
-                <div
-                  className="rounded-sm shadow-md border border-white/20"
-                  style={{ width: 22, height: 30, background: GEM_DOT_STYLE[color] }}
-                />
-                <span className={`text-xs font-black ${count > 0 ? 'text-slate-200' : 'text-slate-600'}`}>
-                  {count}
+            {/* Name + Progress */}
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                {isCurrentTurn && (
+                  <span className="text-amber-400 text-xs leading-none">▶</span>
+                )}
+                <span className="font-bold text-sm text-slate-100 truncate">
+                  {player.username}
                 </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-          {/* ── Nobles ─────────────────────────────────── */}
-          {player.noble_ids.length > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider shrink-0">
-                Nobles
-              </span>
-              <div className="flex gap-1">
-                {player.noble_ids.map((nid) => {
-                  const noble = noblesData[String(nid)];
-                  return noble ? (
-                    <div key={nid} className="w-10 h-10">
-                      <NobleDisplay noble={noble} mini />
-                    </div>
-                  ) : null;
-                })}
+                {isMe && (
+                  <span className="text-[8px] bg-indigo-500/30 text-indigo-300 rounded-full px-1 py-0.5 font-semibold shrink-0">
+                    you
+                  </span>
+                )}
               </div>
             </div>
-          )}
 
-          {/* ── Other player reserved count ─────────────── */}
-          {!isMe && player.reserved_card_ids.length > 0 && (
-            <div className="flex items-center gap-1.5 mt-2">
-              <div className="w-3 h-3 rounded border border-slate-600 bg-slate-700 flex items-center justify-center">
-                <span className="text-[7px] text-slate-400">?</span>
+            {/* Stats inline */}
+            <div className="flex items-center gap-2 ml-auto">
+              {/* Points */}
+              <div className="flex items-center gap-0.5 bg-amber-500/10 rounded px-1.5 py-0.5">
+                <span className="text-amber-400 text-[10px]">★</span>
+                <span className="text-sm font-black gold-text">{player.prestige_points}</span>
+                <span className="text-[8px] text-slate-500">/15</span>
               </div>
-              <span className="text-[10px] text-slate-500">
-                {player.reserved_card_ids.length} reserved card{player.reserved_card_ids.length > 1 ? 's' : ''}
-              </span>
+              {/* Tokens count */}
+              <div className={`flex items-center gap-0.5 rounded px-1.5 py-0.5 ${totalTokens >= 10 ? 'bg-red-500/20' : 'bg-slate-500/10'}`}>
+                <span className={`text-[10px] ${totalTokens >= 10 ? 'text-red-400' : 'text-slate-400'}`}>●</span>
+                <span className={`text-sm font-bold ${totalTokens >= 10 ? 'text-red-400' : 'text-slate-300'}`}>{totalTokens}</span>
+                <span className="text-[8px] text-slate-500">/10</span>
+              </div>
+              {/* Cards count */}
+              <div className="flex items-center gap-0.5 bg-emerald-500/10 rounded px-1.5 py-0.5">
+                <span className="text-emerald-400 text-[10px]">▣</span>
+                <span className="text-sm font-bold text-emerald-300">{player.purchased_card_ids.length}</span>
+              </div>
+              {/* Nobles */}
+              {player.noble_ids.length > 0 && (
+                <div className="flex items-center gap-0.5 bg-amber-500/10 rounded px-1.5 py-0.5">
+                  <span className="text-amber-400 text-[10px]">♛</span>
+                  <span className="text-sm font-bold text-amber-300">{player.noble_ids.length}</span>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* Right side - Reserved cards (always visible) */}
-        {hasReserved && (
-          <div className="shrink-0 border-l border-white/10 pl-4 flex flex-col">
-            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mb-2">
-              Reserved ({player.reserved_card_ids.length}/3)
-            </span>
-            <div className="flex gap-3">
-              {player.reserved_card_ids.map((cid) => {
-                const card = cardsData[String(cid)];
-                if (!card) return null;
+          {/* ── Tokens & Bonuses (side by side, compact) ─────────────────────────────────── */}
+          <div className="flex gap-4">
+            {/* Tokens */}
+            <div className="flex-1">
+              <div className={totalTokens >= 10 ? 'token-limit-warning p-0.5 -m-0.5' : ''}>
+                <TokenRow tokens={player.tokens} size="xs" showLabel={false} />
+              </div>
+            </div>
+
+            {/* Bonuses */}
+            <div className="flex gap-2">
+              {GEM_COLORS.map((color) => {
+                const count = bonuses[color] || 0;
                 return (
-                  <div key={cid} className="w-28 h-36">
-                    <CardDisplay
-                      card={card}
-                      onBuy={onBuyReserved ? () => onBuyReserved(cid) : undefined}
-                      canBuy={!!onBuyReserved && (canAffordCard ? canAffordCard(cid) : false)}
-                      showActions={!!onBuyReserved}
-                      compact
+                  <div key={color} className="flex flex-col items-center gap-0.5">
+                    <div
+                      className="rounded-sm shadow-sm border border-white/20"
+                      style={{ width: 18, height: 24, background: GEM_DOT_STYLE[color] }}
                     />
+                    <span className={`text-[10px] font-black ${count > 0 ? 'text-slate-200' : 'text-slate-600'}`}>
+                      {count}
+                    </span>
                   </div>
                 );
               })}
             </div>
           </div>
+        </div>
+
+        {/* Reserved cards button */}
+        {hasReserved && (
+          <button
+            onClick={() => setShowReservedModal(true)}
+            className={`
+              shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg transition-all
+              ${canBuyAnyReserved 
+                ? 'bg-emerald-500/20 reserved-can-buy hover:bg-emerald-500/30' 
+                : 'bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20'}
+            `}
+          >
+            <span className={`text-xl ${canBuyAnyReserved ? 'text-emerald-400' : 'text-indigo-400'}`}>◈</span>
+            <div className="flex flex-col items-start">
+              <span className={`text-xl font-bold ${canBuyAnyReserved ? 'text-emerald-300' : 'text-indigo-300'}`}>
+                {player.reserved_card_ids.length}
+              </span>
+              <span className="text-[9px] text-slate-400 uppercase tracking-wider">Reserved</span>
+            </div>
+            {canBuyAnyReserved && (
+              <div className="flex flex-col items-center ml-1">
+                <span className="text-emerald-400 text-[10px] font-bold">BUY</span>
+                <span className="text-emerald-400 text-xs">▶</span>
+              </div>
+            )}
+          </button>
         )}
       </div>
+
+      {/* Reserved Cards Modal */}
+      {showReservedModal && (
+        <ReservedCardsModal
+          reservedCardIds={player.reserved_card_ids}
+          cardsData={cardsData}
+          onBuyCard={onBuyReserved}
+          canAffordCard={canAffordCard}
+          onClose={() => setShowReservedModal(false)}
+        />
+      )}
     </div>
   );
 }

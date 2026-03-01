@@ -240,6 +240,22 @@ body {
   animation: pulse-green 1.5s ease-in-out infinite;
 }
 
+/* Reserved card buy opportunity blink */
+@keyframes reserved-blink {
+  0%, 100% { 
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6);
+    border-color: rgba(52, 211, 153, 0.5);
+  }
+  50% { 
+    box-shadow: 0 0 12px 4px rgba(52, 211, 153, 0.4);
+    border-color: rgba(52, 211, 153, 0.8);
+  }
+}
+.reserved-can-buy {
+  animation: reserved-blink 1.2s ease-in-out infinite;
+  border: 2px solid rgba(52, 211, 153, 0.5);
+}
+
 /* Safe area padding for notched phones */
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .safe-area-bottom {

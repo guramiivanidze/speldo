@@ -154,7 +154,7 @@ export default function GameBoard({
     <div className="h-full w-full flex flex-col overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-1">
 
       {/* Main Board Grid */}
-      <div className="flex-1 grid grid-rows-[auto_1fr_auto] grid-cols-[auto_1fr_auto] gap-1 min-h-0">
+      <div className="flex-1 grid grid-rows-[auto_1fr_auto] grid-cols-[auto_1fr_auto] gap-0.5 min-h-0">
         
         {/* Top-left corner */}
         <div />
@@ -201,7 +201,7 @@ export default function GameBoard({
         <div className="glass rounded-xl p-2 flex gap-2 overflow-hidden min-h-0 min-w-0">
           
           {/* Left side - Nobles + Cards */}
-          <div className="flex-1 flex flex-col gap-1 min-h-0 min-w-0 overflow-hidden">
+          <div className="flex-1 flex flex-col gap-0.5 min-h-0 min-w-0 overflow-hidden">
             {/* Nobles - Centered */}
             <div className="flex justify-center items-center gap-2 shrink-0 flex-wrap">
               <span className="text-amber-400 text-sm">♫</span>
@@ -210,7 +210,7 @@ export default function GameBoard({
                   const noble = nobles_data[String(nid)];
                   if (!noble) return null;
                   return (
-                    <div key={nid} className="w-48 h-16">
+                    <div key={nid} className="w-44 h-14">
                       <NobleDisplay noble={noble} compact />
                     </div>
                   );
@@ -221,9 +221,9 @@ export default function GameBoard({
             <div className="h-px bg-white/10 shrink-0" />
 
             {/* Card Rows */}
-            <div className="flex-1 flex flex-col gap-1 min-h-0 justify-center w-full overflow-hidden">
+            <div className="flex-1 flex flex-col gap-2 min-h-0 w-full overflow-hidden">
             {levels.map((level) => (
-              <div key={level} className="flex items-stretch gap-1 w-full flex-1 min-h-0 max-h-28">
+              <div key={level} className="flex items-stretch gap-2 w-full flex-1 min-h-0">
                 {/* Deck */}
                 <button
                   className={`
@@ -244,7 +244,7 @@ export default function GameBoard({
                 </button>
 
                 {/* Cards - responsive grid */}
-                <div className="flex-1 grid grid-cols-4 gap-1 h-full min-w-0">
+                <div className="flex-1 grid grid-cols-4 gap-2 h-full min-w-0">
                   {(visible_cards[level] || []).map((cardId) => {
                     const card = cards_data[String(cardId)];
                     if (!card) return null;
@@ -334,7 +334,6 @@ export default function GameBoard({
                 isCurrentTurn={me.id === currentPlayer?.id}
                 isMe={true}
                 cardsData={cards_data}
-                noblesData={nobles_data}
                 onBuyReserved={
                   isMyTurn && gameState.status === 'playing'
                     ? (cid) => onBuyCard(cid)
