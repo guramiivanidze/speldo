@@ -9,7 +9,7 @@ from channels.db import database_sync_to_async
 from django.contrib.auth.models import User
 from django.utils import timezone
 
-from .models import Game, GamePlayer
+from .models import Game, GamePlayer, GameAction
 from .game_logic import (
     COLORS, get_all_cards, get_all_nobles, get_card, get_noble,
     apply_take_tokens, apply_discard_tokens,
@@ -122,6 +122,9 @@ def serialize_game_state(game, players):
         # Token discard state
         'pending_discard': pending_discard,
         'pending_discard_count': pending_discard_count,
+        # History info
+        'total_turns': game.current_turn_number,
+        'has_history': game.current_turn_number > 0,
     }
 
 
@@ -143,7 +146,55 @@ class GameConsumer(AsyncWebsocketConsumer):
         await self.send_game_state()
 
     async def disconnect(self, close_code):
+        # Clean up waiting room games when player disconnects
+        await self._cleanup_waiting_game()
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+
+    async def _cleanup_waiting_game(self):
+        """Remove player from waiting game when they disconnect."""
+        @database_sync_to_async
+        def _db():
+            from django.db import transaction
+            try:
+                with transaction.atomic():
+                    game = Game.objects.select_for_update().get(code=self.game_code)
+                    
+                    # Only clean up waiting games
+                    if game.status != Game.STATUS_WAITING:
+                        return None
+                    
+                    player = game.players.filter(user=self.user).first()
+                    if not player:
+                        return None
+                    
+                    player.delete()
+                    remaining_players = game.players.count()
+                    
+                    if remaining_players == 0:
+                        # No players left - delete the game
+                        game.delete()
+                        return {'waiting_room_closed': True}
+                    return {'left_waiting_room': True, 'user_id': self.user.id, 'username': self.user.username}
+            except Game.DoesNotExist:
+                return None
+        
+        result = await _db()
+        
+        if isinstance(result, dict):
+            if result.get('waiting_room_closed'):
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {'type': 'waiting_room_closed'}
+                )
+            elif result.get('left_waiting_room'):
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {
+                        'type': 'player_left_waiting',
+                        'user_id': result['user_id'],
+                        'username': result['username'],
+                    }
+                )
 
     async def receive(self, text_data):
         data = json.loads(text_data)
@@ -792,15 +843,29 @@ class GameConsumer(AsyncWebsocketConsumer):
 
                     self._save_state(game, current_gp, new_gd, new_pd)
                     
+                    action_info = {
+                        'colors': colors,
+                        'bank_before': game_data['tokens_in_bank'].copy(),
+                        'bank_after': new_gd['tokens_in_bank'].copy(),
+                        'player_tokens_before': player_data['tokens'].copy(),
+                        'player_tokens_after': new_pd['tokens'].copy(),
+                    }
+                    
                     # Only advance turn if player doesn't need to discard
                     if not needs_discard:
                         current_gp.pending_action_data = None
-                        self._post_action(game, current_gp, players, new_gd, new_pd)
+                        self._post_action(game, current_gp, players, new_gd, new_pd,
+                                          action_type='take_tokens', action_data=action_info)
                     else:
-                        # Save pending action data for cancel support
+                        # Save pending action data for cancel support and later recording
+                        # Include full token data for history tracking
                         current_gp.pending_action_data = {
                             'type': 'take_tokens',
                             'colors': colors,
+                            'bank_before': game_data['tokens_in_bank'].copy(),
+                            'bank_after': new_gd['tokens_in_bank'].copy(),
+                            'player_tokens_before': player_data['tokens'].copy(),
+                            'player_tokens_after': new_pd['tokens'].copy(),
                         }
                         game.save()
                         current_gp.save()
@@ -839,8 +904,31 @@ class GameConsumer(AsyncWebsocketConsumer):
                     
                     # Advance turn only when player is at or below 10 tokens
                     if not still_needs_discard:
+                        # Retrieve the original action from pending_action_data
+                        pending = current_gp.pending_action_data
+                        action_type = pending.get('type') if pending else None
+                        action_info = None
+                        if action_type == 'take_tokens':
+                            action_info = {
+                                'colors': pending.get('colors', []),
+                                'bank_before': pending.get('bank_before'),
+                                'bank_after': pending.get('bank_after'),
+                                'player_tokens_before': pending.get('player_tokens_before'),
+                                'player_tokens_after': pending.get('player_tokens_after'),
+                            }
+                        elif action_type == 'reserve_card':
+                            action_info = {
+                                'card_id': pending.get('card_id'),
+                                'from_deck': pending.get('from_deck', False),
+                                'level': pending.get('level'),
+                                'gold_received': pending.get('gold_received'),
+                                'bank_gold_before': pending.get('bank_gold_before'),
+                                'bank_gold_after': pending.get('bank_gold_after'),
+                            }
+                        
                         current_gp.pending_action_data = None
-                        self._post_action(game, current_gp, players, new_gd, new_pd)
+                        self._post_action(game, current_gp, players, new_gd, new_pd,
+                                          action_type=action_type, action_data=action_info)
                     else:
                         game.save()
                         current_gp.save()
@@ -969,27 +1057,42 @@ class GameConsumer(AsyncWebsocketConsumer):
 
                     self._save_state(game, current_gp, new_gd, new_pd)
                     
+                    # Determine if it came from deck or visible
+                    from_deck = card_id is None
+                    
+                    # Determine if gold was received
+                    gold_before = player_data['tokens'].get('gold', 0)
+                    gold_after = new_pd['tokens'].get('gold', 0)
+                    gold_received = gold_after > gold_before
+                    
+                    action_info = {
+                        'card_id': reserved_id,
+                        'from_deck': from_deck,
+                        'level': level if from_deck else None,
+                        'gold_received': gold_received,
+                        'bank_gold_before': game_data['tokens_in_bank'].get('gold', 0),
+                        'bank_gold_after': new_gd['tokens_in_bank'].get('gold', 0),
+                    }
+                    
                     # Only advance turn if player doesn't need to discard
                     if not needs_discard:
                         current_gp.pending_action_data = None
-                        self._post_action(game, current_gp, players, new_gd, new_pd)
+                        self._post_action(game, current_gp, players, new_gd, new_pd,
+                                          action_type='reserve_card', action_data=action_info)
                     else:
-                        # Determine if gold was received (compare before/after gold)
-                        gold_before = player_data['tokens'].get('gold', 0)
-                        gold_after = new_pd['tokens'].get('gold', 0)
-                        gold_received = gold_after > gold_before
-                        
                         # Determine the card's level
                         reserved_card = get_card(reserved_id)
                         card_level = reserved_card['level'] if reserved_card else None
                         
                         # Save pending action data for cancel support
                         current_gp.pending_action_data = {
-                            'type': 'reserve',
+                            'type': 'reserve_card',
                             'card_id': reserved_id,
                             'gold_received': gold_received,
                             'level': card_level,
-                            'from_visible': card_id is not None,  # True if card_id was provided
+                            'from_deck': from_deck,
+                            'bank_gold_before': game_data['tokens_in_bank'].get('gold', 0),
+                            'bank_gold_after': new_gd['tokens_in_bank'].get('gold', 0),
                         }
                         game.save()
                         current_gp.save()
@@ -1053,8 +1156,10 @@ class GameConsumer(AsyncWebsocketConsumer):
                     )
 
                     # Check noble visits
+                    noble_visited_id = None
                     eligible = check_nobles(new_gd, new_pd)
                     if len(eligible) == 1:
+                        noble_visited_id = eligible[0]
                         noble = get_noble(eligible[0])
                         logger.info(
                             "[BUY_CARD] Game=%s User=%s | NOBLE_VISIT | NobleID=%s (points=%d) | PrestigeBefore=%d",
@@ -1067,8 +1172,30 @@ class GameConsumer(AsyncWebsocketConsumer):
                             self.game_code, self.user.username, new_pd['prestige_points']
                         )
 
+                    # Determine if card was from reserved
+                    from_reserved = card_id in player_data['reserved_card_ids']
+                    
+                    # Calculate tokens spent
+                    tokens_spent = {}
+                    for color in ['white', 'blue', 'green', 'red', 'black', 'gold']:
+                        diff = player_data['tokens'].get(color, 0) - new_pd['tokens'].get(color, 0)
+                        if diff > 0:
+                            tokens_spent[color] = diff
+                    
+                    action_info = {
+                        'card_id': card_id,
+                        'from_reserved': from_reserved,
+                        'tokens_spent': tokens_spent,
+                        'noble_id': noble_visited_id,  # None if no noble was claimed
+                        'player_tokens_before': player_data['tokens'].copy(),
+                        'player_tokens_after': new_pd['tokens'].copy(),
+                        'bank_before': game_data['tokens_in_bank'].copy(),
+                        'bank_after': new_gd['tokens_in_bank'].copy(),
+                    }
+
                     self._save_state(game, current_gp, new_gd, new_pd)
-                    self._post_action(game, current_gp, players, new_gd, new_pd)
+                    self._post_action(game, current_gp, players, new_gd, new_pd,
+                                      action_type='buy_card', action_data=action_info)
                     return None
             except Game.DoesNotExist:
                 return "Game not found."
@@ -1101,7 +1228,10 @@ class GameConsumer(AsyncWebsocketConsumer):
 
                     new_gd, new_pd = apply_noble_visit(game_data, player_data, noble_id)
                     self._save_state(game, current_gp, new_gd, new_pd)
-                    self._post_action(game, current_gp, players, new_gd, new_pd)
+                    
+                    action_info = {'noble_id': noble_id}
+                    self._post_action(game, current_gp, players, new_gd, new_pd,
+                                      action_type='noble_visit', action_data=action_info)
                     return None
             except Game.DoesNotExist:
                 return "Game not found."
@@ -1123,8 +1253,24 @@ class GameConsumer(AsyncWebsocketConsumer):
         current_gp.noble_ids = player_data['noble_ids']
         current_gp.prestige_points = player_data['prestige_points']
 
-    def _post_action(self, game, current_gp, players, game_data, player_data):
-        """Check end condition and advance turn."""
+    def _post_action(self, game, current_gp, players, game_data, player_data, action_type=None, action_data=None):
+        """Record action history, check end condition and advance turn."""
+        # Record the action in history
+        if action_type and action_data is not None:
+            game.current_turn_number += 1
+            num_players = len(players)
+            round_number = ((game.current_turn_number - 1) // num_players) + 1
+            
+            GameAction.objects.create(
+                game=game,
+                player=current_gp,
+                turn_number=game.current_turn_number,
+                round_number=round_number,
+                action_type=action_type,
+                action_data=action_data,
+                prestige_points_after=player_data['prestige_points'],
+            )
+        
         all_player_data = []
         for gp in players:
             if gp.pk == current_gp.pk:

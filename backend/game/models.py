@@ -100,6 +100,7 @@ class Game(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_WAITING)
     max_players = models.IntegerField(default=4)
     current_player_index = models.IntegerField(default=0)
+    current_turn_number = models.IntegerField(default=0)  # Total turns taken so far
     created_at = models.DateTimeField(auto_now_add=True)
     
     # Pause state fields
@@ -163,3 +164,37 @@ class GamePlayer(models.Model):
 
     def __str__(self):
         return f"{self.user.username} in game {self.game.code}"
+
+
+class GameAction(models.Model):
+    """Records each action taken during a game for history/replay."""
+    ACTION_TYPES = [
+        ('take_tokens', 'Take Tokens'),
+        ('reserve_card', 'Reserve Card'),
+        ('buy_card', 'Buy Card'),
+        ('noble_visit', 'Noble Visit'),
+    ]
+    
+    game = models.ForeignKey(Game, on_delete=models.CASCADE, related_name='actions')
+    player = models.ForeignKey(GamePlayer, on_delete=models.CASCADE, related_name='actions')
+    turn_number = models.IntegerField()  # Sequential action number (1, 2, 3, ...)
+    round_number = models.IntegerField()  # Round number (each player gets 1 turn per round)
+    action_type = models.CharField(max_length=20, choices=ACTION_TYPES)
+    
+    # Action-specific data stored as JSON
+    # take_tokens: {"colors": ["white", "blue", "green"]} or {"colors": ["red", "red"]}
+    # reserve_card: {"card_id": 5, "from_deck": false} or {"card_id": 5, "from_deck": true, "level": 2}
+    # buy_card: {"card_id": 5, "from_reserved": false, "tokens_spent": {"white": 2, "blue": 1}}
+    # noble_visit: {"noble_id": 3}
+    action_data = models.JSONField(default=dict)
+    
+    # Snapshot of player state after this action
+    prestige_points_after = models.IntegerField(default=0)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['turn_number']
+    
+    def __str__(self):
+        return f"Turn {self.turn_number}: {self.player.user.username} - {self.action_type}"

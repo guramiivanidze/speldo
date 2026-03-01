@@ -101,6 +101,10 @@ export async function getGameState(code: string) {
   return apiFetch(`/api/games/${code}/state/`);
 }
 
+export async function getGameHistory(code: string) {
+  return apiFetch(`/api/games/${code}/history/`);
+}
+
 export async function getMyGames() {
   return apiFetch('/api/games/mine/');
 }

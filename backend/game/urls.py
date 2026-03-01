@@ -2,6 +2,7 @@ from django.urls import path
 from .views import (
     GameListCreateView, GameJoinView,
     GameStartView, GameStateView, MyGamesView,
+    GameHistoryView,
 )
 
 urlpatterns = [
@@ -10,4 +11,5 @@ urlpatterns = [
     path('games/<str:code>/join/', GameJoinView.as_view(), name='game-join'),
     path('games/<str:code>/start/', GameStartView.as_view(), name='game-start'),
     path('games/<str:code>/state/', GameStateView.as_view(), name='game-state'),
+    path('games/<str:code>/history/', GameHistoryView.as_view(), name='game-history'),
 ]

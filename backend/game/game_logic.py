@@ -271,7 +271,7 @@ def apply_cancel_pending_discard(game_data, player_data, pending_action_data):
     
     action_type = pending_action_data.get('type')
     
-    if action_type == 'reserve':
+    if action_type == 'reserve' or action_type == 'reserve_card':
         # Undo a reserve action:
         # 1. Remove card from reserved_card_ids
         # 2. Return gold to bank if received
@@ -279,7 +279,7 @@ def apply_cancel_pending_discard(game_data, player_data, pending_action_data):
         card_id = pending_action_data.get('card_id')
         gold_received = pending_action_data.get('gold_received', False)
         card_level = pending_action_data.get('level')  # The level of the card
-        from_visible = pending_action_data.get('from_visible', True)
+        from_visible = pending_action_data.get('from_visible', not pending_action_data.get('from_deck', False))
         
         reserved = list(player_data['reserved_card_ids'])
         if card_id not in reserved:

@@ -9,6 +9,8 @@ import { startGame, getMatchByGame } from '@/lib/api';
 import GameBoard from '@/components/GameBoard';
 import PauseSurveyModal from '@/components/PauseSurveyModal';
 import RatingChangeDisplay from '@/components/RatingChangeDisplay';
+import GameHistory from '@/components/GameHistory';
+import GamePodium from '@/components/GamePodium';
 import type { Match, Division } from '@/types/competitive';
 
 const GEM_COLORS_HEX = ['#f1f5f9', '#3b82f6', '#10b981', '#ef4444', '#475569', '#fde047'];
@@ -428,80 +430,19 @@ export default function GamePage({ params }: PageProps) {
           })()}
 
           {/* Trophy banner */}
-          <div className="glass rounded-2xl p-8 border border-amber-500/20 text-center">
-            <div className="text-4xl mb-3">♛</div>
+          <div className="glass rounded-2xl p-6 border border-amber-500/20 text-center">
+            <div className="text-4xl mb-2">♛</div>
             <h3 className="text-2xl font-black gold-text mb-1">Game Over</h3>
 
             {gameState.winner_id && (() => {
               const winner = gameState.players.find(p => p.id === gameState.winner_id);
               return winner ? (
-                <p className="text-slate-400 text-sm mb-6">
+                <p className="text-slate-400 text-sm mb-4">
                   <span className="font-bold text-amber-300">{winner.username}</span> wins with{' '}
                   <span className="font-bold text-slate-100">{winner.prestige_points}</span> prestige points
                 </p>
               ) : null;
             })()}
-
-            {/* Leaderboard */}
-            <div className="flex flex-col gap-2 mb-6">
-              {[...gameState.players]
-                .sort((a, b) => b.prestige_points - a.prestige_points)
-                .map((p, rank) => {
-                  const isWinner = p.id === gameState.winner_id;
-                  const isMe = p.id === user.id;
-                  const initials = p.username.slice(0, 2).toUpperCase();
-                  const rankEmoji = ['♛', '②', '③', '④'][rank] ?? '—';
-                  return (
-                    <div
-                      key={p.id}
-                      className={`
-                        flex items-center gap-3 px-4 py-3 rounded-xl
-                        ${isWinner
-                          ? 'bg-amber-500/15 border border-amber-500/40'
-                          : 'bg-slate-800/50 border border-slate-700/40'}
-                      `}
-                    >
-                      <span className={`text-base w-5 text-center shrink-0 ${isWinner ? 'text-amber-400' : 'text-slate-500'}`}>
-                        {rankEmoji}
-                      </span>
-
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0"
-                        style={{
-                          background: isMe
-                            ? 'linear-gradient(135deg,#6366f1,#4338ca)'
-                            : 'linear-gradient(135deg,#475569,#1e293b)',
-                        }}
-                      >
-                        {initials}
-                      </div>
-
-                      <div className="flex-1 text-left">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`font-bold text-sm ${isWinner ? 'text-amber-200' : 'text-slate-100'}`}>
-                            {p.username}
-                          </span>
-                          {isMe && (
-                            <span className="text-[9px] bg-indigo-500/30 text-indigo-300 rounded-full px-1.5 py-0.5 font-semibold">
-                              you
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[10px] text-slate-500">
-                          {p.purchased_card_ids.length} cards · {p.noble_ids.length} nobles
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 text-right">
-                        <span className={`text-xl font-black ${isWinner ? 'gold-text' : 'text-slate-300'}`}>
-                          {p.prestige_points}
-                        </span>
-                        <span className="text-[10px] text-slate-500 block">pts</span>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
 
             <button
               className="
@@ -516,15 +457,32 @@ export default function GamePage({ params }: PageProps) {
             </button>
           </div>
 
-          {/* Final board read-only */}
-          <GameBoard
-            gameState={gameState}
-            myUserId={user.id}
-            onTakeTokens={() => {}}
-            onReserveCard={() => {}}
-            onBuyCard={() => {}}
-            onDiscardTokens={() => {}}
+          {/* Podium with fireworks */}
+          <GamePodium
+            players={gameState.players}
+            winnerId={gameState.winner_id}
+            currentUserId={user.id}
           />
+
+          {/* Game History - Inline with tabs */}
+          <GameHistory gameCode={code} inline />
+
+          {/* Final board read-only - below the history */}
+          <details className="glass rounded-2xl border border-slate-700 overflow-hidden">
+            <summary className="p-4 cursor-pointer text-sm font-bold text-slate-400 hover:text-slate-200 transition-colors">
+              View Final Board State
+            </summary>
+            <div className="p-4 pt-0">
+              <GameBoard
+                gameState={gameState}
+                myUserId={user.id}
+                onTakeTokens={() => {}}
+                onReserveCard={() => {}}
+                onBuyCard={() => {}}
+                onDiscardTokens={() => {}}
+              />
+            </div>
+          </details>
         </div>
       )}
 

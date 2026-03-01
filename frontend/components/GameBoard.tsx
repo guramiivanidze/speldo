@@ -51,7 +51,9 @@ export default function GameBoard({
     );
   }
 
-  const currentPlayer = gameState.players[gameState.current_player_index];
+  // Don't highlight current player when game is finished
+  const isGameActive = gameState.status === 'playing' || gameState.status === 'paused';
+  const currentPlayer = isGameActive ? gameState.players[gameState.current_player_index] : null;
   const isMyTurn = currentPlayer?.id === myUserId;
   const me = gameState.players.find((p) => p.id === myUserId);
   const canReserveMore = me ? me.reserved_card_ids.length < 3 : false;
