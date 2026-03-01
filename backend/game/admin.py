@@ -42,7 +42,7 @@ class DevelopmentCardAdmin(ImportExportModelAdmin):
     ordering = ['level', 'bonus', 'id']
     search_fields = ['bonus']
     readonly_fields = ['image_preview']
-    actions = ['bulk_upload_images']
+    actions = ['bulk_upload_images', 'bulk_remove_images', 'bulk_upload_single_image']
     
     fieldsets = (
         ('Card Info', {
@@ -60,6 +60,7 @@ class DevelopmentCardAdmin(ImportExportModelAdmin):
         urls = super().get_urls()
         custom_urls = [
             path('bulk-upload-images/', self.admin_site.admin_view(self.bulk_upload_view), name='game_developmentcard_bulk_upload'),
+            path('bulk-upload-single/', self.admin_site.admin_view(self.bulk_upload_single_view), name='game_developmentcard_bulk_upload_single'),
         ]
         return custom_urls + urls
     
@@ -69,6 +70,24 @@ class DevelopmentCardAdmin(ImportExportModelAdmin):
         selected_ids = list(queryset.values_list('id', flat=True))
         request.session['bulk_upload_card_ids'] = selected_ids
         return redirect('admin:game_developmentcard_bulk_upload')
+    
+    @admin.action(description='Bulk remove images from selected cards')
+    def bulk_remove_images(self, request, queryset):
+        count = 0
+        for card in queryset:
+            if card.background_image:
+                card.background_image.delete(save=False)
+                card.background_image = None
+                card.save()
+                count += 1
+        clear_card_cache()
+        messages.success(request, f'Successfully removed images from {count} cards.')
+    
+    @admin.action(description='Upload single image for all selected cards')
+    def bulk_upload_single_image(self, request, queryset):
+        selected_ids = list(queryset.values_list('id', flat=True))
+        request.session['bulk_upload_single_card_ids'] = selected_ids
+        return redirect('admin:game_developmentcard_bulk_upload_single')
     
     def bulk_upload_view(self, request):
         card_ids = request.session.get('bulk_upload_card_ids', [])
@@ -97,6 +116,40 @@ class DevelopmentCardAdmin(ImportExportModelAdmin):
             'has_view_permission': True,
         }
         return render(request, 'admin/game/developmentcard/bulk_upload.html', context)
+    
+    def bulk_upload_single_view(self, request):
+        card_ids = request.session.get('bulk_upload_single_card_ids', [])
+        cards = DevelopmentCard.objects.filter(id__in=card_ids).order_by('level', 'bonus', 'id')
+        
+        if request.method == 'POST':
+            if 'single_image' in request.FILES:
+                image_file = request.FILES['single_image']
+                count = 0
+                for card in cards:
+                    # Each card gets the same image file - need to save with different name
+                    from django.core.files.base import ContentFile
+                    image_file.seek(0)  # Reset file pointer for each card
+                    # Generate unique filename for each card
+                    ext = image_file.name.split('.')[-1] if '.' in image_file.name else 'jpg'
+                    new_filename = f'card_{card.id}_{card.level}_{card.bonus}.{ext}'
+                    card.background_image.save(new_filename, ContentFile(image_file.read()), save=True)
+                    count += 1
+                
+                clear_card_cache()
+                messages.success(request, f'Successfully applied image to {count} cards.')
+                if 'bulk_upload_single_card_ids' in request.session:
+                    del request.session['bulk_upload_single_card_ids']
+                return redirect('admin:game_developmentcard_changelist')
+            else:
+                messages.error(request, 'Please select an image file.')
+        
+        context = {
+            'title': 'Upload Single Image for Multiple Cards',
+            'cards': cards,
+            'opts': self.model._meta,
+            'has_view_permission': True,
+        }
+        return render(request, 'admin/game/developmentcard/bulk_upload_single.html', context)
     
     def image_preview_small(self, obj):
         if obj.background_image:

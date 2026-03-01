@@ -1,0 +1,241 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:game_developmentcard_changelist' %}">Development Cards</a>
+    &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+    .bulk-upload-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    .upload-section {
+        background: #f8f9fa;
+        border: 2px dashed #2196f3;
+        border-radius: 12px;
+        padding: 40px;
+        text-align: center;
+        margin: 20px 0;
+    }
+    .upload-section:hover {
+        border-color: #1976d2;
+        background: #e3f2fd;
+    }
+    .upload-icon {
+        font-size: 48px;
+        margin-bottom: 15px;
+    }
+    .upload-title {
+        font-size: 20px;
+        font-weight: bold;
+        margin-bottom: 10px;
+        color: #333;
+    }
+    .upload-subtitle {
+        color: #666;
+        margin-bottom: 20px;
+    }
+    .file-input-wrapper {
+        display: inline-block;
+    }
+    .file-input {
+        padding: 12px 24px;
+        font-size: 16px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+    .preview-section {
+        margin: 30px 0;
+        text-align: center;
+        display: none;
+    }
+    .preview-section.show {
+        display: block;
+    }
+    .preview-image {
+        max-width: 300px;
+        max-height: 200px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .selected-cards {
+        margin: 30px 0;
+    }
+    .cards-info {
+        background: #e8f5e9;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }
+    .cards-info strong {
+        color: #2e7d32;
+    }
+    .card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 10px;
+    }
+    .card-mini {
+        background: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 10px;
+        text-align: center;
+        font-size: 12px;
+    }
+    .card-mini.has-image {
+        background: #fff3e0;
+        border-color: #ff9800;
+    }
+    .level-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 10px;
+        font-weight: bold;
+        color: white;
+    }
+    .level-1 { background: #4caf50; }
+    .level-2 { background: #ff9800; }
+    .level-3 { background: #f44336; }
+    .bonus-badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 10px;
+        font-weight: bold;
+        text-transform: uppercase;
+        margin-left: 4px;
+    }
+    .bonus-white { background: #e0e0e0; color: #333; }
+    .bonus-blue { background: #2196f3; color: white; }
+    .bonus-green { background: #4caf50; color: white; }
+    .bonus-red { background: #f44336; color: white; }
+    .bonus-black { background: #212121; color: white; }
+    .submit-row {
+        margin-top: 30px;
+        padding: 20px;
+        background: #f5f5f5;
+        border-radius: 8px;
+        text-align: center;
+    }
+    .submit-row input[type="submit"] {
+        padding: 14px 50px;
+        font-size: 18px;
+        background: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .submit-row input[type="submit"]:hover {
+        background: #388e3c;
+    }
+    .submit-row input[type="submit"]:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+    }
+    .cancel-link {
+        margin-left: 20px;
+        color: #666;
+        text-decoration: none;
+    }
+    .cancel-link:hover {
+        text-decoration: underline;
+    }
+    .warning-box {
+        background: #fff3e0;
+        border: 1px solid #ff9800;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+        color: #e65100;
+    }
+</style>
+
+<div class="bulk-upload-container">
+    <h1>{{ title }}</h1>
+    
+    {% if cards %}
+    <div class="warning-box">
+        ⚠️ <strong>Warning:</strong> This will replace any existing images on the selected cards with the single image you upload.
+    </div>
+    
+    <form method="post" enctype="multipart/form-data" id="uploadForm">
+        {% csrf_token %}
+        
+        <div class="upload-section">
+            <div class="upload-icon">📤</div>
+            <div class="upload-title">Select One Image</div>
+            <div class="upload-subtitle">This image will be applied to all {{ cards|length }} selected cards</div>
+            <div class="file-input-wrapper">
+                <input type="file" name="single_image" accept="image/*" class="file-input" id="imageInput" required>
+            </div>
+        </div>
+        
+        <div class="preview-section" id="previewSection">
+            <h3>Preview</h3>
+            <img src="" alt="Preview" class="preview-image" id="previewImage">
+        </div>
+        
+        <div class="selected-cards">
+            <div class="cards-info">
+                <strong>{{ cards|length }} cards selected</strong> - All these cards will receive the uploaded image.
+                <br><small>Cards with existing images are highlighted in orange.</small>
+            </div>
+            
+            <div class="card-grid">
+                {% for card in cards %}
+                <div class="card-mini {% if card.background_image %}has-image{% endif %}">
+                    <div><strong>#{{ card.id }}</strong></div>
+                    <span class="level-badge level-{{ card.level }}">L{{ card.level }}</span>
+                    <span class="bonus-badge bonus-{{ card.bonus }}">{{ card.bonus|slice:":3" }}</span>
+                    {% if card.points %}<div style="margin-top:4px;">{{ card.points }}pt</div>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div class="submit-row">
+            <input type="submit" value="Apply Image to All {{ cards|length }} Cards" id="submitBtn">
+            <a href="{% url 'admin:game_developmentcard_changelist' %}" class="cancel-link">Cancel</a>
+        </div>
+    </form>
+    
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const previewSection = document.getElementById('previewSection');
+        const previewImage = document.getElementById('previewImage');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        imageInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImage.src = e.target.result;
+                    previewSection.classList.add('show');
+                };
+                reader.readAsDataURL(file);
+            } else {
+                previewSection.classList.remove('show');
+            }
+        });
+    </script>
+    {% else %}
+    <p>No cards selected. Please go back and select cards first.</p>
+    <p><a href="{% url 'admin:game_developmentcard_changelist' %}">← Back to card list</a></p>
+    {% endif %}
+</div>
+{% endblock %}
