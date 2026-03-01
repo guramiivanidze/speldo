@@ -76,7 +76,7 @@ class DevelopmentCardAdmin(ImportExportModelAdmin):
         count = 0
         for card in queryset:
             if card.background_image:
-                # For Cloudinary, just clear the field (don't call delete())
+                card.background_image.delete(save=False)
                 card.background_image = None
                 card.save()
                 count += 1

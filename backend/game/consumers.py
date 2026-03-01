@@ -1145,10 +1145,11 @@ class GameConsumer(AsyncWebsocketConsumer):
             game.last_round_triggered_by = trigger['order']
 
         if game.last_round_triggered_by is not None:
-            trigger_order = game.last_round_triggered_by
-            last_player_order = (trigger_order - 1) % len(players)
+            # Game ends when the last player in turn order finishes theirturn
+            # This ensures everyone gets equal turns in the final round
+            last_player_order = len(players) - 1
             if current_gp.order == last_player_order or len(players) == 1:
-                winner_data = determine_winner(all_player_data, trigger_order)
+                winner_data = determine_winner(all_player_data, game.last_round_triggered_by)
                 winner_gp = next(gp for gp in players if gp.order == winner_data['order'])
                 game.status = Game.STATUS_FINISHED
                 game.winner = winner_gp.user
