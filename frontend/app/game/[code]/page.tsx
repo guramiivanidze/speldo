@@ -205,16 +205,27 @@ export default function GamePage({ params }: PageProps) {
         {notification && (
           <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-40 
                           px-4 py-2 bg-emerald-500/20 border border-emerald-500/40 
-                          rounded-lg text-emerald-300 text-sm">
+                          rounded-lg text-emerald-300 text-sm max-w-[90vw] text-center">
             {notification}
           </div>
         )}
 
-        {/* Error floating */}
+        {/* Error toast - prominent mobile-friendly display */}
         {error && (
-          <div className="absolute top-2 right-2 z-30 px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
-            <span>{error}</span>
-            <button onClick={clearError} className="text-red-400 hover:text-red-200 font-bold">✕</button>
+          <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-50 
+                          max-w-[90vw] sm:max-w-md animate-bounce-in">
+            <div className="px-4 py-3 rounded-xl bg-red-600/90 backdrop-blur-sm 
+                            border-2 border-red-400/50 shadow-lg shadow-red-500/30
+                            flex items-center gap-3">
+              <span className="text-xl">⚠️</span>
+              <span className="text-white font-medium text-sm flex-1">{error}</span>
+              <button 
+                onClick={clearError} 
+                className="text-white/70 hover:text-white text-lg font-bold p-1 hover:bg-red-500/50 rounded-lg transition-colors"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         )}
 

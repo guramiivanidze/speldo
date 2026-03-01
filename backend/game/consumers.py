@@ -734,10 +734,11 @@ class GameConsumer(AsyncWebsocketConsumer):
             # Advance turn
             if game.last_round_triggered_by is not None:
                 # Check if round is complete
-                trigger_order = game.last_round_triggered_by
-                if current_gp.order == (trigger_order - 1) % len(players):
-                    # Last player has gone
-                    winner_data = determine_winner(all_player_data, trigger_order)
+                # In Splendor, rounds go 0 → 1 → 2 → ... → n-1 → 0
+                # Round ends when the last player (order = n-1) has played
+                if current_gp.order == len(players) - 1:
+                    # Last player in round has gone - game ends
+                    winner_data = determine_winner(all_player_data, game.last_round_triggered_by)
                     winner_gp = next(gp for gp in players if gp.order == winner_data['order'])
                     game.status = Game.STATUS_FINISHED
                     game.winner = winner_gp.user

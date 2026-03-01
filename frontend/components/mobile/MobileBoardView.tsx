@@ -178,21 +178,24 @@ export default function MobileBoardView({
                             <span className={`text-xs font-bold ${LEVEL_COLOR[Number(level) as 1 | 2 | 3].replace('bg-', 'text-')}`}>
                                 Tier {ROMAN[Number(level)]}
                             </span>
-                            <button
-                                className={`
-                  ml-auto px-2 py-0.5 rounded text-[9px] font-bold
-                  ${isMyTurn && canReserveMore && (deckCounts[level] ?? 0) > 0 && isPlaying
-                                        ? 'bg-slate-700 text-slate-300'
-                                        : 'bg-slate-800 text-slate-600 cursor-not-allowed'}
-                `}
-                                onClick={() => {
-                                    if (isMyTurn && canReserveMore && (deckCounts[level] ?? 0) > 0 && isPlaying) {
-                                        onReserveCard(undefined, Number(level));
-                                    }
-                                }}
-                            >
-                                Deck: {deckCounts[level] ?? 0}
-                            </button>
+                            {(deckCounts[level] ?? 0) > 0 && (
+                                <button
+                                    className={`
+                      ml-auto px-3 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5
+                      ${isMyTurn && canReserveMore && isPlaying
+                                            ? 'bg-amber-600/80 text-white animate-pulse shadow-lg shadow-amber-500/30'
+                                            : 'bg-slate-800 text-slate-500 cursor-not-allowed'}
+                    `}
+                                    onClick={() => {
+                                        if (isMyTurn && canReserveMore && (deckCounts[level] ?? 0) > 0 && isPlaying) {
+                                            onReserveCard(undefined, Number(level));
+                                        }
+                                    }}
+                                >
+                                    <span className="text-[11px]">📥</span>
+                                    Reserve from deck ({deckCounts[level]})
+                                </button>
+                            )}
                         </div>
 
                         {/* Cards - Horizontal scroll */}

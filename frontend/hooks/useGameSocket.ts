@@ -49,6 +49,8 @@ export function useGameSocket(gameCode: string | null) {
           setError(null);
         } else if (msg.type === 'error') {
           setError(msg.message || 'Unknown error');
+          // Auto-dismiss error after 4 seconds
+          setTimeout(() => setError(null), 4000);
         } else if (msg.type === 'player_left_survey') {
           setPauseEvent({
             type: 'player_left',

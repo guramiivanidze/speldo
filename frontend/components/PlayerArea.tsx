@@ -140,14 +140,18 @@ export default function PlayerArea({
 
           {/* ── Nobles ─────────────────────────────────── */}
           {player.noble_ids.length > 0 && (
-            <div>
-              <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider block mb-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider shrink-0">
                 Nobles
               </span>
-              <div className="flex gap-1.5 flex-wrap">
+              <div className="flex gap-1">
                 {player.noble_ids.map((nid) => {
                   const noble = noblesData[String(nid)];
-                  return noble ? <NobleDisplay key={nid} noble={noble} compact /> : null;
+                  return noble ? (
+                    <div key={nid} className="w-10 h-10">
+                      <NobleDisplay noble={noble} mini />
+                    </div>
+                  ) : null;
                 })}
               </div>
             </div>

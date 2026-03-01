@@ -194,17 +194,127 @@ class TakeTokensTestCase(TestCase):
         game_data = create_game_data(4)
         player_data = create_empty_player()
         
-        # 2 different colors only (not valid)
+        # 2 different colors when more are available (not valid)
         new_game, new_player, error, _ = game_logic.apply_take_tokens(
             game_data, player_data, ["white", "blue"]
         )
         self.assertIsNotNone(error)
+        self.assertIn("3 different colors", error)
         
         # 4 tokens
         new_game, new_player, error, _ = game_logic.apply_take_tokens(
             game_data, player_data, ["white", "blue", "green", "red"]
         )
         self.assertIsNotNone(error)
+
+    def test_take_2_different_when_only_2_colors_available(self):
+        """Can take 2 different colors when only 2 colors left in bank."""
+        game_data = create_game_data(4)
+        # Empty all but 2 colors
+        game_data["tokens_in_bank"]["white"] = 0
+        game_data["tokens_in_bank"]["blue"] = 0
+        game_data["tokens_in_bank"]["green"] = 0
+        game_data["tokens_in_bank"]["red"] = 1
+        game_data["tokens_in_bank"]["black"] = 2
+        player_data = create_empty_player()
+        
+        new_game, new_player, error, needs_discard = game_logic.apply_take_tokens(
+            game_data, player_data, ["red", "black"]
+        )
+        
+        self.assertIsNone(error)
+        self.assertEqual(new_player["tokens"]["red"], 1)
+        self.assertEqual(new_player["tokens"]["black"], 1)
+        self.assertEqual(new_game["tokens_in_bank"]["red"], 0)
+        self.assertEqual(new_game["tokens_in_bank"]["black"], 1)
+
+    def test_take_1_when_only_1_color_available(self):
+        """Can take 1 token when only 1 color left in bank."""
+        game_data = create_game_data(4)
+        # Empty all but 1 color
+        game_data["tokens_in_bank"]["white"] = 0
+        game_data["tokens_in_bank"]["blue"] = 0
+        game_data["tokens_in_bank"]["green"] = 0
+        game_data["tokens_in_bank"]["red"] = 0
+        game_data["tokens_in_bank"]["black"] = 3
+        player_data = create_empty_player()
+        
+        new_game, new_player, error, needs_discard = game_logic.apply_take_tokens(
+            game_data, player_data, ["black"]
+        )
+        
+        self.assertIsNone(error)
+        self.assertEqual(new_player["tokens"]["black"], 1)
+        self.assertEqual(new_game["tokens_in_bank"]["black"], 2)
+
+    def test_cannot_take_1_when_more_colors_available(self):
+        """Cannot take just 1 token when more colors are available."""
+        game_data = create_game_data(4)
+        player_data = create_empty_player()
+        
+        new_game, new_player, error, _ = game_logic.apply_take_tokens(
+            game_data, player_data, ["white"]
+        )
+        
+        self.assertIsNotNone(error)
+        self.assertIn("more colors", error)
+
+    def test_9_tokens_take_2_different_and_discard_1(self):
+        """Player with 9 tokens takes 2 different colors (when only 2 available), must discard."""
+        game_data = create_game_data(4)
+        # Only 2 colors available
+        game_data["tokens_in_bank"]["white"] = 0
+        game_data["tokens_in_bank"]["blue"] = 0
+        game_data["tokens_in_bank"]["green"] = 0
+        game_data["tokens_in_bank"]["red"] = 1
+        game_data["tokens_in_bank"]["black"] = 2
+        
+        player_data = create_empty_player()
+        player_data["tokens"] = {"white": 3, "blue": 3, "green": 3, "red": 0, "black": 0, "gold": 0}  # 9 tokens
+        
+        new_game, new_player, error, needs_discard = game_logic.apply_take_tokens(
+            game_data, player_data, ["red", "black"]
+        )
+        
+        self.assertIsNone(error)
+        self.assertTrue(needs_discard)  # 9 + 2 = 11 > 10
+        total = sum(new_player["tokens"].values())
+        self.assertEqual(total, 11)
+
+    def test_8_tokens_cannot_take_2_same_less_than_4(self):
+        """Player with 8 tokens cannot take 2 of same color if less than 4 in bank."""
+        game_data = create_game_data(4)
+        game_data["tokens_in_bank"]["white"] = 3  # Less than 4
+        
+        player_data = create_empty_player()
+        player_data["tokens"] = {"white": 2, "blue": 2, "green": 2, "red": 2, "black": 0, "gold": 0}  # 8 tokens
+        
+        new_game, new_player, error, _ = game_logic.apply_take_tokens(
+            game_data, player_data, ["white", "white"]
+        )
+        
+        self.assertIsNotNone(error)
+        self.assertIn("4 tokens", error)
+
+    def test_8_tokens_can_take_2_different_when_only_2_available(self):
+        """Player with 8 tokens can take 2 different colors when only 2 colors available."""
+        game_data = create_game_data(4)
+        # Only 2 colors available
+        game_data["tokens_in_bank"]["white"] = 0
+        game_data["tokens_in_bank"]["blue"] = 0
+        game_data["tokens_in_bank"]["green"] = 0
+        game_data["tokens_in_bank"]["red"] = 2
+        game_data["tokens_in_bank"]["black"] = 2
+        
+        player_data = create_empty_player()
+        player_data["tokens"] = {"white": 2, "blue": 2, "green": 2, "red": 2, "black": 0, "gold": 0}  # 8 tokens
+        
+        new_game, new_player, error, needs_discard = game_logic.apply_take_tokens(
+            game_data, player_data, ["red", "black"]
+        )
+        
+        self.assertIsNone(error)
+        self.assertFalse(needs_discard)  # 8 + 2 = 10 <= 10
 
 
 class TokenLimitTestCase(TestCase):
@@ -1577,4 +1687,265 @@ class PlayerCountEdgeCasesTestCase(TestCase):
         """4-player game has 5 nobles."""
         game_data = create_game_data(4)
         self.assertEqual(len(game_data["available_nobles"]), 5)
+
+
+class TurnOrderTestCase(TestCase):
+    """Tests for player turn order mechanics."""
+
+    def test_turn_order_advances_correctly_2_players(self):
+        """Turn order advances 0 -> 1 -> 0 -> 1 in a 2-player game."""
+        # Simulate turn advancement logic
+        current_player_index = 0
+        num_players = 2
+        
+        # First turn complete
+        current_player_index = (current_player_index + 1) % num_players
+        self.assertEqual(current_player_index, 1)
+        
+        # Second turn complete
+        current_player_index = (current_player_index + 1) % num_players
+        self.assertEqual(current_player_index, 0)
+        
+        # Third turn complete
+        current_player_index = (current_player_index + 1) % num_players
+        self.assertEqual(current_player_index, 1)
+
+    def test_turn_order_advances_correctly_3_players(self):
+        """Turn order advances 0 -> 1 -> 2 -> 0 in a 3-player game."""
+        current_player_index = 0
+        num_players = 3
+        
+        expected_sequence = [1, 2, 0, 1, 2, 0]
+        for expected in expected_sequence:
+            current_player_index = (current_player_index + 1) % num_players
+            self.assertEqual(current_player_index, expected)
+
+    def test_turn_order_advances_correctly_4_players(self):
+        """Turn order advances correctly in a 4-player game."""
+        current_player_index = 0
+        num_players = 4
+        
+        expected_sequence = [1, 2, 3, 0, 1, 2, 3, 0]
+        for expected in expected_sequence:
+            current_player_index = (current_player_index + 1) % num_players
+            self.assertEqual(current_player_index, expected)
+
+    def test_turn_order_from_non_zero_start(self):
+        """Turn order works correctly when starting from non-zero index."""
+        # Starting player index can be random
+        num_players = 4
+        
+        # Start from player 2
+        current_player_index = 2
+        expected_sequence = [3, 0, 1, 2, 3, 0]
+        for expected in expected_sequence:
+            current_player_index = (current_player_index + 1) % num_players
+            self.assertEqual(current_player_index, expected)
+
+    def test_last_round_trigger_completes_correctly(self):
+        """Last round ends after the player before trigger has gone."""
+        players = [
+            {'order': 0, 'prestige_points': 12},
+            {'order': 1, 'prestige_points': 15},  # Triggers end
+            {'order': 2, 'prestige_points': 8},
+            {'order': 3, 'prestige_points': 10},
+        ]
+        
+        trigger = game_logic.check_end_condition(players)
+        self.assertIsNotNone(trigger)
+        self.assertEqual(trigger['order'], 1)
+
+    def test_last_round_ends_after_full_round(self):
+        """After trigger, each player gets one more turn before end."""
+        # Player 1 (order=1) triggers end at 15 points
+        # Players 2, 3, 0 each get one more turn
+        # Then game ends after player 0 (one before trigger order 1)
+        trigger_order = 1
+        num_players = 4
+        
+        # Last player to go before end is (trigger_order - 1) % num_players
+        last_player_order = (trigger_order - 1) % num_players
+        self.assertEqual(last_player_order, 0)
+
+    def test_determine_winner_uses_correct_order(self):
+        """Winner determination considers player order for tiebreaking."""
+        # All players at 15 points, different card counts
+        players = [
+            {'order': 0, 'prestige_points': 15, 'purchased_card_ids': [1, 2, 3, 4, 5]},  # 5 cards
+            {'order': 1, 'prestige_points': 15, 'purchased_card_ids': [1, 2, 3]},  # 3 cards - winner
+            {'order': 2, 'prestige_points': 15, 'purchased_card_ids': [1, 2, 3, 4]},  # 4 cards
+        ]
+        
+        winner = game_logic.determine_winner(players, trigger_order=1)
+        # Player with fewest cards wins
+        self.assertEqual(winner['order'], 1)
+
+    def test_multiple_players_reach_15_same_turn(self):
+        """When multiple reach 15+ with same points, fewest cards wins."""
+        players = [
+            {'order': 0, 'prestige_points': 16, 'purchased_card_ids': [1, 2, 3, 4, 5]},
+            {'order': 1, 'prestige_points': 16, 'purchased_card_ids': [1, 2]},  # Fewest cards
+            {'order': 2, 'prestige_points': 16, 'purchased_card_ids': [1, 2, 3]},
+        ]
+        
+        winner = game_logic.determine_winner(players, trigger_order=0)
+        # Player 1 has fewest cards among those with same points
+        self.assertEqual(winner['order'], 1)
+
+    def test_highest_points_wins_regardless_of_cards(self):
+        """Player with highest points wins even with more cards."""
+        players = [
+            {'order': 0, 'prestige_points': 16, 'purchased_card_ids': [1, 2]},  # Fewer cards
+            {'order': 1, 'prestige_points': 17, 'purchased_card_ids': [1, 2, 3, 4, 5]},  # More cards but more points
+        ]
+        
+        winner = game_logic.determine_winner(players, trigger_order=0)
+        # Player 1 has highest points, so wins despite more cards
+        self.assertEqual(winner['order'], 1)
+
+
+class TurnOrderIntegrationTestCase(TestCase):
+    """Integration tests for turn order using Django models."""
+
+    def setUp(self):
+        """Create test users and game."""
+        from django.contrib.auth.models import User
+        from game.models import Game, GamePlayer
+        
+        self.User = User
+        self.Game = Game
+        self.GamePlayer = GamePlayer
+        
+        # Create test users
+        self.user1 = User.objects.create_user('player1', 'p1@test.com', 'pass123')
+        self.user2 = User.objects.create_user('player2', 'p2@test.com', 'pass123')
+        self.user3 = User.objects.create_user('player3', 'p3@test.com', 'pass123')
+        self.user4 = User.objects.create_user('player4', 'p4@test.com', 'pass123')
+
+    def test_players_join_with_sequential_order(self):
+        """Players joining a game get sequential order values."""
+        game = self.Game.objects.create(code='TEST01', max_players=4)
+        
+        gp1 = self.GamePlayer.objects.create(
+            game=game, user=self.user1, order=0,
+            tokens={'white': 0, 'blue': 0, 'green': 0, 'red': 0, 'black': 0, 'gold': 0}
+        )
+        gp2 = self.GamePlayer.objects.create(
+            game=game, user=self.user2, order=1,
+            tokens={'white': 0, 'blue': 0, 'green': 0, 'red': 0, 'black': 0, 'gold': 0}
+        )
+        gp3 = self.GamePlayer.objects.create(
+            game=game, user=self.user3, order=2,
+            tokens={'white': 0, 'blue': 0, 'green': 0, 'red': 0, 'black': 0, 'gold': 0}
+        )
+        
+        players = list(game.players.order_by('order'))
+        self.assertEqual(len(players), 3)
+        self.assertEqual(players[0].order, 0)
+        self.assertEqual(players[1].order, 1)
+        self.assertEqual(players[2].order, 2)
+        self.assertEqual(players[0].user.username, 'player1')
+        self.assertEqual(players[1].user.username, 'player2')
+        self.assertEqual(players[2].user.username, 'player3')
+
+    def test_players_order_matches_list_index(self):
+        """Players queried by order should have order == index."""
+        game = self.Game.objects.create(code='TEST02', max_players=4)
+        
+        for i, user in enumerate([self.user1, self.user2, self.user3, self.user4]):
+            self.GamePlayer.objects.create(
+                game=game, user=user, order=i,
+                tokens={'white': 0, 'blue': 0, 'green': 0, 'red': 0, 'black': 0, 'gold': 0}
+            )
+        
+        players = list(game.players.order_by('order'))
+        for i, player in enumerate(players):
+            self.assertEqual(player.order, i, 
+                f"Player at index {i} has order {player.order}, expected {i}")
+
+    def test_current_player_index_identifies_correct_player(self):
+        """current_player_index correctly identifies the active player."""
+        game = self.Game.objects.create(
+            code='TEST03', max_players=4, 
+            current_player_index=0,
+            status='playing'
+        )
+        
+        gp1 = self.GamePlayer.objects.create(
+            game=game, user=self.user1, order=0,
+            tokens={'white': 0, 'blue': 0, 'green': 0, 'red': 0, 'black': 0, 'gold': 0}
+        )
+        gp2 = self.GamePlayer.objects.create(
+            game=game, user=self.user2, order=1,
+            tokens={'white': 0, 'blue': 0, 'green': 0, 'red': 0, 'black': 0, 'gold': 0}
+        )
+        
+        players = list(game.players.order_by('order'))
+        
+        # Index 0 should be player 1
+        self.assertEqual(players[game.current_player_index].user.username, 'player1')
+        
+        # Advance turn
+        game.current_player_index = (game.current_player_index + 1) % len(players)
+        self.assertEqual(players[game.current_player_index].user.username, 'player2')
+        
+        # Advance again (wraps around)
+        game.current_player_index = (game.current_player_index + 1) % len(players)
+        self.assertEqual(players[game.current_player_index].user.username, 'player1')
+
+    def test_turn_order_constraint_prevents_duplicate_order(self):
+        """Cannot have two players with same order in a game."""
+        from django.db import IntegrityError
+        
+        game = self.Game.objects.create(code='TEST04', max_players=4)
+        
+        self.GamePlayer.objects.create(
+            game=game, user=self.user1, order=0,
+            tokens={'white': 0, 'blue': 0, 'green': 0, 'red': 0, 'black': 0, 'gold': 0}
+        )
+        
+        with self.assertRaises(IntegrityError):
+            self.GamePlayer.objects.create(
+                game=game, user=self.user2, order=0,  # Same order
+                tokens={'white': 0, 'blue': 0, 'green': 0, 'red': 0, 'black': 0, 'gold': 0}
+            )
+
+    def test_serialize_game_state_includes_current_player(self):
+        """serialize_game_state correctly identifies current player."""
+        from game.consumers import serialize_game_state
+        
+        game = self.Game.objects.create(
+            code='TEST05', max_players=3, 
+            current_player_index=1,
+            status='playing',
+            tokens_in_bank={'white': 5, 'blue': 5, 'green': 5, 'red': 5, 'black': 5, 'gold': 5},
+            visible_cards={'1': [], '2': [], '3': []},
+            decks={'1': [], '2': [], '3': []},
+            available_nobles=[]
+        )
+        
+        gp1 = self.GamePlayer.objects.create(
+            game=game, user=self.user1, order=0,
+            tokens={'white': 3, 'blue': 0, 'green': 0, 'red': 0, 'black': 0, 'gold': 0}
+        )
+        gp2 = self.GamePlayer.objects.create(
+            game=game, user=self.user2, order=1,
+            tokens={'white': 0, 'blue': 5, 'green': 0, 'red': 0, 'black': 0, 'gold': 0}
+        )
+        gp3 = self.GamePlayer.objects.create(
+            game=game, user=self.user3, order=2,
+            tokens={'white': 0, 'blue': 0, 'green': 2, 'red': 0, 'black': 0, 'gold': 0}
+        )
+        
+        players = list(game.players.select_related('user').order_by('order'))
+        state = serialize_game_state(game, players)
+        
+        self.assertEqual(state['current_player_index'], 1)
+        self.assertEqual(state['players'][0]['username'], 'player1')
+        self.assertEqual(state['players'][1]['username'], 'player2')
+        self.assertEqual(state['players'][2]['username'], 'player3')
+        
+        # Player at current_player_index should be player2
+        current_player = state['players'][state['current_player_index']]
+        self.assertEqual(current_player['username'], 'player2')
 

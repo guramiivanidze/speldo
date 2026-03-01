@@ -7,6 +7,7 @@ import { API_BASE } from '@/lib/api';
 interface NobleDisplayProps {
   noble: Noble;
   compact?: boolean;
+  mini?: boolean;
 }
 
 // Helper to get noble image URL
@@ -19,8 +20,40 @@ function getNobleImageUrl(noble: Noble): string | null {
   return null;
 }
 
-export default function NobleDisplay({ noble, compact = false }: NobleDisplayProps) {
+export default function NobleDisplay({ noble, compact = false, mini = false }: NobleDisplayProps) {
   const bgImage = getNobleImageUrl(noble);
+
+  // Mini version - small square badge showing just points
+  if (mini) {
+    return (
+      <div
+        className="relative rounded-lg overflow-hidden border border-amber-500/60 shadow-md h-full w-full"
+        title={`Noble: ${noble.points} points`}
+      >
+        {/* Background: image or amber gradient */}
+        {bgImage ? (
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url(${bgImage})` }}
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-600 via-amber-700 to-amber-900" />
+        )}
+        {/* Dark overlay */}
+        <div className="absolute inset-0 bg-black/30" />
+        
+        {/* Crown + Points centered */}
+        <div className="relative h-full flex items-center justify-center">
+          <div className="flex flex-col items-center">
+            <span className="text-amber-300 text-xs leading-none drop-shadow">♛</span>
+            <span className="text-white font-black text-sm leading-none drop-shadow-md">
+              {noble.points}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (compact) {
     return (

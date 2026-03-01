@@ -162,25 +162,68 @@ def check_nobles(game_data, player_data):
 def apply_take_tokens(game_data, player_data, colors_to_take):
     """
     colors_to_take: list of color strings.
-    Either 3 different colors OR 2 of same (if bank has >=4).
+    Valid options:
+    - 3 different colors (standard action)
+    - 2 different colors (if only 2 colors available in bank)
+    - 2 of same color (only if bank has >=4 of that color)
+    - 1 color (if only 1 color available in bank)
     Returns (updated_game_data, updated_player_data, error_str, needs_discard)
     needs_discard is True if player now has >10 tokens and must discard.
     """
     bank = dict(game_data['tokens_in_bank'])
     ptokens = dict(player_data['tokens'])
+    
+    # Count colors available in bank (non-gold tokens with count > 0)
+    available_colors = [c for c in COLORS if bank.get(c, 0) > 0]
+    num_available = len(available_colors)
 
+    # Case 1: Taking 2 of the same color
     if len(colors_to_take) == 2 and colors_to_take[0] == colors_to_take[1]:
         color = colors_to_take[0]
+        if color not in COLORS:
+            return None, None, "Invalid color.", False
         if bank.get(color, 0) < 4:
             return None, None, "Need at least 4 tokens of that color to take 2.", False
         bank[color] -= 2
         ptokens[color] = ptokens.get(color, 0) + 2
+    
+    # Case 2: Taking 3 different colors
     elif len(colors_to_take) == 3 and len(set(colors_to_take)) == 3:
         for c in colors_to_take:
+            if c not in COLORS:
+                return None, None, f"Invalid color: {c}.", False
             if bank.get(c, 0) < 1:
                 return None, None, f"No {c} tokens in bank.", False
+        for c in colors_to_take:
             bank[c] -= 1
             ptokens[c] = ptokens.get(c, 0) + 1
+    
+    # Case 3: Taking 2 different colors (allowed if only 2 colors available in bank)
+    elif len(colors_to_take) == 2 and len(set(colors_to_take)) == 2:
+        # This is only allowed if there are exactly 2 colors available in the bank
+        if num_available > 2:
+            return None, None, "You must take 3 different colors when available.", False
+        for c in colors_to_take:
+            if c not in COLORS:
+                return None, None, f"Invalid color: {c}.", False
+            if bank.get(c, 0) < 1:
+                return None, None, f"No {c} tokens in bank.", False
+        for c in colors_to_take:
+            bank[c] -= 1
+            ptokens[c] = ptokens.get(c, 0) + 1
+    
+    # Case 4: Taking 1 color (allowed if only 1 color available in bank)
+    elif len(colors_to_take) == 1:
+        color = colors_to_take[0]
+        if color not in COLORS:
+            return None, None, "Invalid color.", False
+        if num_available > 1:
+            return None, None, "You must take more colors when available.", False
+        if bank.get(color, 0) < 1:
+            return None, None, f"No {color} tokens in bank.", False
+        bank[color] -= 1
+        ptokens[color] = ptokens.get(color, 0) + 1
+    
     else:
         return None, None, "Invalid token selection.", False
 
