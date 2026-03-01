@@ -3,6 +3,7 @@
 import { Card, GemColor } from '@/types/game';
 import { GEM_GRADIENT, COST_CHIP, TOKEN_LABEL, LEVEL_COLOR, GEM_COLORS } from '@/lib/colors';
 import { API_BASE } from '@/lib/api';
+import CardCrystalBg from '../CardCrystalBg';
 
 interface CardZoomModalProps {
   card: Card;
@@ -43,17 +44,16 @@ export default function CardZoomModal({
         className="bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-white/10 relative overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Background: Image or Color Gradient */}
+        {/* Background: Image or Crystal */}
         {cardImage ? (
           <div
             className="absolute inset-0 bg-cover bg-center opacity-20"
             style={{ backgroundImage: `url(${cardImage})` }}
           />
         ) : (
-          <div
-            className="absolute inset-0 opacity-30"
-            style={{ background: GEM_GRADIENT[card.bonus] }}
-          />
+          <div className="absolute inset-0 opacity-40">
+            <CardCrystalBg bonus={card.bonus} level={card.level as 1 | 2 | 3} />
+          </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-800" />
         

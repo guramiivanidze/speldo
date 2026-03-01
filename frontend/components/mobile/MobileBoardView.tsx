@@ -6,6 +6,7 @@ import { GEM_GRADIENT, TOKEN_GRADIENT, TOKEN_LABEL, LEVEL_COLOR, GEM_COLORS } fr
 import { API_BASE } from '@/lib/api';
 import CardZoomModal from './CardZoomModal';
 import NobleZoomModal from './NobleZoomModal';
+import CardCrystalBg from '../CardCrystalBg';
 
 function getImageUrl(card: Card): string | null {
     if (card.background_image) {
@@ -216,7 +217,7 @@ export default function MobileBoardView({
                     `}
                                         onClick={() => setZoomedCard(card)}
                                     >
-                                        {/* Background: image or color gradient */}
+                                        {/* Background: image or crystal */}
                                         {cardImage ? (
                                             <>
                                                 <div
@@ -229,10 +230,9 @@ export default function MobileBoardView({
                                                 />
                                             </>
                                         ) : (
-                                            <div
-                                                className="absolute inset-0"
-                                                style={{ background: GEM_GRADIENT[card.bonus] }}
-                                            />
+                                            <div className="absolute inset-0">
+                                                <CardCrystalBg bonus={card.bonus} level={card.level as 1 | 2 | 3} />
+                                            </div>
                                         )}
                                         <div className="h-full flex flex-col justify-between p-1.5 relative z-10">
                                             {/* Points & Level */}

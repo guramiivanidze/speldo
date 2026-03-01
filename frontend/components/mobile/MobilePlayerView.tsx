@@ -5,22 +5,14 @@ import { PlayerState, Card, Noble, GemColor } from '@/types/game';
 import { GEM_GRADIENT, TOKEN_GRADIENT, GEM_COLORS, TOKEN_LABEL } from '@/lib/colors';
 import { API_BASE } from '@/lib/api';
 import CardZoomModal from './CardZoomModal';
+import CardCrystalBg from '../CardCrystalBg';
 
-// Fallback gem images
-const GEM_IMAGES: Record<string, string> = {
-    white: 'https://images.pexels.com/photos/2529148/pexels-photo-2529148.jpeg?auto=compress&w=400',
-    blue: 'https://images.pexels.com/photos/1458867/pexels-photo-1458867.jpeg?auto=compress&w=400',
-    green: 'https://images.pexels.com/photos/1573236/pexels-photo-1573236.jpeg?auto=compress&w=400',
-    red: 'https://images.pexels.com/photos/4040567/pexels-photo-4040567.jpeg?auto=compress&w=400',
-    black: 'https://images.pexels.com/photos/2166456/pexels-photo-2166456.jpeg?auto=compress&w=400',
-};
-
-function getImageUrl(card: Card): string {
+function getImageUrl(card: Card): string | null {
     if (card.background_image) {
         if (card.background_image.startsWith('http')) return card.background_image;
         return `${API_BASE}${card.background_image}`;
     }
-    return GEM_IMAGES[card.bonus];
+    return null;
 }
 
 interface MobilePlayerViewProps {
@@ -140,6 +132,7 @@ export default function MobilePlayerView({
               const card = cardsData[String(cid)];
               if (!card) return null;
               const affordable = canAfford(cid);
+              const cardImage = getImageUrl(card);
               
               return (
                 <button
@@ -151,15 +144,23 @@ export default function MobilePlayerView({
                   `}
                   onClick={() => setZoomedCard(card)}
                 >
-                  {/* Background image */}
-                  <div
-                    className="absolute inset-0 bg-cover bg-center"
-                    style={{ backgroundImage: `url(${getImageUrl(card)})` }}
-                  />
-                  <div
-                    className="absolute inset-0"
-                    style={{ background: GEM_GRADIENT[card.bonus], opacity: 0.6 }}
-                  />
+                  {/* Background: image or crystal */}
+                  {cardImage ? (
+                    <>
+                      <div
+                        className="absolute inset-0 bg-cover bg-center"
+                        style={{ backgroundImage: `url(${cardImage})` }}
+                      />
+                      <div
+                        className="absolute inset-0"
+                        style={{ background: GEM_GRADIENT[card.bonus], opacity: 0.6 }}
+                      />
+                    </>
+                  ) : (
+                    <div className="absolute inset-0">
+                      <CardCrystalBg bonus={card.bonus} level={card.level as 1 | 2 | 3} />
+                    </div>
+                  )}
                   <div className="h-full flex flex-col justify-between p-2 relative z-10">
                     <div className="flex justify-end">
                       {card.points > 0 && (
