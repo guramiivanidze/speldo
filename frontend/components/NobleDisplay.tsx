@@ -73,11 +73,11 @@ export default function NobleDisplay({ noble, compact = false, mini = false }: N
         <div className="absolute inset-0 bg-gradient-to-t from-amber-950/90 via-amber-900/50 to-amber-800/30" />
         
         {/* Content */}
-        <div className="relative h-full flex flex-col justify-between p-1.5">
+        <div className="relative h-full flex flex-col justify-between p-1 2xl:p-1.5">
           {/* Points badge - top right - Crown shape */}
           <div className="flex justify-end">
             <div className="relative flex items-center justify-center">
-              <svg viewBox="0 0 32 28" className="w-7 h-6" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' }}>
+              <svg viewBox="0 0 32 28" className="w-4 h-3 xl:w-5 xl:h-4 2xl:w-7 2xl:h-6" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' }}>
                 <defs>
                   <linearGradient id="crownGradNobleCompact" x1="0%" y1="0%" x2="100%" y2="100%">
                     <stop offset="0%" stopColor="#fcd34d" />
@@ -94,27 +94,27 @@ export default function NobleDisplay({ noble, compact = false, mini = false }: N
                 <circle cx="16" cy="3" r="2" fill="#fde047" />
                 <circle cx="26" cy="9" r="2" fill="#fde047" />
               </svg>
-              <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[35%] text-amber-900 font-black text-[10px]">
+              <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[35%] text-amber-900 font-black text-[7px] xl:text-[8px] 2xl:text-[10px]">
                 {noble.points}
               </span>
             </div>
           </div>
           
           {/* Requirements - bottom */}
-          <div className="flex gap-1.5 justify-center flex-wrap">
+          <div className="flex gap-0.5 xl:gap-1 2xl:gap-1.5 justify-center flex-wrap">
             {GEM_COLORS.map((color) => {
               const req = noble.requirements[color];
               if (!req) return null;
               return (
                 <div
                   key={color}
-                  className="flex items-center gap-1 bg-black/50 rounded-md px-1.5 py-1"
+                  className="flex items-center gap-0.5 bg-black/50 rounded px-0.5 py-0.5 xl:px-1 2xl:px-1.5 2xl:py-1"
                 >
                   <div
-                    className=" rounded border border-white/0 shadow-sm"
-                    style={{ width: 14, height: 17, background: GEM_DOT_STYLE[color] }}
+                    className="rounded border border-white/0 shadow-sm w-2 h-2.5 xl:w-2.5 xl:h-3 2xl:w-3.5 2xl:h-4"
+                    style={{ background: GEM_DOT_STYLE[color] }}
                   />
-                  <span className="text-xs font-bold text-white">{req}</span>
+                  <span className="text-[8px] xl:text-[10px] 2xl:text-xs font-bold text-white">{req}</span>
                 </div>
               );
             })}

@@ -238,14 +238,14 @@ export default function GameBoard({
           {/* Left side - Nobles + Cards */}
           <div className="flex-1 flex flex-col gap-0.5 min-h-0 min-w-0 overflow-hidden">
             {/* Nobles - Centered */}
-            <div className="flex justify-center items-center gap-2 shrink-0 flex-wrap">
-              <span className="text-amber-400 text-sm">♫</span>
-              <div className="flex gap-5 flex-wrap justify-center">
+            <div className="flex justify-center items-center gap-1 2xl:gap-2 shrink-0 flex-wrap">
+              <span className="text-amber-400 text-xs 2xl:text-sm">♫</span>
+              <div className="flex gap-2 xl:gap-3 2xl:gap-5 flex-wrap justify-center">
                 {available_nobles.map((nid) => {
                   const noble = nobles_data[String(nid)];
                   if (!noble) return null;
                   return (
-                    <div key={nid} className="w-44 h-20">
+                    <div key={nid} className="w-24 h-12 lg:w-28 lg:h-14 xl:w-32 xl:h-16 2xl:w-44 2xl:h-20">
                       <NobleDisplay noble={noble} compact />
                     </div>
                   );
