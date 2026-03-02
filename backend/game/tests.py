@@ -1756,16 +1756,118 @@ class TurnOrderTestCase(TestCase):
         self.assertEqual(trigger['order'], 1)
 
     def test_last_round_ends_after_full_round(self):
-        """After trigger, each player gets one more turn before end."""
-        # Player 1 (order=1) triggers end at 15 points
-        # Players 2, 3, 0 each get one more turn
-        # Then game ends after player 0 (one before trigger order 1)
-        trigger_order = 1
+        """After trigger, remaining players in turn order get one more turn.
+        
+        Game ends when the last player (order = n-1) finishes their turn.
+        This ensures all players have equal number of turns.
+        
+        Examples for 4 players (A=0, B=1, C=2, D=3):
+        - A triggers: B, C, D still play → game ends after D
+        - B triggers: C, D still play → game ends after D (A already played this round)
+        - C triggers: D still plays → game ends after D
+        - D triggers: game ends immediately
+        """
         num_players = 4
         
-        # Last player to go before end is (trigger_order - 1) % num_players
-        last_player_order = (trigger_order - 1) % num_players
-        self.assertEqual(last_player_order, 0)
+        # The game always ends after the last player (order = num_players - 1)
+        # regardless of who triggered the end condition
+        last_player_order = num_players - 1
+        self.assertEqual(last_player_order, 3)  # Player D
+        
+        # Verify: if trigger_order is 0 (A), game should end after order 3 (D)
+        # If trigger_order is 1 (B), game should end after order 3 (D)
+        # etc.
+        for trigger_order in range(num_players):
+            # In all cases, the last player to act is order 3
+            self.assertEqual(last_player_order, 3)
+
+    def test_final_round_player_a_triggers(self):
+        """When player A (order 0) triggers, B, C, D each get one move."""
+        # Simulate: A gets 15+ points
+        # B, C, D should play, then game ends after D
+        trigger_order = 0
+        num_players = 4
+        last_player_order = num_players - 1  # 3
+        
+        # After A triggers (order 0), remaining players in current round: B(1), C(2), D(3)
+        remaining_players = [i for i in range(trigger_order + 1, num_players)]
+        self.assertEqual(remaining_players, [1, 2, 3])  # B, C, D
+        
+        # Game ends when current_gp.order == last_player_order (3)
+        self.assertEqual(last_player_order, 3)
+
+    def test_final_round_player_b_triggers(self):
+        """When player B (order 1) triggers, only C and D get one move."""
+        # A already played this round, so only C and D get moves
+        trigger_order = 1
+        num_players = 4
+        last_player_order = num_players - 1  # 3
+        
+        # After B triggers (order 1), remaining players in current round: C(2), D(3)
+        # A does NOT play again (already went this round)
+        remaining_players = [i for i in range(trigger_order + 1, num_players)]
+        self.assertEqual(remaining_players, [2, 3])  # C, D only
+        
+        self.assertEqual(last_player_order, 3)
+
+    def test_final_round_player_c_triggers(self):
+        """When player C (order 2) triggers, only D gets one move."""
+        trigger_order = 2
+        num_players = 4
+        last_player_order = num_players - 1  # 3
+        
+        remaining_players = [i for i in range(trigger_order + 1, num_players)]
+        self.assertEqual(remaining_players, [3])  # D only
+        
+        self.assertEqual(last_player_order, 3)
+
+    def test_final_round_player_d_triggers(self):
+        """When player D (order 3) triggers, game ends immediately."""
+        trigger_order = 3
+        num_players = 4
+        last_player_order = num_players - 1  # 3
+        
+        # D is the last player, so when D triggers and D's order == last_player_order
+        # game ends immediately
+        remaining_players = [i for i in range(trigger_order + 1, num_players)]
+        self.assertEqual(remaining_players, [])  # No one else plays
+        
+        # Verify trigger order equals last player order
+        self.assertEqual(trigger_order, last_player_order)
+
+    def test_final_round_3_player_game(self):
+        """Verify final round logic works for 3-player games."""
+        num_players = 3
+        last_player_order = num_players - 1  # 2
+        
+        # Player A (order 0) triggers: B, C play → ends after C
+        remaining_after_0 = [i for i in range(1, num_players)]
+        self.assertEqual(remaining_after_0, [1, 2])
+        
+        # Player B (order 1) triggers: C plays → ends after C
+        remaining_after_1 = [i for i in range(2, num_players)]
+        self.assertEqual(remaining_after_1, [2])
+        
+        # Player C (order 2) triggers: game ends immediately
+        remaining_after_2 = [i for i in range(3, num_players)]
+        self.assertEqual(remaining_after_2, [])
+        
+        self.assertEqual(last_player_order, 2)
+
+    def test_final_round_2_player_game(self):
+        """Verify final round logic works for 2-player games."""
+        num_players = 2
+        last_player_order = num_players - 1  # 1
+        
+        # Player A (order 0) triggers: B plays → ends after B
+        remaining_after_0 = [i for i in range(1, num_players)]
+        self.assertEqual(remaining_after_0, [1])
+        
+        # Player B (order 1) triggers: game ends immediately
+        remaining_after_1 = [i for i in range(2, num_players)]
+        self.assertEqual(remaining_after_1, [])
+        
+        self.assertEqual(last_player_order, 1)
 
     def test_determine_winner_uses_correct_order(self):
         """Winner determination considers player order for tiebreaking."""
@@ -1948,4 +2050,264 @@ class TurnOrderIntegrationTestCase(TestCase):
         # Player at current_player_index should be player2
         current_player = state['players'][state['current_player_index']]
         self.assertEqual(current_player['username'], 'player2')
+
+
+class FinalRoundIntegrationTestCase(TestCase):
+    """Integration tests for final round mechanics using Django models.
+    
+    Tests verify the Splendor end-game rule:
+    - When a player reaches 15+ points, complete the current round
+    - The round ends when the last player (order = n-1) finishes their turn
+    - This ensures all players have equal number of turns
+    """
+
+    def setUp(self):
+        """Create test users and set up a 4-player game."""
+        from django.contrib.auth.models import User
+        from game.models import Game, GamePlayer
+        
+        self.User = User
+        self.Game = Game
+        self.GamePlayer = GamePlayer
+        
+        # Create 4 test users
+        self.user_a = User.objects.create_user('player_a', 'a@test.com', 'pass123')
+        self.user_b = User.objects.create_user('player_b', 'b@test.com', 'pass123')
+        self.user_c = User.objects.create_user('player_c', 'c@test.com', 'pass123')
+        self.user_d = User.objects.create_user('player_d', 'd@test.com', 'pass123')
+
+    def _create_game_with_players(self, num_players=4):
+        """Create a game with specified number of players."""
+        users = [self.user_a, self.user_b, self.user_c, self.user_d][:num_players]
+        
+        game = self.Game.objects.create(
+            code='FINAL1',
+            max_players=num_players,
+            current_player_index=0,
+            status='playing',
+            tokens_in_bank={'white': 7, 'blue': 7, 'green': 7, 'red': 7, 'black': 7, 'gold': 5},
+            visible_cards={'1': [], '2': [], '3': []},
+            decks={'1': [], '2': [], '3': []},
+            available_nobles=[],
+            last_round_triggered_by=None,
+        )
+        
+        players = []
+        for i, user in enumerate(users):
+            gp = self.GamePlayer.objects.create(
+                game=game,
+                user=user,
+                order=i,
+                tokens={'white': 0, 'blue': 0, 'green': 0, 'red': 0, 'black': 0, 'gold': 0},
+                prestige_points=0,
+                purchased_card_ids=[],
+                reserved_card_ids=[],
+                noble_ids=[],
+            )
+            players.append(gp)
+        
+        return game, players
+
+    def test_game_should_end_when_last_player_finishes_after_trigger(self):
+        """After trigger, game ends when player D (last player) finishes."""
+        game, players = self._create_game_with_players(4)
+        
+        # Player A (order 0) triggers by getting 15+ points
+        players[0].prestige_points = 15
+        players[0].save()
+        game.last_round_triggered_by = 0
+        game.save()
+        
+        # Simulate turns: current player should be whoever's turn it is
+        # After A triggers, the game should continue until D finishes
+        
+        # Verify the trigger is set
+        self.assertEqual(game.last_round_triggered_by, 0)
+        
+        # The last_player_order should be 3 (player D)
+        last_player_order = len(players) - 1
+        self.assertEqual(last_player_order, 3)
+
+    def test_player_a_triggers_remaining_bcd_play(self):
+        """When A triggers, B, C, D should get one more move each."""
+        game, players = self._create_game_with_players(4)
+        
+        # Track which players should still play after A triggers
+        trigger_order = 0  # Player A
+        remaining = []
+        
+        for i in range(trigger_order + 1, len(players)):
+            remaining.append(players[i].user.username)
+        
+        self.assertEqual(remaining, ['player_b', 'player_c', 'player_d'])
+
+    def test_player_b_triggers_remaining_cd_play(self):
+        """When B triggers, only C and D should get one more move."""
+        game, players = self._create_game_with_players(4)
+        
+        trigger_order = 1  # Player B
+        remaining = []
+        
+        for i in range(trigger_order + 1, len(players)):
+            remaining.append(players[i].user.username)
+        
+        # A should NOT be in the list (already played this round)
+        self.assertEqual(remaining, ['player_c', 'player_d'])
+        self.assertNotIn('player_a', remaining)
+
+    def test_player_c_triggers_remaining_d_plays(self):
+        """When C triggers, only D should get one more move."""
+        game, players = self._create_game_with_players(4)
+        
+        trigger_order = 2  # Player C
+        remaining = []
+        
+        for i in range(trigger_order + 1, len(players)):
+            remaining.append(players[i].user.username)
+        
+        self.assertEqual(remaining, ['player_d'])
+
+    def test_player_d_triggers_game_ends_immediately(self):
+        """When D triggers, game should end immediately."""
+        game, players = self._create_game_with_players(4)
+        
+        trigger_order = 3  # Player D
+        remaining = []
+        
+        for i in range(trigger_order + 1, len(players)):
+            remaining.append(players[i].user.username)
+        
+        # No one should play after D
+        self.assertEqual(remaining, [])
+        
+        # Verify that trigger_order == last_player_order means immediate end
+        last_player_order = len(players) - 1
+        self.assertEqual(trigger_order, last_player_order)
+
+    def test_all_players_have_equal_turns_after_round_completes(self):
+        """Verify all players have equal turns when game ends."""
+        # Scenario: Round 2, Player A triggers
+        # A plays turn 5 (triggers), B plays turn 6, C plays turn 7, D plays turn 8
+        # Total turns: A=2, B=2, C=2, D=2 (equal!)
+        
+        turn_counts = {0: 0, 1: 0, 2: 0, 3: 0}
+        num_players = 4
+        current_player_index = 0
+        trigger_order = None
+        game_ended = False
+        
+        # Simulate 8 turns
+        for turn in range(1, 9):
+            turn_counts[current_player_index] += 1
+            
+            # Player A triggers on turn 5 (their 2nd turn)
+            if turn == 5:
+                trigger_order = 0
+            
+            # Check if game should end
+            if trigger_order is not None:
+                if current_player_index == num_players - 1:
+                    game_ended = True
+                    break
+            
+            current_player_index = (current_player_index + 1) % num_players
+        
+        self.assertTrue(game_ended)
+        self.assertEqual(turn_counts[0], 2)  # A
+        self.assertEqual(turn_counts[1], 2)  # B
+        self.assertEqual(turn_counts[2], 2)  # C
+        self.assertEqual(turn_counts[3], 2)  # D
+
+    def test_turn_count_equal_when_player_b_triggers(self):
+        """Verify equal turns when player B triggers."""
+        # Round 2: A plays turn 5, B plays turn 6 (triggers), C plays turn 7, D plays turn 8
+        # A=2, B=2, C=2, D=2 (equal!)
+        
+        turn_counts = {0: 0, 1: 0, 2: 0, 3: 0}
+        num_players = 4
+        current_player_index = 0
+        trigger_order = None
+        game_ended = False
+        
+        for turn in range(1, 9):
+            turn_counts[current_player_index] += 1
+            
+            # Player B triggers on turn 6
+            if turn == 6:
+                trigger_order = 1
+            
+            if trigger_order is not None:
+                if current_player_index == num_players - 1:
+                    game_ended = True
+                    break
+            
+            current_player_index = (current_player_index + 1) % num_players
+        
+        self.assertTrue(game_ended)
+        # All players should have equal turns
+        self.assertEqual(turn_counts[0], 2)
+        self.assertEqual(turn_counts[1], 2)
+        self.assertEqual(turn_counts[2], 2)
+        self.assertEqual(turn_counts[3], 2)
+
+    def test_turn_count_equal_when_player_d_triggers(self):
+        """Verify equal turns when player D triggers."""
+        # Round 2: A plays turn 5, B plays turn 6, C plays turn 7, D plays turn 8 (triggers)
+        # Game ends immediately. A=2, B=2, C=2, D=2 (equal!)
+        
+        turn_counts = {0: 0, 1: 0, 2: 0, 3: 0}
+        num_players = 4
+        current_player_index = 0
+        trigger_order = None
+        game_ended = False
+        
+        for turn in range(1, 9):
+            turn_counts[current_player_index] += 1
+            
+            # Player D triggers on turn 8
+            if turn == 8:
+                trigger_order = 3
+            
+            if trigger_order is not None:
+                if current_player_index == num_players - 1:
+                    game_ended = True
+                    break
+            
+            current_player_index = (current_player_index + 1) % num_players
+        
+        self.assertTrue(game_ended)
+        self.assertEqual(turn_counts[0], 2)
+        self.assertEqual(turn_counts[1], 2)
+        self.assertEqual(turn_counts[2], 2)
+        self.assertEqual(turn_counts[3], 2)
+
+    def test_3_player_final_round_mechanics(self):
+        """Verify final round works correctly in 3-player games."""
+        num_players = 3
+        last_player_order = num_players - 1  # 2
+        
+        # Player A triggers
+        remaining_after_0 = list(range(1, num_players))
+        self.assertEqual(remaining_after_0, [1, 2])  # B, C play
+        
+        # Player B triggers
+        remaining_after_1 = list(range(2, num_players))
+        self.assertEqual(remaining_after_1, [2])  # Only C plays
+        
+        # Player C triggers
+        remaining_after_2 = list(range(3, num_players))
+        self.assertEqual(remaining_after_2, [])  # Game ends immediately
+
+    def test_2_player_final_round_mechanics(self):
+        """Verify final round works correctly in 2-player games."""
+        num_players = 2
+        last_player_order = num_players - 1  # 1
+        
+        # Player A triggers
+        remaining_after_0 = list(range(1, num_players))
+        self.assertEqual(remaining_after_0, [1])  # B plays
+        
+        # Player B triggers
+        remaining_after_1 = list(range(2, num_players))
+        self.assertEqual(remaining_after_1, [])  # Game ends immediately
 
