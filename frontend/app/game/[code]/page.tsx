@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameHeader } from '@/contexts/GameHeaderContext';
 import { useGameSocket } from '@/hooks/useGameSocket';
@@ -37,6 +37,7 @@ export default function GamePage({ params }: PageProps) {
   const { code } = use(params);
   const { user, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [startError, setStartError] = useState('');
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -63,6 +64,23 @@ export default function GamePage({ params }: PageProps) {
     clearError,
     clearPauseEvent,
   } = useGameSocket(user ? code : null);
+
+  // Show welcome back message when rejoining
+  useEffect(() => {
+    const rejoined = searchParams.get('rejoined');
+    const status = searchParams.get('status');
+    if (rejoined === '1') {
+      const messages: Record<string, string> = {
+        'waiting': 'Welcome back! Waiting for players...',
+        'playing': 'Welcome back! The game is in progress.',
+        'finished': 'This game has ended.',
+      };
+      setNotification(messages[status || ''] || 'Welcome back!');
+      setTimeout(() => setNotification(null), 3000);
+      // Clear query params from URL
+      router.replace(`/game/${code}`);
+    }
+  }, [searchParams, code, router]);
 
   // Set up header with Leave button when in game
   const handleLeaveClick = useCallback(() => {

@@ -222,20 +222,12 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
         },
-        'game_file': {
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'game_actions.log',
-            'formatter': 'verbose',
-        },
     },
     'loggers': {
         'game.actions': {
-            'handlers': ['console', 'game_file'],
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
         },
     },
 }
-
-# Create logs directory if it doesn't exist
-(BASE_DIR / 'logs').mkdir(exist_ok=True)

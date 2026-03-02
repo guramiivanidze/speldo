@@ -103,7 +103,15 @@ export async function createGame(max_players: number) {
   });
 }
 
-export async function joinGame(code: string) {
+export interface JoinGameResponse {
+  message: string;
+  rejoined: boolean;
+  game_status: 'waiting' | 'playing' | 'finished';
+  player_count: number;
+  max_players: number;
+}
+
+export async function joinGame(code: string): Promise<JoinGameResponse> {
   return apiFetch(`/api/games/${code}/join/`, { method: 'POST' });
 }
 

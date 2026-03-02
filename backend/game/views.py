@@ -18,29 +18,9 @@ from .consumers import serialize_game_state
 
 class GameListCreateView(APIView):
     def get(self, request):
-        # Clean up stale waiting games (older than 1 hour with no players)
-        stale_cutoff = timezone.now() - timedelta(hours=1)
-        stale_games = Game.objects.filter(
-            status=Game.STATUS_WAITING,
-            created_at__lt=stale_cutoff
-        )
-        for game in stale_games:
-            if game.players.count() == 0:
-                game.delete()
-        
-        # Return only games that have at least one player
-        games = Game.objects.filter(status=Game.STATUS_WAITING).order_by('-created_at')
-        data = [
-            {
-                'id': str(g.id),
-                'code': g.code,
-                'player_count': g.players.count(),
-                'max_players': g.max_players,
-            }
-            for g in games
-            if g.players.count() > 0  # Only show games with players
-        ]
-        return Response(data)
+        # Games are private - only joinable via code
+        # Return empty list to prevent browsing open games
+        return Response([])
 
     def post(self, request):
         max_players = request.data.get('max_players', 4)
@@ -62,10 +42,27 @@ class GameListCreateView(APIView):
 class GameJoinView(APIView):
     def post(self, request, code):
         game = get_object_or_404(Game, code=code)
+        
+        # Check if user is already in this game (allow rejoin)
+        existing_player = game.players.filter(user=request.user).first()
+        if existing_player:
+            # Already in the game - return success with game status info
+            status_messages = {
+                Game.STATUS_WAITING: 'Welcome back! Waiting for players...',
+                Game.STATUS_PLAYING: 'Welcome back! The game is in progress.',
+                Game.STATUS_FINISHED: 'This game has ended.',
+            }
+            message = status_messages.get(game.status, 'Rejoined successfully.')
+            return Response({
+                'message': message,
+                'rejoined': True,
+                'game_status': game.status,
+                'player_count': game.players.count(),
+                'max_players': game.max_players,
+            })
+        
         if game.status != Game.STATUS_WAITING:
             return Response({'error': 'Game already started or finished.'}, status=400)
-        if game.players.filter(user=request.user).exists():
-            return Response({'error': 'Already in this game.'}, status=400)
         count = game.players.count()
         if count >= game.max_players:
             return Response({'error': 'Game is full.'}, status=400)
@@ -87,7 +84,13 @@ class GameJoinView(APIView):
             }
         )
 
-        return Response({'message': 'Joined successfully.'})
+        return Response({
+            'message': 'Joined successfully!',
+            'rejoined': False,
+            'game_status': game.status,
+            'player_count': game.players.count(),
+            'max_players': game.max_players,
+        })
 
 
 class GameStartView(APIView):

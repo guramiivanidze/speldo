@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { register, login, logout, listGames, createGame, joinGame, getMyGames, getMyProfile, getCurrentSeason } from '@/lib/api';
+import { register, login, logout, createGame, joinGame, getMyGames, getMyProfile, getCurrentSeason } from '@/lib/api';
 import { useMatchmaking } from '@/hooks/useMatchmaking';
 import type { PlayerProfile, Season } from '@/types/competitive';
 import DivisionBadge from '@/components/DivisionBadge';
@@ -41,7 +41,6 @@ export default function Home() {
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [termsError, setTermsError] = useState('');
 
-  const [openGames, setOpenGames] = useState<GameInfo[]>([]);
   const [myGames, setMyGames] = useState<GameInfo[]>([]);
   const [joinCode, setJoinCode] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(2);
@@ -65,8 +64,7 @@ export default function Home() {
 
   async function fetchGames() {
     try {
-      const [open, mine] = await Promise.all([listGames(), getMyGames()]);
-      setOpenGames(open);
+      const mine = await getMyGames();
       setMyGames(mine);
     } catch { /* ignore */ }
   }
@@ -262,8 +260,10 @@ export default function Home() {
     const code = joinCode.trim().toUpperCase();
     if (!code) return;
     try {
-      await joinGame(code);
-      router.push(`/game/${code}`);
+      const result = await joinGame(code);
+      // Pass rejoin info via query param so game page can show welcome message
+      const query = result.rejoined ? `?rejoined=1&status=${result.game_status}` : '';
+      router.push(`/game/${code}${query}`);
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Error');
     }
@@ -801,11 +801,11 @@ export default function Home() {
         />
       )}
 
-      {/* Open games */}
-      {openGames.length > 0 && (
-        <div className="glass rounded-2xl p-5 border border-white/5 mb-4">
+      {/* My games */}
+      {myGames.length > 0 && (
+        <div className="glass rounded-2xl p-5 border border-white/5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-slate-200 text-sm">Open Games</h3>
+            <h3 className="font-bold text-slate-200 text-sm">My Games</h3>
             <button
               className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold uppercase tracking-wider"
               onClick={fetchGames}
@@ -813,35 +813,6 @@ export default function Home() {
               Refresh
             </button>
           </div>
-          <div className="flex flex-col gap-2">
-            {openGames.map((g) => (
-              <div
-                key={g.id}
-                className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700/40"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="font-mono font-black text-slate-100 tracking-widest">{g.code}</span>
-                  <span className="text-xs text-slate-500">{g.player_count}/{g.max_players} players</span>
-                </div>
-                <button
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/40 transition-colors"
-                  onClick={async () => {
-                    try { await joinGame(g.code); } catch { /* already joined */ }
-                    router.push(`/game/${g.code}`);
-                  }}
-                >
-                  Join
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* My games */}
-      {myGames.length > 0 && (
-        <div className="glass rounded-2xl p-5 border border-white/5">
-          <h3 className="font-bold text-slate-200 text-sm mb-4">My Games</h3>
           <div className="flex flex-col gap-2">
             {myGames.map((g) => (
               <div
@@ -857,10 +828,14 @@ export default function Home() {
                   <span className="text-xs text-slate-600">{g.player_count}/{g.max_players}</span>
                 </div>
                 <button
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                    g.status === 'finished' 
+                      ? 'bg-slate-700/50 text-slate-400 hover:bg-slate-700' 
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
                   onClick={() => router.push(`/game/${g.code}`)}
                 >
-                  {g.status === 'playing' ? 'Rejoin' : 'View'}
+                  {g.status === 'finished' ? 'History' : g.status === 'playing' ? 'Rejoin' : 'Enter'}
                 </button>
               </div>
             ))}
