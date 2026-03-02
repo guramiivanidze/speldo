@@ -12,4 +12,4 @@ python manage.py collectstatic --no-input
 python manage.py migrate
 
 
-python manage.py createsuperuser --no-input --username superuser --email superuser@example.com --password Skullbusher123
+python manage.py createsuperuser --no-input || true
