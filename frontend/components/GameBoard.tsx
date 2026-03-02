@@ -63,8 +63,50 @@ export default function GameBoard({
 
   const { cards_data, nobles_data, visible_cards, deck_counts, tokens_in_bank, available_nobles } = gameState;
 
-  // Separate opponents from me
-  const opponents = gameState.players.filter(p => p.id !== myUserId);
+  // Find my index in the player order
+  const myIndex = gameState.players.findIndex(p => p.id === myUserId);
+  const totalPlayers = gameState.players.length;
+
+  // Position opponents around the table in clockwise order from my perspective:
+  // - Left: next player (plays after me)
+  // - Top: player across (in 4-player game)
+  // - Right: previous player (plays before me)
+  const getSeatedOpponents = () => {
+    if (myIndex === -1 || totalPlayers <= 1) return { left: null, top: null, right: null };
+    
+    if (totalPlayers === 2) {
+      // 2 players: opponent is across (top)
+      const opponentIndex = (myIndex + 1) % 2;
+      return { left: null, top: gameState.players[opponentIndex], right: null };
+    }
+    
+    if (totalPlayers === 3) {
+      // 3 players: next player on left, previous player on right
+      const leftIndex = (myIndex + 1) % 3;
+      const rightIndex = (myIndex + 2) % 3;
+      return { 
+        left: gameState.players[leftIndex], 
+        top: null, 
+        right: gameState.players[rightIndex] 
+      };
+    }
+    
+    if (totalPlayers === 4) {
+      // 4 players: next on left, across on top, previous on right
+      const leftIndex = (myIndex + 1) % 4;
+      const topIndex = (myIndex + 2) % 4;
+      const rightIndex = (myIndex + 3) % 4;
+      return { 
+        left: gameState.players[leftIndex], 
+        top: gameState.players[topIndex], 
+        right: gameState.players[rightIndex] 
+      };
+    }
+    
+    return { left: null, top: null, right: null };
+  };
+
+  const seatedOpponents = getSeatedOpponents();
 
   // Compute which cards I can afford
   function canAfford(cardId: number): boolean {
@@ -161,21 +203,12 @@ export default function GameBoard({
         {/* Top-left corner */}
         <div />
         
-        {/* Top opponent(s) */}
+        {/* Top opponent */}
         <div className="flex justify-center gap-2">
-          {opponents.length === 1 && (
+          {seatedOpponents.top && (
             <CompactPlayerPanel
-              player={opponents[0]}
-              isCurrentTurn={opponents[0].id === currentPlayer?.id}
-              isMe={false}
-              cardsData={cards_data}
-              position="top"
-            />
-          )}
-          {opponents.length === 3 && opponents[1] && (
-            <CompactPlayerPanel
-              player={opponents[1]}
-              isCurrentTurn={opponents[1].id === currentPlayer?.id}
+              player={seatedOpponents.top}
+              isCurrentTurn={seatedOpponents.top.id === currentPlayer?.id}
               isMe={false}
               cardsData={cards_data}
               position="top"
@@ -186,12 +219,12 @@ export default function GameBoard({
         {/* Top-right corner */}
         <div />
 
-        {/* Left opponent */}
-        <div className="flex items-center justify-center w-36">
-          {opponents.length >= 2 && opponents[0] && (
+        {/* Left opponent (next in turn order) */}
+        <div className="flex items-center justify-center w-44">
+          {seatedOpponents.left && (
             <CompactPlayerPanel
-              player={opponents[0]}
-              isCurrentTurn={opponents[0].id === currentPlayer?.id}
+              player={seatedOpponents.left}
+              isCurrentTurn={seatedOpponents.left.id === currentPlayer?.id}
               isMe={false}
               cardsData={cards_data}
               position="left"
@@ -207,12 +240,12 @@ export default function GameBoard({
             {/* Nobles - Centered */}
             <div className="flex justify-center items-center gap-2 shrink-0 flex-wrap">
               <span className="text-amber-400 text-sm">♫</span>
-              <div className="flex gap-2 flex-wrap justify-center">
+              <div className="flex gap-5 flex-wrap justify-center">
                 {available_nobles.map((nid) => {
                   const noble = nobles_data[String(nid)];
                   if (!noble) return null;
                   return (
-                    <div key={nid} className="w-44 h-14">
+                    <div key={nid} className="w-44 h-20">
                       <NobleDisplay noble={noble} compact />
                     </div>
                   );
@@ -223,13 +256,13 @@ export default function GameBoard({
             <div className="h-px bg-white/10 shrink-0" />
 
             {/* Card Rows */}
-            <div className="flex-1 flex flex-col gap-2 min-h-0 w-full overflow-hidden">
+            <div className="flex-1 flex flex-col gap-5 min-h-0 w-full overflow-hidden">
             {levels.map((level) => (
               <div key={level} className="flex items-stretch gap-2 w-full flex-1 min-h-0">
                 {/* Deck */}
                 <button
                   className={`
-                    shrink-0 w-10 rounded-lg flex flex-col items-center justify-center
+                    shrink-0 w-15 rounded-lg flex flex-col items-center justify-center
                     text-[10px] font-bold transition-all
                     ${isMyTurn && canReserveMore && (deck_counts[level] ?? 0) > 0
                       ? 'bg-slate-700 text-slate-300 hover:bg-slate-600 cursor-pointer border border-slate-600'
@@ -246,7 +279,7 @@ export default function GameBoard({
                 </button>
 
                 {/* Cards - responsive grid */}
-                <div className="flex-1 grid grid-cols-4 gap-2 h-full min-w-0">
+                <div className="flex-1 grid grid-cols-4 gap-6 h-full min-w-0">
                   {(visible_cards[level] || []).map((cardId) => {
                     const card = cards_data[String(cardId)];
                     if (!card) return null;
@@ -271,22 +304,22 @@ export default function GameBoard({
           </div>
 
           {/* Right side - Gem Bank (inside board) */}
-          <div className="shrink-0 w-14 flex flex-col items-center justify-center gap-1 border-l border-white/10 pl-1">
-            <span className="text-slate-400 text-[9px]">◈ Bank</span>
+          <div className="shrink-0 w-20 flex flex-col items-center justify-center gap-6 border-l border-white/10 pl-0">
+            <span className="text-slate-400 text-[14px]">◈ Bank</span>
             <TokenRow
               tokens={tokens_in_bank}
               onClickToken={isMyTurn && gameState.status === 'playing' ? handleTokenClick : undefined}
               selectedTokens={selectedTokens}
               selectionCounts={selectionCounts}
               disabledColors={disabledTokenColors}
-              size="xs"
+              size="md"
               showLabel={false}
               vertical
             />
             {selectedTokens.length > 0 && (
-              <div className="flex flex-col items-center gap-0.5">
+              <div className="flex flex-col items-center gap-4">
                 <button
-                  className="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[9px] font-bold w-full"
+                  className="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[14px] font-bold w-full"
                   onClick={confirmTakeTokens}
                 >
                   Take
@@ -302,21 +335,12 @@ export default function GameBoard({
           </div>
         </div>
 
-        {/* Right opponent */}
-        <div className="flex items-center justify-center w-36">
-          {opponents.length >= 3 && opponents[2] && (
+        {/* Right opponent (previous in turn order) */}
+        <div className="flex items-center justify-center w-44">
+          {seatedOpponents.right && (
             <CompactPlayerPanel
-              player={opponents[2]}
-              isCurrentTurn={opponents[2].id === currentPlayer?.id}
-              isMe={false}
-              cardsData={cards_data}
-              position="right"
-            />
-          )}
-          {opponents.length === 2 && opponents[1] && (
-            <CompactPlayerPanel
-              player={opponents[1]}
-              isCurrentTurn={opponents[1].id === currentPlayer?.id}
+              player={seatedOpponents.right}
+              isCurrentTurn={seatedOpponents.right.id === currentPlayer?.id}
               isMe={false}
               cardsData={cards_data}
               position="right"

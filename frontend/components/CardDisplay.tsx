@@ -128,14 +128,14 @@ export default function CardDisplay({
                   <path
                     d="M2 24 L6 10 L10 16 L16 4 L22 16 L26 10 L30 24 Z"
                     fill="url(#crownGradCard)"
-                    // stroke="#fcd34d"
-                    // strokeWidth="1.5"
+                  // stroke="#fcd34d"
+                  // strokeWidth="1.5"
                   />
                   <circle cx="6" cy="9" r="2.5" fill="#fcd34d" />
                   <circle cx="16" cy="3" r="2.5" fill="#fcd34d" />
                   <circle cx="26" cy="9" r="2.5" fill="#fcd34d" />
                 </svg>
-                
+
                 <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[35%] text-amber-900 font-black text-sm">
                   {card.points}
                 </span>
