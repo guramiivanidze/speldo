@@ -51,10 +51,51 @@ async function apiFetch(path: string, options: RequestInit = {}) {
   return data;
 }
 
-export async function register(username: string, email: string, password: string) {
+// Auth configuration
+export interface AuthConfig {
+  email_verification_enabled: boolean;
+}
+
+export async function getAuthConfig(): Promise<AuthConfig> {
+  return apiFetch('/api/auth/config/');
+}
+
+// Email verification
+export interface SendVerificationResponse {
+  message: string;
+  verification_token: string;
+}
+
+export async function sendVerificationCode(email: string): Promise<SendVerificationResponse> {
+  return apiFetch('/api/auth/send-verification/', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function verifyCode(email: string, code: string, verificationToken: string) {
+  return apiFetch('/api/auth/verify-code/', {
+    method: 'POST',
+    body: JSON.stringify({ email, code, verification_token: verificationToken }),
+  });
+}
+
+export async function register(
+  username: string,
+  email: string,
+  password: string,
+  verificationToken: string,
+  verificationCode: string
+) {
   const data = await apiFetch('/api/auth/register/', {
     method: 'POST',
-    body: JSON.stringify({ username, email, password }),
+    body: JSON.stringify({
+      username,
+      email,
+      password,
+      verification_token: verificationToken,
+      verification_code: verificationCode,
+    }),
   });
   if (data.token) {
     setStoredToken(data.token);
@@ -129,6 +170,151 @@ export async function getGameHistory(code: string) {
 
 export async function getMyGames() {
   return apiFetch('/api/games/mine/');
+}
+
+export async function getUserGameHistory(page = 1, perPage = 20) {
+  return apiFetch(`/api/games/history/?page=${page}&per_page=${perPage}`);
+}
+
+export interface CasualStats {
+  total_games: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+}
+
+export async function getCasualStats(): Promise<CasualStats> {
+  return apiFetch('/api/games/casual-stats/');
+}
+
+// ─── Game Invitations API ──────────────────────────────
+
+export interface GameFriend {
+  id: number;
+  username: string;
+  is_in_game: boolean;
+  invitation_status: 'pending' | 'accepted' | 'declined' | 'expired' | null;
+  can_invite: boolean;
+}
+
+export interface GameInvitation {
+  id: number;
+  game_code: string;
+  from_user_id: number;
+  from_username: string;
+  max_players: number;
+  current_players: number;
+  created_at: string;
+}
+
+export async function getGameFriends(code: string): Promise<{ 
+  friends: GameFriend[]; 
+  game_code: string; 
+  slots_available: number; 
+}> {
+  return apiFetch(`/api/games/${code}/friends/`);
+}
+
+export async function sendGameInvitation(code: string, friendId: number): Promise<{
+  message: string;
+  invitation_id: number;
+}> {
+  return apiFetch(`/api/games/${code}/invite/`, {
+    method: 'POST',
+    body: JSON.stringify({ friend_id: friendId }),
+  });
+}
+
+export async function respondToGameInvitation(invitationId: number, action: 'accept' | 'decline'): Promise<{
+  message: string;
+  game_code?: string;
+}> {
+  return apiFetch(`/api/games/invitation/${invitationId}/${action}/`, { method: 'POST' });
+}
+
+export async function getPendingGameInvitations(): Promise<{
+  invitations: GameInvitation[];
+  count: number;
+}> {
+  return apiFetch('/api/games/invitations/');
+}
+
+// ─── Friends API ───────────────────────────────────────
+
+export interface FriendRequest {
+  id: number;
+  from_username: string;
+  created_at: string;
+}
+
+export interface Friend {
+  id: number;
+  username: string;
+  since: string;
+}
+
+export interface FriendWithStats {
+  id: number;
+  username: string;
+  since: string;
+  casual_wins: number;
+}
+
+export async function sendFriendRequest(nickname: string) {
+  return apiFetch('/api/auth/friend-request/', {
+    method: 'POST',
+    body: JSON.stringify({ nickname }),
+  });
+}
+
+export async function getPendingFriendRequests(): Promise<{ requests: FriendRequest[]; count: number }> {
+  return apiFetch('/api/auth/friend-requests/');
+}
+
+export async function respondToFriendRequest(requestId: number, action: 'accept' | 'reject') {
+  return apiFetch(`/api/auth/friend-request/${requestId}/${action}/`, { method: 'POST' });
+}
+
+export async function getFriendsList(): Promise<{ friends: Friend[]; count: number }> {
+  return apiFetch('/api/auth/friends/');
+}
+
+export async function getFriendsWithStats(): Promise<{ friends: FriendWithStats[]; count: number }> {
+  return apiFetch('/api/auth/friends/with-stats/');
+}
+
+export async function removeFriend(friendId: number) {
+  return apiFetch(`/api/auth/friends/${friendId}/remove/`, { method: 'POST' });
+}
+
+// ─── Profile Change API ────────────────────────────────
+
+export async function sendEmailChangeCode(newEmail: string): Promise<{ message: string; verification_token: string }> {
+  return apiFetch('/api/auth/send-email-change-code/', {
+    method: 'POST',
+    body: JSON.stringify({ new_email: newEmail }),
+  });
+}
+
+export async function changeEmail(newEmail: string, verificationToken: string, verificationCode: string) {
+  return apiFetch('/api/auth/change-email/', {
+    method: 'POST',
+    body: JSON.stringify({
+      new_email: newEmail,
+      verification_token: verificationToken,
+      verification_code: verificationCode,
+    }),
+  });
+}
+
+export async function changePassword(currentPassword: string, newPassword: string) {
+  return apiFetch('/api/auth/change-password/', {
+    method: 'POST',
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
 }
 
 // ─── Competitive API ───────────────────────────────────

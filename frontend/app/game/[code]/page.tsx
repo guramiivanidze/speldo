@@ -11,6 +11,7 @@ import PauseSurveyModal from '@/components/PauseSurveyModal';
 import RatingChangeDisplay from '@/components/RatingChangeDisplay';
 import GameHistory from '@/components/GameHistory';
 import GamePodium from '@/components/GamePodium';
+import FriendsInviteList from '@/components/FriendsInviteList';
 import type { Match, Division } from '@/types/competitive';
 
 const GEM_COLORS_HEX = ['#f1f5f9', '#3b82f6', '#10b981', '#ef4444', '#475569', '#fde047'];
@@ -404,6 +405,14 @@ export default function GamePage({ params }: PageProps) {
               <div className="text-center py-3 text-slate-400 text-sm">
                 Waiting for {gameState.max_players - gameState.players.length} more player{gameState.max_players - gameState.players.length > 1 ? 's' : ''}...
               </div>
+            )}
+
+            {/* Friends invite list */}
+            {gameState.players.length < gameState.max_players && (
+              <FriendsInviteList 
+                gameCode={code} 
+                slotsAvailable={gameState.max_players - gameState.players.length} 
+              />
             )}
 
             {/* Back to lobby button */}

@@ -198,3 +198,49 @@ class GameAction(models.Model):
     
     def __str__(self):
         return f"Turn {self.turn_number}: {self.player.user.username} - {self.action_type}"
+
+
+class GameInvitation(models.Model):
+    """Invitation to join a game room."""
+    STATUS_PENDING = 'pending'
+    STATUS_ACCEPTED = 'accepted'
+    STATUS_DECLINED = 'declined'
+    STATUS_EXPIRED = 'expired'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_ACCEPTED, 'Accepted'),
+        (STATUS_DECLINED, 'Declined'),
+        (STATUS_EXPIRED, 'Expired'),
+    ]
+
+    game = models.ForeignKey(Game, on_delete=models.CASCADE, related_name='invitations')
+    from_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='sent_game_invitations'
+    )
+    to_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='received_game_invitations'
+    )
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        unique_together = [('game', 'to_user')]
+
+    def __str__(self):
+        return f"{self.from_user.username} invited {self.to_user.username} to game {self.game.code}"
+
+    def is_valid(self):
+        """Check if invitation is still valid (game is waiting and not full)."""
+        if self.status != self.STATUS_PENDING:
+            return False
+        if self.game.status != Game.STATUS_WAITING:
+            return False
+        if self.game.players.count() >= self.game.max_players:
+            return False
+        return True

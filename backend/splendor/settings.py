@@ -231,3 +231,11 @@ LOGGING = {
         },
     },
 }
+
+# Mailgun Email Configuration
+MAILGUN_API_KEY = os.environ.get('MAILGUN_API_KEY', '')
+MAILGUN_DOMAIN = os.environ.get('MAILGUN_DOMAIN', '')
+MAILGUN_FROM_EMAIL = os.environ.get('MAILGUN_FROM_EMAIL', '')
+
+# Email verification toggle - set to False to disable during development
+EMAIL_VERIFICATION_ENABLED = os.environ.get('EMAIL_VERIFICATION_ENABLED', 'True').lower() in ('true', '1', 'yes')

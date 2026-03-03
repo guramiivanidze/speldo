@@ -7,13 +7,14 @@ from django.shortcuts import get_object_or_404
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
-from .models import Game, GamePlayer, GameAction
+from .models import Game, GamePlayer, GameAction, GameInvitation
 from .game_logic import (
     generate_code, initial_bank,
     initial_decks_and_nobles,
     get_card, get_noble,
 )
 from .consumers import serialize_game_state
+from accounts.models import Friendship
 
 
 class GameListCreateView(APIView):
@@ -116,6 +117,14 @@ class GameStartView(APIView):
         game.status = Game.STATUS_PLAYING
         game.save()
 
+        # Expire all pending invitations and notify invitees
+        pending_invitations = GameInvitation.objects.filter(
+            game=game,
+            status=GameInvitation.STATUS_PENDING
+        )
+        invitation_recipients = list(pending_invitations.values_list('to_user_id', 'id'))
+        pending_invitations.update(status=GameInvitation.STATUS_EXPIRED)
+        
         # Broadcast game state to all connected players
         players_with_users = list(game.players.select_related('user').order_by('order'))
         state = serialize_game_state(game, players_with_users)
@@ -127,6 +136,17 @@ class GameStartView(APIView):
                 'state': state,
             }
         )
+        
+        # Notify invitees that their invitations have expired
+        for user_id, invitation_id in invitation_recipients:
+            async_to_sync(channel_layer.group_send)(
+                f'notifications_{user_id}',
+                {
+                    'type': 'invitation_expired',
+                    'invitation_id': invitation_id,
+                    'reason': 'Game has started',
+                }
+            )
 
         return Response({'message': 'Game started.'})
 
@@ -160,6 +180,69 @@ class MyGamesView(APIView):
                 'prestige_points': gp.prestige_points,
             })
         return Response(data)
+
+
+class UserGameHistoryView(APIView):
+    """Get the game history for a user showing all finished games."""
+    
+    def get(self, request):
+        page = int(request.query_params.get('page', 1))
+        per_page = min(int(request.query_params.get('per_page', 20)), 50)
+        
+        # Get all game players for this user in finished games
+        game_players = (
+            GamePlayer.objects.filter(user=request.user, game__status=Game.STATUS_FINISHED)
+            .select_related('game', 'game__winner')
+            .order_by('-game__created_at')
+        )
+        
+        total = game_players.count()
+        start = (page - 1) * per_page
+        end = start + per_page
+        
+        games_data = []
+        for gp in game_players[start:end]:
+            game = gp.game
+            
+            # Get all players in this game sorted by placement (highest points first, then fewest cards)
+            all_players = list(game.players.select_related('user').order_by('-prestige_points'))
+            
+            # Sort by prestige_points desc, then by total cards asc (fewer cards is better as tiebreaker)
+            all_players.sort(key=lambda p: (-p.prestige_points, len(p.purchased_card_ids)))
+            
+            # Build placement info
+            player_results = []
+            for idx, player in enumerate(all_players):
+                is_winner = game.winner and player.user.id == game.winner.id
+                player_results.append({
+                    'username': player.user.username,
+                    'placement': idx + 1,
+                    'prestige_points': player.prestige_points,
+                    'total_cards': len(player.purchased_card_ids),
+                    'is_winner': is_winner,
+                    'is_me': player.user.id == request.user.id,
+                })
+            
+            # Find my placement
+            my_placement = next((p['placement'] for p in player_results if p['is_me']), None)
+            
+            games_data.append({
+                'id': str(game.id),
+                'code': game.code,
+                'finished_at': game.created_at.isoformat(),  # Note: no finished_at field, using created_at
+                'player_count': len(all_players),
+                'players': player_results,
+                'my_placement': my_placement,
+                'my_points': gp.prestige_points,
+                'won': game.winner and game.winner.id == request.user.id,
+            })
+        
+        return Response({
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'games': games_data,
+        })
 
 
 class GameHistoryView(APIView):
@@ -309,4 +392,233 @@ class GameHistoryView(APIView):
             ],
             'history': history,
             'results': results,
+        })
+
+
+class CasualStatsView(APIView):
+    """Get casual game stats for the current user."""
+    
+    def get(self, request):
+        user = request.user
+        
+        # Count finished casual games (exclude ranked games)
+        # A game is ranked if it has a related ranked_match
+        finished_games = Game.objects.filter(
+            status=Game.STATUS_FINISHED,
+            players__user=user,
+            ranked_match__isnull=True  # Exclude games with a ranked match
+        ).distinct()
+        
+        total_games = finished_games.count()
+        wins = finished_games.filter(winner=user).count()
+        losses = total_games - wins
+        win_rate = round((wins / total_games) * 100) if total_games > 0 else 0
+        
+        return Response({
+            'total_games': total_games,
+            'wins': wins,
+            'losses': losses,
+            'win_rate': win_rate,
+        })
+
+
+class GameFriendsListView(APIView):
+    """Get friends list for game invitations."""
+    
+    def get(self, request, code):
+        game = get_object_or_404(Game, code=code)
+        
+        # Verify user is in this game
+        if not game.players.filter(user=request.user).exists():
+            return Response({'error': 'Not in this game.'}, status=403)
+        
+        # Get all friends
+        friendships = Friendship.objects.filter(user=request.user).select_related('friend')
+        
+        # Get existing invitations for this game
+        sent_invitations = {
+            inv.to_user_id: inv.status
+            for inv in GameInvitation.objects.filter(game=game, from_user=request.user)
+        }
+        
+        # Get players already in the game
+        players_in_game = set(game.players.values_list('user_id', flat=True))
+        
+        friends = []
+        for friendship in friendships:
+            friend = friendship.friend
+            
+            # Check invitation status
+            invitation_status = sent_invitations.get(friend.id)
+            is_in_game = friend.id in players_in_game
+            
+            friends.append({
+                'id': friend.id,
+                'username': friend.username,
+                'is_in_game': is_in_game,
+                'invitation_status': invitation_status,
+                'can_invite': not is_in_game and invitation_status is None,
+            })
+        
+        return Response({
+            'friends': friends,
+            'game_code': code,
+            'slots_available': game.max_players - game.players.count(),
+        })
+
+
+class SendGameInvitationView(APIView):
+    """Send a game invitation to a friend."""
+    
+    def post(self, request, code):
+        game = get_object_or_404(Game, code=code)
+        friend_id = request.data.get('friend_id')
+        
+        if not friend_id:
+            return Response({'error': 'friend_id is required.'}, status=400)
+        
+        # Verify user is in this game
+        if not game.players.filter(user=request.user).exists():
+            return Response({'error': 'Not in this game.'}, status=403)
+        
+        # Verify game is in waiting status
+        if game.status != Game.STATUS_WAITING:
+            return Response({'error': 'Game has already started.'}, status=400)
+        
+        # Verify game is not full
+        if game.players.count() >= game.max_players:
+            return Response({'error': 'Game is full.'}, status=400)
+        
+        # Verify friendship exists
+        if not Friendship.objects.filter(user=request.user, friend_id=friend_id).exists():
+            return Response({'error': 'Not friends with this user.'}, status=400)
+        
+        # Check if invitation already exists
+        existing = GameInvitation.objects.filter(game=game, to_user_id=friend_id).first()
+        if existing:
+            if existing.status == GameInvitation.STATUS_PENDING:
+                return Response({'error': 'Invitation already sent.'}, status=400)
+            # Reset a declined invitation
+            existing.status = GameInvitation.STATUS_PENDING
+            existing.from_user = request.user
+            existing.responded_at = None
+            existing.save()
+            invitation = existing
+        else:
+            invitation = GameInvitation.objects.create(
+                game=game,
+                from_user=request.user,
+                to_user_id=friend_id,
+            )
+        
+        # Send real-time notification via WebSocket
+        channel_layer = get_channel_layer()
+        from django.contrib.auth.models import User
+        to_user = User.objects.get(id=friend_id)
+        
+        async_to_sync(channel_layer.group_send)(
+            f'notifications_{friend_id}',
+            {
+                'type': 'game_invitation',
+                'invitation_id': invitation.id,
+                'game_code': game.code,
+                'from_user_id': request.user.id,
+                'from_username': request.user.username,
+                'max_players': game.max_players,
+                'current_players': game.players.count(),
+            }
+        )
+        
+        return Response({
+            'message': f'Invitation sent to {to_user.username}.',
+            'invitation_id': invitation.id,
+        })
+
+
+class RespondGameInvitationView(APIView):
+    """Accept or decline a game invitation."""
+    
+    def post(self, request, invitation_id, action):
+        if action not in ['accept', 'decline']:
+            return Response({'error': 'Invalid action.'}, status=400)
+        
+        invitation = get_object_or_404(GameInvitation, id=invitation_id, to_user=request.user)
+        
+        if invitation.status != GameInvitation.STATUS_PENDING:
+            return Response({'error': 'Invitation already responded to.'}, status=400)
+        
+        if action == 'accept':
+            # Check if invitation is still valid
+            if not invitation.is_valid():
+                invitation.status = GameInvitation.STATUS_EXPIRED
+                invitation.save()
+                return Response({'error': 'Invitation is no longer valid. The game may have started or is full.'}, status=400)
+            
+            # Join the game
+            game = invitation.game
+            count = game.players.count()
+            
+            GamePlayer.objects.create(
+                game=game,
+                user=request.user,
+                order=count,
+                tokens={c: 0 for c in ['white', 'blue', 'green', 'red', 'black', 'gold']},
+            )
+            
+            invitation.status = GameInvitation.STATUS_ACCEPTED
+            invitation.responded_at = timezone.now()
+            invitation.save()
+            
+            # Broadcast updated game state
+            players_with_users = list(game.players.select_related('user').order_by('order'))
+            state = serialize_game_state(game, players_with_users)
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'game_{game.code}',
+                {
+                    'type': 'game_state_update',
+                    'state': state,
+                }
+            )
+            
+            return Response({
+                'message': 'Invitation accepted.',
+                'game_code': game.code,
+            })
+        else:
+            invitation.status = GameInvitation.STATUS_DECLINED
+            invitation.responded_at = timezone.now()
+            invitation.save()
+            
+            return Response({'message': 'Invitation declined.'})
+
+
+class PendingGameInvitationsView(APIView):
+    """Get pending game invitations for the current user."""
+    
+    def get(self, request):
+        # Get pending invitations where the game is still waiting
+        invitations = GameInvitation.objects.filter(
+            to_user=request.user,
+            status=GameInvitation.STATUS_PENDING,
+            game__status=Game.STATUS_WAITING,
+        ).select_related('game', 'from_user')
+        
+        # Filter to only valid invitations (game not full)
+        valid_invitations = []
+        for inv in invitations:
+            if inv.game.players.count() < inv.game.max_players:
+                valid_invitations.append({
+                    'id': inv.id,
+                    'game_code': inv.game.code,
+                    'from_user_id': inv.from_user.id,
+                    'from_username': inv.from_user.username,
+                    'max_players': inv.game.max_players,
+                    'current_players': inv.game.players.count(),
+                    'created_at': inv.created_at.isoformat(),
+                })
+        
+        return Response({
+            'invitations': valid_invitations,
+            'count': len(valid_invitations),
         })

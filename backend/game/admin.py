@@ -5,7 +5,7 @@ from django.urls import path
 from django.contrib import messages
 from import_export import resources, fields
 from import_export.admin import ImportExportModelAdmin
-from .models import Game, GamePlayer, DevelopmentCard, Noble
+from .models import Game, GamePlayer, DevelopmentCard, Noble, GameInvitation
 from .game_logic import clear_card_cache
 
 
@@ -217,3 +217,11 @@ class GameAdmin(admin.ModelAdmin):
 class GamePlayerAdmin(admin.ModelAdmin):
     list_display = ['game', 'user', 'order', 'prestige_points', 'is_online']
     list_filter = ['game__status', 'is_online']
+
+
+@admin.register(GameInvitation)
+class GameInvitationAdmin(admin.ModelAdmin):
+    list_display = ['id', 'game', 'from_user', 'to_user', 'status', 'created_at']
+    list_filter = ['status', 'created_at']
+    search_fields = ['from_user__username', 'to_user__username', 'game__code']
+    readonly_fields = ['created_at', 'responded_at']

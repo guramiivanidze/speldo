@@ -23,5 +23,8 @@ django-cloudinary-storage==0.3.0
 # Admin utilities
 django-import-export==4.0.0
 
+# Email
+requests==2.31.0
+
 # Development
 python-dotenv==1.0.1

@@ -44,8 +44,14 @@ export default function CardDisplay({
   showActions = false,
   compact = false,
 }: CardDisplayProps) {
-  const textCls = CARD_TEXT[card.bonus];
-  const costColors = GEM_COLORS.filter((color) => card.cost[color as GemColor]);
+  // Guard against missing card data
+  const bonus = card.bonus || 'white';
+  const level = card.level || 1;
+  const cost = card.cost || {};
+  const points = card.points || 0;
+  
+  const textCls = CARD_TEXT[bonus];
+  const costColors = GEM_COLORS.filter((color) => cost[color as GemColor]);
   const cardImage = getImageUrl(card);
 
   return (
@@ -57,7 +63,7 @@ export default function CardDisplay({
         cursor-default shadow-lg
         hover:z-50 transition-transform hover:scale-[1.02]
       `}
-      style={{ background: CARD_GRADIENT[card.bonus] }}
+      style={{ background: CARD_GRADIENT[bonus] }}
     >
       {/* Background: image or crystal art fallback */}
       {cardImage ? (
@@ -69,12 +75,12 @@ export default function CardDisplay({
           {/* Gradient overlay for readability */}
           <div
             className="absolute inset-0"
-            style={{ background: CARD_GRADIENT[card.bonus], opacity: 0.7 }}
+            style={{ background: CARD_GRADIENT[bonus], opacity: 0.7 }}
           />
         </>
       ) : (
         /* Crystal art fallback when no image uploaded */
-        <CardCrystalBg bonus={card.bonus} level={card.level} />
+        <CardCrystalBg bonus={bonus} level={level} />
       )}
 
       {/* Main content - horizontal layout */}
@@ -86,9 +92,9 @@ export default function CardDisplay({
           <div className={`
             text-[9px] font-black tracking-wider leading-none
             px-1.5 py-0.5 rounded-full text-slate-900
-            ${LEVEL_COLOR[card.level as 1 | 2 | 3]}
+            ${LEVEL_COLOR[level as 1 | 2 | 3]}
           `}>
-            {ROMAN[card.level]}
+            {ROMAN[level]}
           </div>
 
           {/* Gem orb */}
@@ -97,13 +103,13 @@ export default function CardDisplay({
             style={{
               width: compact ? 28 : 40,
               height: compact ? 28 : 40,
-              background: GEM_GRADIENT[card.bonus],
+              background: GEM_GRADIENT[bonus],
             }}
           />
 
           {/* Gem label */}
           <span className={`text-[7px] font-semibold uppercase tracking-wide opacity-60 ${textCls}`}>
-            {TOKEN_LABEL[card.bonus]}
+            {TOKEN_LABEL[bonus]}
           </span>
         </div>
 
@@ -111,7 +117,7 @@ export default function CardDisplay({
         <div className="flex-1 flex flex-col justify-between py-2 pr-2">
           {/* Points (top right) - Crown badge */}
           <div className="flex justify-end">
-            {card.points > 0 ? (
+            {points > 0 ? (
               <div
                 className="relative flex items-center justify-center
                            font-black text-sm text-amber-900 drop-shadow-lg"
@@ -137,7 +143,7 @@ export default function CardDisplay({
                 </svg>
 
                 <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[35%] text-amber-900 font-black text-sm">
-                  {card.points}
+                  {points}
                 </span>
               </div>
             ) : <div className="w-9 h-8" />}
@@ -146,7 +152,7 @@ export default function CardDisplay({
           {/* Cost circles (bottom right) */}
           <div className="flex flex-wrap gap-1.5 justify-end">
             {costColors.map((color) => {
-              const c = card.cost[color as GemColor];
+              const c = cost[color as GemColor];
               if (!c) return null;
               return (
                 <div

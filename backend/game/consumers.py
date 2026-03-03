@@ -155,6 +155,7 @@ class GameConsumer(AsyncWebsocketConsumer):
         @database_sync_to_async
         def _db():
             from django.db import transaction
+            from .models import GameInvitation
             try:
                 with transaction.atomic():
                     game = Game.objects.select_for_update().get(code=self.game_code)
@@ -171,9 +172,17 @@ class GameConsumer(AsyncWebsocketConsumer):
                     remaining_players = game.players.count()
                     
                     if remaining_players == 0:
-                        # No players left - delete the game
+                        # No players left - expire all pending invitations
+                        pending_invitations = GameInvitation.objects.filter(
+                            game=game,
+                            status=GameInvitation.STATUS_PENDING
+                        )
+                        invitation_recipients = list(pending_invitations.values_list('to_user_id', 'id'))
+                        pending_invitations.update(status=GameInvitation.STATUS_EXPIRED)
+                        
+                        # Delete the game
                         game.delete()
-                        return {'waiting_room_closed': True}
+                        return {'waiting_room_closed': True, 'expired_invitations': invitation_recipients}
                     return {'left_waiting_room': True, 'user_id': self.user.id, 'username': self.user.username}
             except Game.DoesNotExist:
                 return None
@@ -186,6 +195,16 @@ class GameConsumer(AsyncWebsocketConsumer):
                     self.room_group_name,
                     {'type': 'waiting_room_closed'}
                 )
+                # Notify invitees that their invitations have expired
+                for user_id, invitation_id in result.get('expired_invitations', []):
+                    await self.channel_layer.group_send(
+                        f'notifications_{user_id}',
+                        {
+                            'type': 'invitation_expired',
+                            'invitation_id': invitation_id,
+                            'reason': 'Room was closed',
+                        }
+                    )
             elif result.get('left_waiting_room'):
                 await self.channel_layer.group_send(
                     self.room_group_name,

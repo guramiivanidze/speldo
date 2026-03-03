@@ -65,7 +65,7 @@ const CRYSTAL_COLORS: Record<GemColor, {
 };
 
 export default function CardCrystalBg({ bonus, level }: CardCrystalBgProps) {
-    const colors = CRYSTAL_COLORS[bonus];
+    const colors = CRYSTAL_COLORS[bonus] || CRYSTAL_COLORS.white;
     const uid = `${bonus}_${level}`;
 
     return (
