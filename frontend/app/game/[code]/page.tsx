@@ -1,10 +1,11 @@
 'use client';
 
-import { use, useEffect, useState, useCallback } from 'react';
+import { use, useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameHeader } from '@/contexts/GameHeaderContext';
 import { useGameSocket } from '@/hooks/useGameSocket';
+import { useGameSounds } from '@/hooks/useGameSounds';
 import { startGame, getMatchByGame } from '@/lib/api';
 import GameBoard from '@/components/GameBoard';
 import PauseSurveyModal from '@/components/PauseSurveyModal';
@@ -55,6 +56,10 @@ export default function GamePage({ params }: PageProps) {
   // Ranked match state
   const [rankedMatch, setRankedMatch] = useState<Match | null>(null);
   const [showRatingChange, setShowRatingChange] = useState(false);
+  
+  // Game sounds
+  const { playTakeCoin, playReservation, playBuyCard, playEndGame } = useGameSounds();
+  const prevGameStatusRef = useRef<string | null>(null);
 
   const {
     gameState,
@@ -92,6 +97,30 @@ export default function GamePage({ params }: PageProps) {
       setUnreadCount(0);
     }
   }, [chatOpen]);
+
+  // Play endgame sound when game finishes
+  useEffect(() => {
+    if (gameState?.status === 'finished' && prevGameStatusRef.current === 'playing') {
+      playEndGame();
+    }
+    prevGameStatusRef.current = gameState?.status || null;
+  }, [gameState?.status, playEndGame]);
+
+  // Wrapped action handlers with sounds
+  const handleTakeTokens = useCallback((colors: string[]) => {
+    playTakeCoin();
+    takeTokens(colors);
+  }, [takeTokens, playTakeCoin]);
+
+  const handleReserveCard = useCallback((cardId?: number, level?: number) => {
+    playReservation();
+    reserveCard(cardId, level);
+  }, [reserveCard, playReservation]);
+
+  const handleBuyCard = useCallback((cardId: number) => {
+    playBuyCard();
+    buyCard(cardId);
+  }, [buyCard, playBuyCard]);
 
   // Show welcome back message when rejoining
   useEffect(() => {
@@ -320,9 +349,9 @@ export default function GamePage({ params }: PageProps) {
           <GameBoard
             gameState={gameState}
             myUserId={user.id}
-            onTakeTokens={takeTokens}
-            onReserveCard={reserveCard}
-            onBuyCard={buyCard}
+            onTakeTokens={handleTakeTokens}
+            onReserveCard={handleReserveCard}
+            onBuyCard={handleBuyCard}
             onDiscardTokens={discardTokens}
             onCancelPendingDiscard={cancelPendingDiscard}
             chatMessages={chatMessages}
