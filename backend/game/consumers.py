@@ -230,6 +230,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             'vote_response': self.handle_vote_response,
             'refresh_state': self.handle_refresh_state,
             'cancel_pending_discard': self.handle_cancel_pending_discard,
+            'chat_message': self.handle_chat_message,
         }
 
         handler = handlers.get(action)
@@ -600,6 +601,37 @@ class GameConsumer(AsyncWebsocketConsumer):
     async def handle_refresh_state(self, payload):
         """Handle refresh state request - just sends current game state."""
         await self.send_game_state()
+
+    async def handle_chat_message(self, payload):
+        """Handle chat message from a player."""
+        message = payload.get('message', '').strip()
+        if not message:
+            return
+        
+        # Limit message length
+        message = message[:200]
+        
+        # Broadcast to all players in the game
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {
+                'type': 'chat_message',
+                'user_id': self.user.id,
+                'username': self.user.username,
+                'message': message,
+                'timestamp': timezone.now().isoformat(),
+            }
+        )
+
+    async def chat_message(self, event):
+        """Receive chat message from channel layer and send to WebSocket."""
+        await self.send(text_data=json.dumps({
+            'type': 'chat_message',
+            'user_id': event['user_id'],
+            'username': event['username'],
+            'message': event['message'],
+            'timestamp': event['timestamp'],
+        }))
 
     async def send_game_state(self):
         # First check pause status

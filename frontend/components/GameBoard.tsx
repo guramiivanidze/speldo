@@ -11,6 +11,7 @@ import DiscardTokensModal from './DiscardTokensModal';
 import { GEM_COLORS, TOKEN_LABEL } from '@/lib/colors';
 import useIsMobile from '@/hooks/useIsMobile';
 import MobileGameBoard from './mobile/MobileGameBoard';
+import { ChatMessage } from '@/hooks/useGameSocket';
 
 interface GameBoardProps {
   gameState: GameState;
@@ -20,6 +21,8 @@ interface GameBoardProps {
   onBuyCard: (cardId: number) => void;
   onDiscardTokens: (tokens: Record<string, number>) => void;
   onCancelPendingDiscard?: () => void;
+  chatMessages?: ChatMessage[];
+  onSendChat?: (message: string) => void;
 }
 
 const LEVEL_DOT: Record<string, string> = { '3': 'bg-red-400', '2': 'bg-yellow-400', '1': 'bg-emerald-400' };
@@ -32,6 +35,8 @@ export default function GameBoard({
   onBuyCard,
   onDiscardTokens,
   onCancelPendingDiscard,
+  chatMessages = [],
+  onSendChat,
 }: GameBoardProps) {
   const isMobile = useIsMobile();
   const [selectedTokens, setSelectedTokens] = useState<TokenColor[]>([]);
@@ -47,6 +52,8 @@ export default function GameBoard({
         onBuyCard={onBuyCard}
         onDiscardTokens={onDiscardTokens}
         onCancelPendingDiscard={onCancelPendingDiscard}
+        chatMessages={chatMessages}
+        onSendChat={onSendChat}
       />
     );
   }

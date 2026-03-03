@@ -12,6 +12,8 @@ import RatingChangeDisplay from '@/components/RatingChangeDisplay';
 import GameHistory from '@/components/GameHistory';
 import GamePodium from '@/components/GamePodium';
 import FriendsInviteList from '@/components/FriendsInviteList';
+import GameChat, { ChatButton } from '@/components/GameChat';
+import useIsMobile from '@/hooks/useIsMobile';
 import type { Match, Division } from '@/types/competitive';
 
 const GEM_COLORS_HEX = ['#f1f5f9', '#3b82f6', '#10b981', '#ef4444', '#475569', '#fde047'];
@@ -39,11 +41,16 @@ export default function GamePage({ params }: PageProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isMobile = useIsMobile();
   const [startError, setStartError] = useState('');
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
   const { setHeaderState, clearHeaderState } = useGameHeader();
+  
+  // Chat state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   
   // Ranked match state
   const [rankedMatch, setRankedMatch] = useState<Match | null>(null);
@@ -54,6 +61,7 @@ export default function GamePage({ params }: PageProps) {
     error,
     connected,
     pauseEvent,
+    chatMessages,
     takeTokens,
     discardTokens,
     reserveCard,
@@ -62,9 +70,28 @@ export default function GamePage({ params }: PageProps) {
     voteResponse,
     cancelPendingDiscard,
     refreshState,
+    sendChat,
     clearError,
     clearPauseEvent,
   } = useGameSocket(user ? code : null);
+
+  // Track unread chat messages (when chat is closed on desktop)
+  useEffect(() => {
+    if (chatMessages.length > 0 && !chatOpen && !isMobile) {
+      const lastMsg = chatMessages[chatMessages.length - 1];
+      // Don't count own messages
+      if (lastMsg.user_id !== user?.id) {
+        setUnreadCount(prev => prev + 1);
+      }
+    }
+  }, [chatMessages.length, chatOpen, isMobile, chatMessages, user?.id]);
+
+  // Clear unread count when chat is opened
+  useEffect(() => {
+    if (chatOpen) {
+      setUnreadCount(0);
+    }
+  }, [chatOpen]);
 
   // Show welcome back message when rejoining
   useEffect(() => {
@@ -298,8 +325,24 @@ export default function GamePage({ params }: PageProps) {
             onBuyCard={buyCard}
             onDiscardTokens={discardTokens}
             onCancelPendingDiscard={cancelPendingDiscard}
+            chatMessages={chatMessages}
+            onSendChat={sendChat}
           />
         </div>
+
+        {/* Desktop chat button and panel */}
+        {!isMobile && (
+          <>
+            <ChatButton onClick={() => setChatOpen(true)} unreadCount={unreadCount} />
+            <GameChat
+              messages={chatMessages}
+              onSendMessage={sendChat}
+              myUserId={user.id}
+              isOpen={chatOpen}
+              onClose={() => setChatOpen(false)}
+            />
+          </>
+        )}
       </div>
     );
   }

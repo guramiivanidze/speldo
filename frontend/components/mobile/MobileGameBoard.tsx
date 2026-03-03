@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { GameState, GemColor, TokenColor } from '@/types/game';
 import { GEM_COLORS } from '@/lib/colors';
+import { ChatMessage } from '@/hooks/useGameSocket';
 
 import MobileTurnBanner from './MobileTurnBanner';
 import MobileNavTabs from './MobileNavTabs';
@@ -11,8 +12,9 @@ import MobilePlayerView from './MobilePlayerView';
 import MobileOpponentsView from './MobileOpponentsView';
 import MobileTokenSelector from './MobileTokenSelector';
 import DiscardTokensModal from '../DiscardTokensModal';
+import GameChat from '../GameChat';
 
-type MobileTab = 'board' | 'me' | 'opponents';
+type MobileTab = 'board' | 'me' | 'opponents' | 'chat';
 
 interface MobileGameBoardProps {
   gameState: GameState;
@@ -22,6 +24,8 @@ interface MobileGameBoardProps {
   onBuyCard: (cardId: number) => void;
   onDiscardTokens: (tokens: Record<string, number>) => void;
   onCancelPendingDiscard?: () => void;
+  chatMessages?: ChatMessage[];
+  onSendChat?: (message: string) => void;
 }
 
 export default function MobileGameBoard({
@@ -32,10 +36,14 @@ export default function MobileGameBoard({
   onBuyCard,
   onDiscardTokens,
   onCancelPendingDiscard,
+  chatMessages = [],
+  onSendChat,
 }: MobileGameBoardProps) {
   const [activeTab, setActiveTab] = useState<MobileTab>('board');
   const [showTokenSelector, setShowTokenSelector] = useState(false);
   const [selectedTokens, setSelectedTokens] = useState<TokenColor[]>([]);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const lastSeenChatCountRef = useRef(0);
 
   const currentPlayer = gameState.players[gameState.current_player_index];
   const isMyTurn = currentPlayer?.id === myUserId;
@@ -91,6 +99,21 @@ export default function MobileGameBoard({
   }, [activeTab, hasAffordableReserved]);
   
   const shouldFlashMeTab = hasAffordableReserved && !hasSeenAffordable;
+
+  // Track unread chat messages
+  useEffect(() => {
+    if (activeTab === 'chat') {
+      // Reset unread count when viewing chat
+      setUnreadChatCount(0);
+      lastSeenChatCountRef.current = chatMessages.length;
+    } else {
+      // Count new messages since last seen
+      const newMessages = chatMessages.length - lastSeenChatCountRef.current;
+      if (newMessages > 0) {
+        setUnreadChatCount(newMessages);
+      }
+    }
+  }, [activeTab, chatMessages.length, chatMessages]);
 
   // Token selection logic
   const hasTwoSameColor = selectedTokens.length === 2 && selectedTokens[0] === selectedTokens[1];
@@ -180,6 +203,17 @@ export default function MobileGameBoard({
             noblesData={nobles_data}
           />
         )}
+
+        {activeTab === 'chat' && onSendChat && (
+          <GameChat
+            messages={chatMessages}
+            onSendMessage={onSendChat}
+            myUserId={myUserId}
+            isOpen={true}
+            onClose={() => setActiveTab('board')}
+            compact
+          />
+        )}
       </div>
 
       {/* Bottom Navigation */}
@@ -188,6 +222,8 @@ export default function MobileGameBoard({
         onTabChange={setActiveTab}
         opponentCount={opponents.length}
         flashMeTab={shouldFlashMeTab}
+        showChat={!!onSendChat}
+        unreadChatCount={unreadChatCount}
       />
 
       {/* Token Selector Modal */}

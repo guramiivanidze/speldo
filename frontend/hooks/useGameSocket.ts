@@ -15,11 +15,19 @@ export interface PauseEvent {
   rejoinedUsername?: string;
 }
 
+export interface ChatMessage {
+  user_id: number;
+  username: string;
+  message: string;
+  timestamp: string;
+}
+
 export function useGameSocket(gameCode: string | null) {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [pauseEvent, setPauseEvent] = useState<PauseEvent | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -84,6 +92,21 @@ export function useGameSocket(gameCode: string | null) {
             type: 'player_left_waiting',
             leftUserId: msg.user_id,
             leftUsername: msg.username,
+          });
+        } else if (msg.type === 'chat_message') {
+          // Deduplicate messages by checking timestamp + user_id + message
+          setChatMessages(prev => {
+            const msgKey = `${msg.timestamp}-${msg.user_id}-${msg.message}`;
+            const isDuplicate = prev.some(
+              m => `${m.timestamp}-${m.user_id}-${m.message}` === msgKey
+            );
+            if (isDuplicate) return prev;
+            return [...prev, {
+              user_id: msg.user_id,
+              username: msg.username,
+              message: msg.message,
+              timestamp: msg.timestamp,
+            }];
           });
         }
       };
@@ -198,11 +221,17 @@ export function useGameSocket(gameCode: string | null) {
     sendAction('refresh_state', {});
   }, [sendAction]);
 
+  // Send chat message
+  const sendChat = useCallback((message: string) => {
+    sendAction('chat_message', { message });
+  }, [sendAction]);
+
   return {
     gameState,
     error,
     connected,
     pauseEvent,
+    chatMessages,
     takeTokens,
     discardTokens,
     reserveCard,
@@ -212,7 +241,9 @@ export function useGameSocket(gameCode: string | null) {
     voteResponse,
     cancelPendingDiscard,
     refreshState,
+    sendChat,
     clearError: () => setError(null),
     clearPauseEvent: () => setPauseEvent(null),
+    clearChat: () => setChatMessages([]),
   };
 }
