@@ -55,11 +55,12 @@ export interface GameState {
 }
 
 export interface WebSocketMessage {
-  type: 'game_state' | 'error' | 'player_left_survey' | 'game_resumed' | 'player_rejoined' | 'game_ended_by_vote' | 'game_ended_all_left' | 'all_voted_wait' | 'pause_timeout_ended' | 'waiting_room_closed' | 'player_left_waiting';
+  type: 'game_state' | 'error' | 'player_left_survey' | 'game_resumed' | 'player_rejoined' | 'game_ended_by_vote' | 'game_ended_all_left' | 'all_voted_wait' | 'pause_timeout_ended' | 'waiting_room_closed' | 'player_left_waiting' | 'chat_message';
   state?: GameState;
   message?: string;
   left_user_id?: number;
   left_username?: string;
   user_id?: number;
   username?: string;
+  timestamp?: string;
 }

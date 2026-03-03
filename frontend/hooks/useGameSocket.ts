@@ -95,17 +95,21 @@ export function useGameSocket(gameCode: string | null) {
           });
         } else if (msg.type === 'chat_message') {
           // Deduplicate messages by checking timestamp + user_id + message
+          const userId = msg.user_id!;
+          const username = msg.username!;
+          const message = msg.message!;
+          const timestamp = msg.timestamp!;
           setChatMessages(prev => {
-            const msgKey = `${msg.timestamp}-${msg.user_id}-${msg.message}`;
+            const msgKey = `${timestamp}-${userId}-${message}`;
             const isDuplicate = prev.some(
               m => `${m.timestamp}-${m.user_id}-${m.message}` === msgKey
             );
             if (isDuplicate) return prev;
             return [...prev, {
-              user_id: msg.user_id,
-              username: msg.username,
-              message: msg.message,
-              timestamp: msg.timestamp,
+              user_id: userId,
+              username,
+              message,
+              timestamp,
             }];
           });
         }
