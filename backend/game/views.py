@@ -105,6 +105,17 @@ class GameStartView(APIView):
         if len(players) < 2:
             return Response({'error': 'Need at least 2 players.'}, status=400)
 
+        # Shuffle player order randomly so the first player is chosen randomly
+        random.shuffle(players)
+        # First, set all orders to temporary negative values to avoid unique constraint
+        for i, player in enumerate(players):
+            player.order = -(i + 1)
+            player.save()
+        # Now assign the final shuffled order
+        for new_order, player in enumerate(players):
+            player.order = new_order
+            player.save()
+
         player_count = len(players)
         bank = initial_bank(player_count)
         decks, visible, nobles = initial_decks_and_nobles(player_count)
@@ -113,7 +124,7 @@ class GameStartView(APIView):
         game.decks = decks
         game.visible_cards = visible
         game.available_nobles = nobles
-        game.current_player_index = random.randint(0, player_count - 1)
+        game.current_player_index = 0  # First player in shuffled order always starts
         game.status = Game.STATUS_PLAYING
         game.save()
 

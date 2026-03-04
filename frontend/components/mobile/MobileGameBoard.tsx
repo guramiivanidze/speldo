@@ -202,9 +202,9 @@ export default function MobileGameBoard({
     <div className="h-full w-full flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pt-4">
       {/* Turn Banner */}
       <MobileTurnBanner
-        isMyTurn={isMyTurn}
-        currentPlayerName={currentPlayer?.username || 'Unknown'}
-        myUsername={me?.username || 'You'}
+        players={gameState.players}
+        currentPlayerIndex={gameState.current_player_index}
+        myUserId={myUserId}
       />
 
       {/* Main Content Area */}
