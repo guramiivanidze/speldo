@@ -138,7 +138,7 @@ export default function MobileTokenSelector({
       )}
 
       {/* Token grid */}
-      <div className="flex-1 flex items-center justify-center p-4">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 gap-4">
         <div className="grid grid-cols-3 gap-4">
           {GEM_COLORS.map((color) => {
             const count = tokensInBank[color] ?? 0;
@@ -189,6 +189,20 @@ export default function MobileTokenSelector({
               </button>
             );
           })}
+        </div>
+        
+        {/* Gold token display */}
+        <div className="flex items-center gap-3 px-1 py-2 rounded-xl bg-slate-800/60 border border-white/10">
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-lg font-black shadow-lg text-slate-900"
+            style={{ background: TOKEN_GRADIENT.gold }}
+          >
+            {tokensInBank.gold ?? 0}
+          </div>
+          <div className="text-sm">
+            <div className="text-amber-400 font-semibold">Gold Tokens</div>
+            <div className="text-slate-500 text-xs">Received when reserving cards</div>
+          </div>
         </div>
       </div>
 
