@@ -98,9 +98,9 @@ function ProfileContent() {
     async function loadData() {
       try {
         const [profileData, matchesData, casualStatsData] = await Promise.all([
-          getMyProfile(),
-          getMatchHistory(1, 10),
-          getCasualStats(),
+          getMyProfile().catch(() => null),
+          getMatchHistory(1, 10).catch(() => ({ matches: [] })),
+          getCasualStats().catch(() => null),
         ]);
         setProfile(profileData);
         setMatches(matchesData.matches || []);

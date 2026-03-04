@@ -428,6 +428,10 @@ export async function getLeaderboardByDivision(division: string) {
   return apiFetch(`/api/competitive/leaderboard/${division.toLowerCase()}/`);
 }
 
+export async function getCasualLeaderboard(page = 1, perPage = 50) {
+  return apiFetch(`/api/games/casual-leaderboard/?page=${page}&per_page=${perPage}`);
+}
+
 export async function joinMatchmaking() {
   return apiFetch('/api/competitive/matchmaking/join/', { method: 'POST' });
 }

@@ -111,8 +111,8 @@ export default function GameModeSelection({ onCasualClick }: GameModeSelectionPr
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* Player Rating Card */}
-      {profile && (
+      {/* Player Rating Card - Only show if season exists */}
+      {profile && season && (
         <div className="glass rounded-2xl p-6 mb-8 border border-white/10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -164,7 +164,7 @@ export default function GameModeSelection({ onCasualClick }: GameModeSelectionPr
       )}
 
       {/* Game Mode Buttons */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className={`grid gap-4 ${season ? 'grid-cols-1 md:grid-cols-2' : ''}`}>
         {/* Casual Match */}
         <button
           onClick={handleCasualClick}
@@ -189,91 +189,86 @@ export default function GameModeSelection({ onCasualClick }: GameModeSelectionPr
           )}
         </button>
 
-        {/* Ranked Match */}
-        <button
-          onClick={handleRankedClick}
-          disabled={!season || !connected}
-          className={`
-            group relative overflow-hidden
-            rounded-2xl p-6 transition-all duration-300
-            border
-            ${status?.in_queue 
-              ? 'bg-red-900/30 border-red-500/50 hover:bg-red-900/40' 
-              : 'bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border-indigo-500/30 hover:border-indigo-400/50'
-            }
-            disabled:opacity-50 disabled:cursor-not-allowed
-          `}
-        >
-          {/* Animated background for searching */}
-          {status?.in_queue && (
-            <div className="absolute inset-0 opacity-20">
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-indigo-500 to-transparent animate-pulse" />
-            </div>
-          )}
-          
-          <div className="relative">
-            <div className="text-4xl mb-3">⚔️</div>
-            <h3 className="text-xl font-bold text-slate-100 mb-2 flex items-center justify-center gap-2">
-              Ranked Match
-              <span className="text-xs bg-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full">
-                COMPETITIVE
-              </span>
-            </h3>
-            
-            {status?.in_queue ? (
-              <div className="text-sm text-slate-300">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                  Searching for {(status.player_count || 2) - 1} opponent{(status.player_count || 2) > 2 ? 's' : ''}...
-                </div>
-                
-                {/* Lobby Players */}
-                {status.lobby_players && status.lobby_players.length > 0 && (
-                  <div className="flex flex-wrap justify-center gap-1 mb-2">
-                    {status.lobby_players.map((player, idx) => (
-                      <span key={idx} className="text-xs bg-slate-700/50 px-2 py-0.5 rounded-full text-slate-200">
-                        {player.username}
-                      </span>
-                    ))}
-                    {Array.from({ length: (status.player_count || 2) - (status.lobby_players?.length || 1) }).map((_, idx) => (
-                      <span key={`empty-${idx}`} className="text-xs bg-slate-800/30 px-2 py-0.5 rounded-full text-slate-500 border border-dashed border-slate-600">
-                        ?
-                      </span>
-                    ))}
-                  </div>
-                )}
-                
-                <div className="text-xs text-slate-400">
-                  {status.wait_time_seconds !== undefined && (
-                    <span>{Math.floor(status.wait_time_seconds)}s • </span>
-                  )}
-                  {status.search_range !== undefined && (
-                    <span>±{status.search_range} rating</span>
-                  )}
-                </div>
-                <div className="text-xs text-red-300 mt-2">Click to cancel</div>
+        {/* Ranked Match - Only show if season exists */}
+        {season && (
+          <button
+            onClick={handleRankedClick}
+            disabled={!connected}
+            className={`
+              group relative overflow-hidden
+              rounded-2xl p-6 transition-all duration-300
+              border
+              ${status?.in_queue 
+                ? 'bg-red-900/30 border-red-500/50 hover:bg-red-900/40' 
+                : 'bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border-indigo-500/30 hover:border-indigo-400/50'
+              }
+              disabled:opacity-50 disabled:cursor-not-allowed
+            `}
+          >
+            {/* Animated background for searching */}
+            {status?.in_queue && (
+              <div className="absolute inset-0 opacity-20">
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-indigo-500 to-transparent animate-pulse" />
               </div>
-            ) : (
-              <p className="text-sm text-slate-400">
-                Compete for rating and climb the ranks!
-              </p>
             )}
-          </div>
-
-          {/* Not connected warning */}
-          {!connected && (
-            <div className="absolute inset-0 bg-slate-900/80 flex items-center justify-center rounded-2xl">
-              <div className="text-sm text-slate-400">Connecting...</div>
+            
+            <div className="relative">
+              <div className="text-4xl mb-3">⚔️</div>
+              <h3 className="text-xl font-bold text-slate-100 mb-2 flex items-center justify-center gap-2">
+                Ranked Match
+                <span className="text-xs bg-indigo-500/30 text-indigo-300 px-2 py-0.5 rounded-full">
+                  COMPETITIVE
+                </span>
+              </h3>
+              
+              {status?.in_queue ? (
+                <div className="text-sm text-slate-300">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                    Searching for {(status.player_count || 2) - 1} opponent{(status.player_count || 2) > 2 ? 's' : ''}...
+                  </div>
+                  
+                  {/* Lobby Players */}
+                  {status.lobby_players && status.lobby_players.length > 0 && (
+                    <div className="flex flex-wrap justify-center gap-1 mb-2">
+                      {status.lobby_players.map((player, idx) => (
+                        <span key={idx} className="text-xs bg-slate-700/50 px-2 py-0.5 rounded-full text-slate-200">
+                          {player.username}
+                        </span>
+                      ))}
+                      {Array.from({ length: (status.player_count || 2) - (status.lobby_players?.length || 1) }).map((_, idx) => (
+                        <span key={`empty-${idx}`} className="text-xs bg-slate-800/30 px-2 py-0.5 rounded-full text-slate-500 border border-dashed border-slate-600">
+                          ?
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  
+                  <div className="text-xs text-slate-400">
+                    {status.wait_time_seconds !== undefined && (
+                      <span>{Math.floor(status.wait_time_seconds)}s • </span>
+                    )}
+                    {status.search_range !== undefined && (
+                      <span>±{status.search_range} rating</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-red-300 mt-2">Click to cancel</div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">
+                  Compete for rating and climb the ranks!
+                </p>
+              )}
             </div>
-          )}
 
-          {/* No season warning */}
-          {!season && connected && (
-            <div className="absolute inset-0 bg-slate-900/80 flex items-center justify-center rounded-2xl">
-              <div className="text-sm text-slate-400">No active season</div>
-            </div>
-          )}
-        </button>
+            {/* Not connected warning */}
+            {!connected && (
+              <div className="absolute inset-0 bg-slate-900/80 flex items-center justify-center rounded-2xl">
+                <div className="text-sm text-slate-400">Connecting...</div>
+              </div>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Error display */}

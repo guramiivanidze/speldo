@@ -640,3 +640,59 @@ class PendingGameInvitationsView(APIView):
             'invitations': valid_invitations,
             'count': len(valid_invitations),
         })
+
+
+class CasualLeaderboardView(APIView):
+    """Get casual game leaderboard - top players by wins."""
+    permission_classes = []  # Public endpoint
+    
+    def get(self, request):
+        from django.contrib.auth import get_user_model
+        from django.db.models import Count, Q
+        
+        User = get_user_model()
+        
+        page = int(request.query_params.get('page', 1))
+        per_page = int(request.query_params.get('per_page', 50))
+        offset = (page - 1) * per_page
+        
+        # Get users with their casual game stats
+        # Casual games are games without a ranked_match
+        users_with_stats = User.objects.annotate(
+            casual_games=Count(
+                'gameplayer__game',
+                filter=Q(
+                    gameplayer__game__status=Game.STATUS_FINISHED,
+                    gameplayer__game__ranked_match__isnull=True
+                ),
+                distinct=True
+            ),
+            casual_wins=Count(
+                'won_games',
+                filter=Q(
+                    won_games__ranked_match__isnull=True
+                )
+            )
+        ).filter(
+            casual_games__gt=0  # Only users who have played at least one casual game
+        ).order_by('-casual_wins', '-casual_games')  # Order by wins, then games played
+        
+        total = users_with_stats.count()
+        leaderboard = users_with_stats[offset:offset + per_page]
+        
+        entries = []
+        for rank, user in enumerate(leaderboard, start=offset + 1):
+            entries.append({
+                'rank': rank,
+                'username': user.username,
+                'games': user.casual_games,
+                'wins': user.casual_wins,
+                'losses': user.casual_games - user.casual_wins,
+            })
+        
+        return Response({
+            'entries': entries,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+        })

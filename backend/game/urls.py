@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     GameListCreateView, GameJoinView,
     GameStartView, GameStateView, MyGamesView,
-    GameHistoryView, UserGameHistoryView, CasualStatsView,
+    GameHistoryView, UserGameHistoryView, CasualStatsView, CasualLeaderboardView,
     GameFriendsListView, SendGameInvitationView, 
     RespondGameInvitationView, PendingGameInvitationsView,
 )
@@ -12,6 +12,7 @@ urlpatterns = [
     path('games/mine/', MyGamesView.as_view(), name='my-games'),
     path('games/history/', UserGameHistoryView.as_view(), name='user-game-history'),
     path('games/casual-stats/', CasualStatsView.as_view(), name='casual-stats'),
+    path('games/casual-leaderboard/', CasualLeaderboardView.as_view(), name='casual-leaderboard'),
     path('games/invitations/', PendingGameInvitationsView.as_view(), name='pending-game-invitations'),
     path('games/<str:code>/join/', GameJoinView.as_view(), name='game-join'),
     path('games/<str:code>/start/', GameStartView.as_view(), name='game-start'),
