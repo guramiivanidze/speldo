@@ -643,7 +643,7 @@ class PendingGameInvitationsView(APIView):
 
 
 class CasualLeaderboardView(APIView):
-    """Get casual game leaderboard - top players by wins."""
+    """Get casual game leaderboard - top 50 players by wins."""
     permission_classes = []  # Public endpoint
     
     def get(self, request):
@@ -651,10 +651,6 @@ class CasualLeaderboardView(APIView):
         from django.db.models import Count, Q
         
         User = get_user_model()
-        
-        page = int(request.query_params.get('page', 1))
-        per_page = int(request.query_params.get('per_page', 50))
-        offset = (page - 1) * per_page
         
         # Get users with their casual game stats
         # Casual games are games without a ranked_match
@@ -675,13 +671,10 @@ class CasualLeaderboardView(APIView):
             )
         ).filter(
             casual_games__gt=0  # Only users who have played at least one casual game
-        ).order_by('-casual_wins', '-casual_games')  # Order by wins, then games played
-        
-        total = users_with_stats.count()
-        leaderboard = users_with_stats[offset:offset + per_page]
+        ).order_by('-casual_wins', '-casual_games')[:50]  # Top 50 only
         
         entries = []
-        for rank, user in enumerate(leaderboard, start=offset + 1):
+        for rank, user in enumerate(users_with_stats, start=1):
             entries.append({
                 'rank': rank,
                 'username': user.username,
@@ -692,7 +685,5 @@ class CasualLeaderboardView(APIView):
         
         return Response({
             'entries': entries,
-            'total': total,
-            'page': page,
-            'per_page': per_page,
+            'total': len(entries),
         })

@@ -52,7 +52,7 @@ export default function LeaderboardPage() {
       setLoading(true);
       try {
         if (mode === 'casual') {
-          const data = await getCasualLeaderboard(page, perPage).catch(() => ({ entries: [], total: 0 }));
+          const data = await getCasualLeaderboard().catch(() => ({ entries: [], total: 0 }));
           setCasualEntries(data.entries || []);
           setTotal(data.total || 0);
         } else {
@@ -87,15 +87,19 @@ export default function LeaderboardPage() {
         </button>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-slate-100">Leaderboard</h1>
-            {season && (
+            <h1 className="text-3xl font-bold text-slate-100">
+              {mode === 'casual' ? 'Top 50 Casual Players' : 'Leaderboard'}
+            </h1>
+            {season && mode === 'ranked' && (
               <p className="text-sm text-slate-400 mt-1">{season.name}</p>
             )}
           </div>
-          <div className="text-right">
-            <div className="text-2xl font-bold text-indigo-400">{total}</div>
-            <div className="text-xs text-slate-400">Total Players</div>
-          </div>
+          {mode === 'ranked' && (
+            <div className="text-right">
+              <div className="text-2xl font-bold text-indigo-400">{total}</div>
+              <div className="text-xs text-slate-400">Total Players</div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -243,29 +247,6 @@ export default function LeaderboardPage() {
                   );
                 })}
               </div>
-
-              {/* Casual Pagination */}
-              {totalPages > 1 && (
-                <div className="flex justify-center items-center gap-4 px-6 py-4 border-t border-white/5">
-                  <button
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="px-3 py-1 rounded bg-slate-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-600 transition-colors"
-                  >
-                    Previous
-                  </button>
-                  <span className="text-sm text-slate-400">
-                    Page {page} of {totalPages}
-                  </span>
-                  <button
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="px-3 py-1 rounded bg-slate-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-600 transition-colors"
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
             </>
           )
         ) : entries.length === 0 ? (
