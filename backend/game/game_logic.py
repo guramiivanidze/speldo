@@ -352,11 +352,13 @@ def apply_reserve_card(game_data, player_data, card_id=None, level=None):
         found_level = None
         for lvl, cards in visible.items():
             if card_id in cards:
-                cards.remove(card_id)
+                idx = cards.index(card_id)
                 found_level = lvl
-                # refill
+                # Replace in-place to maintain card positions
                 if decks[lvl]:
-                    cards.append(decks[lvl].pop(0))
+                    cards[idx] = decks[lvl].pop(0)
+                else:
+                    cards.pop(idx)
                 visible[lvl] = cards
                 break
         if found_level is None:
@@ -423,9 +425,12 @@ def apply_buy_card(game_data, player_data, card_id):
     else:
         for lvl, cards in visible.items():
             if card_id in cards:
-                cards.remove(card_id)
+                idx = cards.index(card_id)
+                # Replace in-place to maintain card positions
                 if decks[lvl]:
-                    cards.append(decks[lvl].pop(0))
+                    cards[idx] = decks[lvl].pop(0)
+                else:
+                    cards.pop(idx)
                 visible[lvl] = cards
                 break
 

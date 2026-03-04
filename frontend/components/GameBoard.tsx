@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { GameState, GemColor, TokenColor } from '@/types/game';
 import CardDisplay from './CardDisplay';
 import NobleDisplay from './NobleDisplay';
@@ -40,6 +40,54 @@ export default function GameBoard({
 }: GameBoardProps) {
   const isMobile = useIsMobile();
   const [selectedTokens, setSelectedTokens] = useState<TokenColor[]>([]);
+
+  // Track the new card for animation (only for buy/reserve actions)
+  const prevTurnNumberRef = useRef<number>(0);
+  const [newCardId, setNewCardId] = useState<number | null>(null);
+
+  // Detect the new card when a card is bought or reserved (not for take_tokens)
+  useEffect(() => {
+    const currentTurn = gameState.total_turns || 0;
+    const lastAction = gameState.last_action;
+    
+    // Only animate for buy_card or reserve_card actions
+    if (currentTurn > prevTurnNumberRef.current && lastAction) {
+      const actionType = lastAction.type;
+      
+      // Only trigger animation for buy_card or reserve_card (from visible, not from deck/reserved)
+      if (actionType === 'buy_card' || actionType === 'reserve_card') {
+        const actionData = lastAction.data;
+        
+        // For reserve_card from deck, there's no new visible card (it goes to hand)
+        // For reserve_card from visible OR buy_card from visible, a new card appears
+        const fromDeck = actionData?.from_deck;
+        const fromReserved = actionData?.from_reserved;
+        
+        // Only animate if the card was taken from visible (triggers refill)
+        if (!fromDeck && !fromReserved) {
+          // The card_id in action data is the card that was bought/reserved
+          // We need to find what NEW card appeared in its place
+          // Since we replaced in-place, we can use the new_card_id if available
+          // Otherwise detect from visible_cards change
+          const newId = actionData?.new_card_id;
+          
+          if (newId) {
+            setNewCardId(newId);
+          }
+          // Clear the animation after it completes (match the 1.8s animation duration + buffer)
+          const timeout = setTimeout(() => {
+            setNewCardId(null);
+          }, 2000);
+          
+          prevTurnNumberRef.current = currentTurn;
+          return () => clearTimeout(timeout);
+        }
+      }
+    }
+    
+    // Update turn ref for non-animation actions
+    prevTurnNumberRef.current = currentTurn;
+  }, [gameState.total_turns, gameState.last_action]);
 
   // Render mobile layout
   if (isMobile) {
@@ -291,6 +339,7 @@ export default function GameBoard({
                     const card = cards_data[String(cardId)];
                     if (!card) return null;
                     const affordable = canAfford(cardId);
+                    const isNewCard = newCardId === cardId;
                     return (
                       <CardDisplay
                         key={cardId}
@@ -301,6 +350,7 @@ export default function GameBoard({
                         canReserve={isMyTurn && canReserveMore && gameState.status === 'playing'}
                         showActions={isMyTurn && gameState.status === 'playing'}
                         compact
+                        isNewCard={isNewCard}
                       />
                     );
                   })}

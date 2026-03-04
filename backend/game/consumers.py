@@ -100,6 +100,18 @@ def serialize_game_state(game, players):
     pending_discard = current_player_token_count > 10
     pending_discard_count = max(0, current_player_token_count - 10) if pending_discard else 0
 
+    # Get the last action for animations
+    last_action = None
+    last_action_obj = game.actions.order_by('-turn_number').first()
+    if last_action_obj:
+        last_action = {
+            'type': last_action_obj.action_type,
+            'player_id': last_action_obj.player.user.id,
+            'player_username': last_action_obj.player.user.username,
+            'turn_number': last_action_obj.turn_number,
+            'data': last_action_obj.action_data,
+        }
+
     return {
         'game_id': str(game.id),
         'code': game.code,
@@ -125,6 +137,8 @@ def serialize_game_state(game, players):
         # History info
         'total_turns': game.current_turn_number,
         'has_history': game.current_turn_number > 0,
+        # Last action for animations
+        'last_action': last_action,
     }
 
 
@@ -1111,6 +1125,19 @@ class GameConsumer(AsyncWebsocketConsumer):
                     # Determine if it came from deck or visible
                     from_deck = card_id is None
                     
+                    # Detect the new card that was drawn to replace the reserved card (only for visible cards)
+                    new_card_id = None
+                    if not from_deck:
+                        for lvl in ['1', '2', '3']:
+                            old_cards = game_data['visible_cards'].get(lvl, [])
+                            new_cards = new_gd['visible_cards'].get(lvl, [])
+                            for cid in new_cards:
+                                if cid not in old_cards:
+                                    new_card_id = cid
+                                    break
+                            if new_card_id:
+                                break
+                    
                     # Determine if gold was received
                     gold_before = player_data['tokens'].get('gold', 0)
                     gold_after = new_pd['tokens'].get('gold', 0)
@@ -1121,6 +1148,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                         'from_deck': from_deck,
                         'level': level if from_deck else None,
                         'gold_received': gold_received,
+                        'new_card_id': new_card_id,  # The new card drawn to replace the reserved card
                         'bank_gold_before': game_data['tokens_in_bank'].get('gold', 0),
                         'bank_gold_after': new_gd['tokens_in_bank'].get('gold', 0),
                     }
@@ -1142,6 +1170,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                             'gold_received': gold_received,
                             'level': card_level,
                             'from_deck': from_deck,
+                            'new_card_id': new_card_id,  # The new card drawn to replace the reserved card
                             'bank_gold_before': game_data['tokens_in_bank'].get('gold', 0),
                             'bank_gold_after': new_gd['tokens_in_bank'].get('gold', 0),
                         }
@@ -1196,6 +1225,20 @@ class GameConsumer(AsyncWebsocketConsumer):
                         logger.warning("[BUY_CARD] Game=%s User=%s | ERROR: %s", self.game_code, self.user.username, error)
                         return error
 
+                    # Detect the new card that was drawn to replace the bought card
+                    new_card_id = None
+                    if card_id not in player_data['reserved_card_ids']:
+                        # Card was from visible, find the new card that appeared
+                        for lvl in ['1', '2', '3']:
+                            old_cards = game_data['visible_cards'].get(lvl, [])
+                            new_cards = new_gd['visible_cards'].get(lvl, [])
+                            for cid in new_cards:
+                                if cid not in old_cards:
+                                    new_card_id = cid
+                                    break
+                            if new_card_id:
+                                break
+
                     # Log after buy (before noble check)
                     logger.info(
                         "[BUY_CARD] Game=%s User=%s | AFTER_BUY | PrestigePoints=%d | Bank=%s | PlayerTokens=%s (total=%d) | PurchasedCount=%d",
@@ -1238,6 +1281,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                         'from_reserved': from_reserved,
                         'tokens_spent': tokens_spent,
                         'noble_id': noble_visited_id,  # None if no noble was claimed
+                        'new_card_id': new_card_id,  # The new card drawn to replace the bought card
                         'player_tokens_before': player_data['tokens'].copy(),
                         'player_tokens_after': new_pd['tokens'].copy(),
                         'bank_before': game_data['tokens_in_bank'].copy(),

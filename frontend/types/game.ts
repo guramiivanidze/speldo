@@ -30,6 +30,23 @@ export interface PlayerState {
   is_online: boolean;
 }
 
+export interface LastAction {
+  type: 'take_tokens' | 'reserve_card' | 'buy_card' | 'noble_visit';
+  player_id: number;
+  player_username: string;
+  turn_number: number;
+  data: {
+    card_id?: number;
+    from_deck?: boolean;
+    from_reserved?: boolean;
+    level?: number;
+    colors?: string[];
+    noble_id?: number;
+    tokens_spent?: Record<string, number>;
+    new_card_id?: number;    // The card that replaced the bought/reserved one
+  };
+}
+
 export interface GameState {
   game_id: string;
   code: string;
@@ -52,6 +69,11 @@ export interface GameState {
   // Token discard state
   pending_discard: boolean;
   pending_discard_count: number;
+  // History info
+  total_turns: number;
+  has_history: boolean;
+  // Last action for animations
+  last_action: LastAction | null;
 }
 
 export interface WebSocketMessage {

@@ -39,6 +39,7 @@ interface MobileBoardViewProps {
     onReserveCard: (cardId?: number, level?: number) => void;
     onOpenTokenSelector: () => void;
     selectedTokens: TokenColor[];
+    newCardId?: number | null;  // The card that just appeared for animation
 }
 
 const ROMAN: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
@@ -59,6 +60,7 @@ export default function MobileBoardView({
     onReserveCard,
     onOpenTokenSelector,
     selectedTokens,
+    newCardId = null,
 }: MobileBoardViewProps) {
     const [zoomedCard, setZoomedCard] = useState<Card | null>(null);
     const [zoomedNoble, setZoomedNoble] = useState<Noble | null>(null);
@@ -206,6 +208,7 @@ export default function MobileBoardView({
                                 if (!card) return null;
                                 const affordable = canAfford(cardId);
                                 const cardImage = getImageUrl(card);
+                                const isNewCard = newCardId === cardId;
 
                                 return (
                                     <button
@@ -214,6 +217,7 @@ export default function MobileBoardView({
                       shrink-0 w-20 h-30 snap-start rounded-lg overflow-hidden relative
                       transition-transform active:scale-95
                       ${affordable ? 'ring-2 ring-emerald-400' : ''}
+                      ${isNewCard ? 'new-card-appear' : ''}
                     `}
                                         onClick={() => setZoomedCard(card)}
                                     >

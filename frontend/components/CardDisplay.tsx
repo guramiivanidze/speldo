@@ -16,6 +16,7 @@ interface CardDisplayProps {
   canReserve?: boolean;
   showActions?: boolean;
   compact?: boolean;
+  isNewCard?: boolean;  // Animate as newly appeared card
 }
 
 const ROMAN: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
@@ -43,6 +44,7 @@ export default function CardDisplay({
   canReserve = false,
   showActions = false,
   compact = false,
+  isNewCard = false,
 }: CardDisplayProps) {
   // Guard against missing card data
   const bonus = card.bonus || 'white';
@@ -60,6 +62,7 @@ export default function CardDisplay({
         dev-card group relative rounded-xl overflow-hidden
         h-full w-full
         ${canBuy ? 'afford-glow' : ''}
+        ${isNewCard ? 'new-card-appear' : ''}
         cursor-default shadow-lg
         hover:z-50 transition-transform hover:scale-[1.02]
       `}
