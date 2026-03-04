@@ -1,10 +1,12 @@
 'use client';
 
 import { TokenColor, GemColor } from '@/types/game';
-import { TOKEN_GRADIENT, TOKEN_LABEL, GEM_COLORS } from '@/lib/colors';
+import { TOKEN_GRADIENT, TOKEN_LABEL, GEM_COLORS, GEM_GRADIENT } from '@/lib/colors';
 
 interface MobileTokenSelectorProps {
   tokensInBank: Record<TokenColor, number>;
+  playerTokens?: Record<TokenColor, number>;
+  playerBonuses?: Record<GemColor, number>;
   selectedTokens: TokenColor[];
   onSelectToken: (color: TokenColor) => void;
   onConfirm: () => void;
@@ -15,6 +17,8 @@ interface MobileTokenSelectorProps {
 
 export default function MobileTokenSelector({
   tokensInBank,
+  playerTokens,
+  playerBonuses,
   selectedTokens,
   onSelectToken,
   onConfirm,
@@ -67,6 +71,69 @@ export default function MobileTokenSelector({
         <div className="px-4 py-2 bg-slate-800/50 text-xs text-slate-400">
           <p>• Take 3 different colors OR</p>
           <p>• Take 2 of same color (if 4+ available)</p>
+        </div>
+      )}
+
+      {/* My Gems */}
+      {playerTokens && (
+        <div className="px-4 py-3 border-b border-white/10">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-slate-300 font-medium">My Gems</span>
+            <span className="text-xs text-slate-500">
+              Total: {Object.values(playerTokens).reduce((a, b) => a + b, 0)}/10
+            </span>
+          </div>
+          <div className="flex gap-2 justify-center">
+            {GEM_COLORS.map((color) => {
+              const count = playerTokens[color] ?? 0;
+              return (
+                <div
+                  key={color}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shadow-md
+                    ${color === 'white' ? 'text-slate-800' : ''}
+                    ${count === 0 ? 'opacity-40' : ''}`}
+                  style={{ background: TOKEN_GRADIENT[color] }}
+                >
+                  {count}
+                </div>
+              );
+            })}
+            <div
+              className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shadow-md text-slate-900
+                ${(playerTokens.gold ?? 0) === 0 ? 'opacity-40' : ''}`}
+              style={{ background: TOKEN_GRADIENT.gold }}
+            >
+              {playerTokens.gold ?? 0}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* My Cards (Bonuses) */}
+      {playerBonuses && (
+        <div className="px-4 py-3 border-b border-white/10">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm text-slate-300 font-medium">My Cards</span>
+            <span className="text-xs text-slate-500">
+              Total: {Object.values(playerBonuses).reduce((a, b) => a + b, 0)} cards
+            </span>
+          </div>
+          <div className="flex gap-2 justify-center">
+            {GEM_COLORS.map((color) => {
+              const count = playerBonuses[color] ?? 0;
+              return (
+                <div
+                  key={color}
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold shadow-md border-2
+                    ${color === 'white' ? 'text-slate-800 border-slate-400' : 'border-white/20'}
+                    ${count === 0 ? 'opacity-40' : ''}`}
+                  style={{ background: GEM_GRADIENT[color] }}
+                >
+                  {count}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

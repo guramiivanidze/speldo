@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { GameState, GemColor, TokenColor } from '@/types/game';
 import { GEM_COLORS } from '@/lib/colors';
 import { ChatMessage } from '@/hooks/useGameSocket';
@@ -78,6 +78,19 @@ export default function MobileGameBoard({
 
   // Check if any reserved card is affordable
   const hasAffordableReserved = me?.reserved_card_ids.some((cid) => canAfford(cid)) ?? false;
+
+  // Compute player's card bonuses
+  const playerBonuses = useMemo(() => {
+    if (!me) return undefined;
+    const bonuses: Record<GemColor, number> = { white: 0, blue: 0, green: 0, red: 0, black: 0 };
+    for (const cid of me.purchased_card_ids) {
+      const c = cards_data[String(cid)];
+      if (c && c.bonus in bonuses) {
+        bonuses[c.bonus as GemColor] += 1;
+      }
+    }
+    return bonuses;
+  }, [me, cards_data]);
   
   // Track if user has seen the affordable reserved card (visited Me tab)
   const [hasSeenAffordable, setHasSeenAffordable] = useState(false);
@@ -301,6 +314,8 @@ export default function MobileGameBoard({
       {showTokenSelector && (
         <MobileTokenSelector
           tokensInBank={tokens_in_bank}
+          playerTokens={me?.tokens}
+          playerBonuses={playerBonuses}
           selectedTokens={selectedTokens}
           onSelectToken={handleTokenClick}
           onConfirm={handleConfirmTokens}
