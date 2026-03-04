@@ -727,7 +727,7 @@ export default function Home() {
                   <span className="font-medium">Profile</span>
                 </Link>
                 <Link
-                  href="/profile?tab=history"
+                  href="/profile?tab=games"
                   className="flex items-center gap-3 px-4 py-3 rounded-xl bg-slate-800/50 border border-slate-700/40 text-slate-200 hover:bg-slate-700/50 transition-colors"
                   onClick={() => setMobileMenuOpen(false)}
                 >

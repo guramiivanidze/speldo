@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   getMyProfile, getMatchHistory, getUserGameHistory, getCasualStats,
@@ -12,7 +12,6 @@ import {
 } from '@/lib/api';
 import { PlayerProfile, Match, DIVISION_CONFIG, DIVISION_THRESHOLDS, Division } from '@/types/competitive';
 import DivisionBadge from '@/components/DivisionBadge';
-import RatingDisplay from '@/components/RatingDisplay';
 
 interface GameHistoryItem {
   id: string;
@@ -32,17 +31,24 @@ interface GameHistoryItem {
   won: boolean;
 }
 
-export default function ProfilePage() {
+function ProfileContent() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [matches, setMatches] = useState<Match[]>([]);  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Tab state
-  const [activeTab, setActiveTab] = useState<'stats' | 'games' | 'friends' | 'settings'>('stats');
+  // Tab state - read initial value from URL params
+  const getInitialTab = (): 'stats' | 'games' | 'friends' | 'settings' => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'games' || tabParam === 'history') return 'games';
+    if (tabParam === 'friends') return 'friends';
+    if (tabParam === 'settings') return 'settings';
+    return 'stats';
+  };
+  const [activeTab, setActiveTab] = useState<'stats' | 'games' | 'friends' | 'settings'>(getInitialTab);
 
   // Game history state
   const [gameHistory, setGameHistory] = useState<GameHistoryItem[]>([]);
@@ -74,6 +80,14 @@ export default function ProfilePage() {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordChanging, setPasswordChanging] = useState(false);
+
+  // Sync tab with URL params on navigation
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'games' || tabParam === 'history') setActiveTab('games');
+    else if (tabParam === 'friends') setActiveTab('friends');
+    else if (tabParam === 'settings') setActiveTab('settings');
+  }, [searchParams]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -287,94 +301,88 @@ export default function ProfilePage() {
   return (
     <div className="max-w-4xl mx-auto">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-4">
         <button 
           onClick={() => router.push('/')}
-          className="text-slate-400 hover:text-slate-200 text-sm mb-4 inline-block"
+          className="text-slate-400 hover:text-slate-200 text-sm mb-2 inline-block"
         >
           ← Back
         </button>
-        <h1 className="text-3xl font-bold text-slate-100">Ranked Profile</h1>
+        <h1 className="text-2xl font-bold text-slate-100">Profile</h1>
       </div>
 
-      {/* Main Profile Card */}
-      <div className="glass rounded-2xl p-8 border border-white/10 mb-8">
-        <div className="flex flex-col md:flex-row items-center gap-8">
-          {/* Avatar & Division */}
-          <div className="flex flex-col items-center">
-            <div 
-              className="w-24 h-24 rounded-full flex items-center justify-center text-5xl mb-4"
-              style={{ 
-                backgroundColor: config.bgColor,
-                border: `3px solid ${config.color}`,
-              }}
-            >
-              {config.icon}
-            </div>
-            <DivisionBadge division={profile.division} size="lg" />
+      {/* Main Profile Card - Compact */}
+      <div className="glass rounded-xl p-4 border border-white/10 mb-4">
+        {/* Avatar & Username Row */}
+        <div className="flex items-center gap-3 mb-3">
+          <div 
+            className="w-12 h-12 rounded-full flex items-center justify-center text-xl flex-shrink-0"
+            style={{ 
+              backgroundColor: config.bgColor,
+              border: `2px solid ${config.color}`,
+            }}
+          >
+            {config.icon}
           </div>
-
-          {/* Stats */}
-          <div className="flex-1 text-center md:text-left">
-            <h2 className="text-2xl font-bold text-slate-100 mb-2">{profile.username}</h2>
-            
-            <RatingDisplay 
-              rating={profile.rating}
-              division={profile.division}
-              pointsToNext={profile.points_to_next_division}
-              nextDivision={profile.next_division}
-            />
+          <div>
+            <h2 className="text-lg font-bold text-slate-100">{profile.username}</h2>
+            <div className="flex items-center gap-2">
+              <DivisionBadge division={profile.division} size="sm" />
+              <span className="text-sm font-semibold" style={{ color: config.color }}>{profile.rating}</span>
+            </div>
           </div>
+        </div>
 
-          {/* Quick Stats */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-              <div className="text-2xl font-bold text-green-400">{profile.ranked_wins}</div>
-              <div className="text-xs text-slate-400">Ranked Wins</div>
-            </div>
-            <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-              <div className="text-2xl font-bold text-red-400">{profile.ranked_losses}</div>
-              <div className="text-xs text-slate-400">Ranked Losses</div>
-            </div>
-            <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-              <div className="text-2xl font-bold text-slate-100">{profile.win_rate}%</div>
-              <div className="text-xs text-slate-400">Ranked Win Rate</div>
-            </div>
-            <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-              <div className="text-2xl font-bold text-yellow-400">{profile.peak_rating}</div>
-              <div className="text-xs text-slate-400">Peak Rating</div>
-            </div>
+        {/* Stats Row */}
+        <div className="grid grid-cols-4 gap-2">
+          <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+            <div className="text-lg font-bold text-green-400">{profile.ranked_wins}</div>
+            <div className="text-[10px] text-slate-400">Wins</div>
+          </div>
+          <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+            <div className="text-lg font-bold text-red-400">{profile.ranked_losses}</div>
+            <div className="text-[10px] text-slate-400">Losses</div>
+          </div>
+          <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+            <div className="text-lg font-bold text-slate-100">{profile.win_rate}%</div>
+            <div className="text-[10px] text-slate-400">Win%</div>
+          </div>
+          <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+            <div className="text-lg font-bold text-yellow-400">{profile.peak_rating}</div>
+            <div className="text-[10px] text-slate-400">Peak</div>
           </div>
         </div>
       </div>
 
-      {/* Casual Stats Card */}
+      {/* Casual Stats Card - Compact */}
       {casualStats && (
-        <div className="glass rounded-2xl p-6 border border-white/10 mb-8">
-          <h3 className="text-lg font-semibold text-slate-100 mb-4">Casual Games</h3>
-          <div className="grid grid-cols-4 gap-4">
-            <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-              <div className="text-2xl font-bold text-indigo-400">{casualStats.total_games}</div>
-              <div className="text-xs text-slate-400">Games</div>
-            </div>
-            <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-              <div className="text-2xl font-bold text-green-400">{casualStats.wins}</div>
-              <div className="text-xs text-slate-400">Wins</div>
-            </div>
-            <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-              <div className="text-2xl font-bold text-red-400">{casualStats.losses}</div>
-              <div className="text-xs text-slate-400">Losses</div>
-            </div>
-            <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-              <div className="text-2xl font-bold text-slate-100">{casualStats.win_rate}%</div>
-              <div className="text-xs text-slate-400">Win Rate</div>
+        <div className="glass rounded-xl p-3 border border-white/10 mb-4">
+          <div className="flex items-center gap-3">
+            <h3 className="text-sm font-semibold text-slate-400">Casual</h3>
+            <div className="flex-1 grid grid-cols-4 gap-2">
+              <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                <div className="text-lg font-bold text-indigo-400">{casualStats.total_games}</div>
+                <div className="text-[10px] text-slate-400">Games</div>
+              </div>
+              <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                <div className="text-lg font-bold text-green-400">{casualStats.wins}</div>
+                <div className="text-[10px] text-slate-400">Wins</div>
+              </div>
+              <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                <div className="text-lg font-bold text-red-400">{casualStats.losses}</div>
+                <div className="text-[10px] text-slate-400">Losses</div>
+              </div>
+              <div className="bg-slate-800/50 rounded-lg p-2 text-center">
+                <div className="text-lg font-bold text-slate-100">{casualStats.win_rate}%</div>
+                <div className="text-[10px] text-slate-400">Win%</div>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {/* Tab Navigation */}
-      <div className="flex gap-2 mb-6 overflow-x-auto">
+      <div className="flex gap-2 mb-4 overflow-x-auto">
         {(['stats', 'games', 'friends', 'settings'] as const).map((tab) => (
           <button
             key={tab}
@@ -769,5 +777,13 @@ export default function ProfilePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="text-slate-400">Loading...</div></div>}>
+      <ProfileContent />
+    </Suspense>
   );
 }
