@@ -46,34 +46,29 @@ export default function GameBoard({
   const prevTurnNumberRef = useRef<number>(0);
   const [newCardId, setNewCardId] = useState<number | null>(null);
 
-  // Track action notification visibility (temporary, 7 seconds)
+  // Track action notification visibility (temporary, 3 seconds)
   const [showNotification, setShowNotification] = useState(false);
   const lastNotifiedTurnRef = useRef<number>(0);
-  const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Show notification when opponent makes a move
   useEffect(() => {
     const lastAction = gameState.last_action;
     if (lastAction && lastAction.turn_number > lastNotifiedTurnRef.current && lastAction.player_id !== myUserId) {
       lastNotifiedTurnRef.current = lastAction.turn_number;
       setShowNotification(true);
-      
-      // Clear any existing timeout
-      if (notificationTimeoutRef.current) {
-        clearTimeout(notificationTimeoutRef.current);
-      }
-      
-      notificationTimeoutRef.current = setTimeout(() => {
-        setShowNotification(false);
-        notificationTimeoutRef.current = null;
-      }, 3000);
     }
-    
-    return () => {
-      if (notificationTimeoutRef.current) {
-        clearTimeout(notificationTimeoutRef.current);
-      }
-    };
   }, [gameState.last_action?.turn_number, gameState.last_action?.player_id, myUserId]);
+
+  // Auto-hide notification after 3 seconds
+  useEffect(() => {
+    if (!showNotification) return;
+    
+    const timeout = setTimeout(() => {
+      setShowNotification(false);
+    }, 3000);
+    
+    return () => clearTimeout(timeout);
+  }, [showNotification]);
 
   // Detect the new card when a card is bought or reserved (not for take_tokens)
   useEffect(() => {

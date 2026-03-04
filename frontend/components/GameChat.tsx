@@ -6,6 +6,7 @@ import { ChatMessage } from '@/hooks/useGameSocket';
 const QUICK_PHRASES = [
   { emoji: '🍀', text: 'ოოოეე მალეეეე' },
   { emoji: '👏', text: 'აი ეს აიღე ეს' },
+  { emoji: '👏', text: 'სამამულო ომია ?' },
   { emoji: '🎯', text: 'ეს დაარეზერვე აი ეს' },
   { emoji: '🙏', text: '2 წრეც და მუხლებზე ხართ' },
 ];
