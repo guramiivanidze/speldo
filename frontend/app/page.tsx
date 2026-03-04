@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { register, login, logout, createGame, joinGame, getMyGames, getMyProfile, getCurrentSeason, sendVerificationCode, getAuthConfig, getFriendsWithStats, sendFriendRequest, type FriendWithStats } from '@/lib/api';
+import { register, login, logout, createGame, joinGame, getMyGames, getMyProfile, getCurrentSeason, sendVerificationCode, getAuthConfig, getFriendsWithStats, sendFriendRequest, getPendingFriendRequests, respondToFriendRequest, type FriendWithStats, type FriendRequest } from '@/lib/api';
 import { useMatchmaking } from '@/hooks/useMatchmaking';
 import type { PlayerProfile, Season } from '@/types/competitive';
 import DivisionBadge from '@/components/DivisionBadge';
@@ -58,10 +58,12 @@ export default function Home() {
   
   // Friends state
   const [friends, setFriends] = useState<FriendWithStats[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<FriendRequest[]>([]);
   const [friendNickname, setFriendNickname] = useState('');
   const [friendRequestLoading, setFriendRequestLoading] = useState(false);
   const [friendRequestError, setFriendRequestError] = useState<string | null>(null);
   const [friendRequestSuccess, setFriendRequestSuccess] = useState<string | null>(null);
+  const [respondingTo, setRespondingTo] = useState<number | null>(null);
   
   // Mobile menu state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -88,16 +90,18 @@ export default function Home() {
   async function fetchAllUserData() {
     try {
       // Batch all user data requests in parallel
-      const [games, profile, season, friendsData] = await Promise.all([
+      const [games, profile, season, friendsData, requestsData] = await Promise.all([
         getMyGames().catch(() => []),
         getMyProfile().catch(() => null),
         getCurrentSeason().catch(() => null),
-        getFriendsWithStats().catch(() => ({ friends: [] }))
+        getFriendsWithStats().catch(() => ({ friends: [] })),
+        getPendingFriendRequests(true).catch(() => ({ requests: [] }))
       ]);
       setMyGames(games);
       setRankedProfile(profile);
       setCurrentSeason(season);
       setFriends(friendsData.friends || []);
+      setPendingRequests(requestsData.requests || []);
     } catch { /* ignore */ }
   }
   
@@ -115,6 +119,24 @@ export default function Home() {
       setFriendRequestError(err instanceof Error ? err.message : 'Failed to send request');
     } finally {
       setFriendRequestLoading(false);
+    }
+  }
+
+  async function handleRespondToFriendRequest(requestId: number, action: 'accept' | 'reject') {
+    setRespondingTo(requestId);
+    try {
+      await respondToFriendRequest(requestId, action);
+      // Remove from pending list
+      setPendingRequests(prev => prev.filter(r => r.id !== requestId));
+      // If accepted, refresh friends list
+      if (action === 'accept') {
+        const friendsData = await getFriendsWithStats();
+        setFriends(friendsData.friends || []);
+      }
+    } catch (err) {
+      console.error('Failed to respond to friend request:', err);
+    } finally {
+      setRespondingTo(null);
     }
   }
 
@@ -808,6 +830,45 @@ export default function Home() {
                   )}
                 </div>
 
+                {/* Pending friend requests */}
+                {pendingRequests.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs text-slate-400 mb-2">Friend Requests ({pendingRequests.length})</p>
+                    <div className="space-y-2">
+                      {pendingRequests.map((request) => (
+                        <div
+                          key={request.id}
+                          className="flex items-center justify-between px-3 py-2 rounded-lg bg-indigo-900/30 border border-indigo-700/40"
+                        >
+                          <span className="text-sm font-medium text-slate-200 truncate">{request.from_username}</span>
+                          <div className="flex gap-1.5 shrink-0">
+                            <button
+                              onClick={() => handleRespondToFriendRequest(request.id, 'accept')}
+                              disabled={respondingTo === request.id}
+                              className="p-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white transition-all disabled:opacity-50"
+                              title="Accept"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleRespondToFriendRequest(request.id, 'reject')}
+                              disabled={respondingTo === request.id}
+                              className="p-1.5 rounded bg-red-600 hover:bg-red-500 text-white transition-all disabled:opacity-50"
+                              title="Reject"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Friends list */}
                 {friends.length > 0 ? (
                   <div className="space-y-2">
@@ -1230,6 +1291,45 @@ export default function Home() {
               <p className="text-emerald-400 text-xs mt-1.5">{friendRequestSuccess}</p>
             )}
           </div>
+
+          {/* Pending friend requests */}
+          {pendingRequests.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs text-slate-400 mb-2">Friend Requests ({pendingRequests.length})</p>
+              <div className="space-y-2">
+                {pendingRequests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-indigo-900/30 border border-indigo-700/40"
+                  >
+                    <span className="text-sm font-medium text-slate-200 truncate">{request.from_username}</span>
+                    <div className="flex gap-1.5 shrink-0">
+                      <button
+                        onClick={() => handleRespondToFriendRequest(request.id, 'accept')}
+                        disabled={respondingTo === request.id}
+                        className="p-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white transition-all disabled:opacity-50"
+                        title="Accept"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleRespondToFriendRequest(request.id, 'reject')}
+                        disabled={respondingTo === request.id}
+                        className="p-1.5 rounded bg-red-600 hover:bg-red-500 text-white transition-all disabled:opacity-50"
+                        title="Reject"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Friends list */}
           {friends.length > 0 ? (

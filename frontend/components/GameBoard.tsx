@@ -65,7 +65,7 @@ export default function GameBoard({
       notificationTimeoutRef.current = setTimeout(() => {
         setShowNotification(false);
         notificationTimeoutRef.current = null;
-      }, 7000);
+      }, 3000);
     }
     
     return () => {
@@ -379,6 +379,7 @@ export default function GameBoard({
                         canBuy={isMyTurn && affordable && gameState.status === 'playing'}
                         canReserve={isMyTurn && canReserveMore && gameState.status === 'playing'}
                         showActions={isMyTurn && gameState.status === 'playing'}
+                        isAffordable={affordable}
                         compact
                         isNewCard={isNewCard}
                       />
@@ -438,13 +439,8 @@ export default function GameBoard({
         {/* Bottom-left corner */}
         <div />
 
-        {/* Bottom - Action Notification + My Player Area */}
+        {/* Bottom - My Player Area */}
         <div className="flex flex-col items-center gap-1">
-          {/* Action Notification - temporary, 7 seconds */}
-          {showNotification && gameState.last_action && (
-            <ActionNotification lastAction={gameState.last_action} myUserId={myUserId} />
-          )}
-          
           {me && (
             <div className="w-full max-w-3xl">
               <PlayerArea
@@ -475,6 +471,11 @@ export default function GameBoard({
           onDiscard={onDiscardTokens}
           onCancel={onCancelPendingDiscard}
         />
+      )}
+
+      {/* Action Notification Toast - fixed position, doesn't affect layout */}
+      {showNotification && gameState.last_action && (
+        <ActionNotification lastAction={gameState.last_action} myUserId={myUserId} />
       )}
     </div>
   );

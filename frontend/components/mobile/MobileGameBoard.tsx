@@ -124,7 +124,7 @@ export default function MobileGameBoard({
       notificationTimeoutRef.current = setTimeout(() => {
         setShowNotification(false);
         notificationTimeoutRef.current = null;
-      }, 7000);
+      }, 3000);
     }
     
     return () => {
@@ -237,13 +237,6 @@ export default function MobileGameBoard({
         myUserId={myUserId}
       />
 
-      {/* Action Notification - temporary, 7 seconds */}
-      {showNotification && gameState.last_action && (
-        <div className="px-2 py-1">
-          <ActionNotification lastAction={gameState.last_action} myUserId={myUserId} />
-        </div>
-      )}
-
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {activeTab === 'board' && (
@@ -329,6 +322,11 @@ export default function MobileGameBoard({
           onDiscard={onDiscardTokens}
           onCancel={onCancelPendingDiscard}
         />
+      )}
+
+      {/* Action Notification Toast - fixed position, doesn't affect layout */}
+      {showNotification && gameState.last_action && (
+        <ActionNotification lastAction={gameState.last_action} myUserId={myUserId} />
       )}
     </div>
   );

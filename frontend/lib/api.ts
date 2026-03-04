@@ -327,20 +327,26 @@ export async function getPendingFriendRequests(forceRefresh = false): Promise<{ 
     return friendRequestsCache.data;
   }
   
-  // If a request is already in flight, wait for it
-  if (friendRequestsPromise) {
+  // If a request is already in flight and we're not forcing refresh, wait for it
+  if (!forceRefresh && friendRequestsPromise) {
     return friendRequestsPromise;
   }
   
-  friendRequestsPromise = (async () => {
-    try {
-      const data = await apiFetch('/api/auth/friend-requests/');
-      friendRequestsCache = { data, expires: Date.now() + 10000 }; // 10 second cache
-      return data;
-    } finally {
-      friendRequestsPromise = null;
-    }
-  })();
+  const fetchData = async (): Promise<{ requests: FriendRequest[]; count: number }> => {
+    const data = await apiFetch('/api/auth/friend-requests/');
+    friendRequestsCache = { data, expires: Date.now() + 10000 }; // 10 second cache
+    return data;
+  };
+  
+  // For forceRefresh, always make a fresh request
+  if (forceRefresh) {
+    return fetchData();
+  }
+  
+  // Otherwise, dedupe with in-flight promise
+  friendRequestsPromise = fetchData().finally(() => {
+    friendRequestsPromise = null;
+  });
   
   return friendRequestsPromise;
 }

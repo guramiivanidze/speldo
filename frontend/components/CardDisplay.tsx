@@ -17,6 +17,7 @@ interface CardDisplayProps {
   showActions?: boolean;
   compact?: boolean;
   isNewCard?: boolean;  // Animate as newly appeared card
+  isAffordable?: boolean;  // Show affordability border (regardless of turn)
 }
 
 const ROMAN: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
@@ -45,6 +46,7 @@ export default function CardDisplay({
   showActions = false,
   compact = false,
   isNewCard = false,
+  isAffordable = false,
 }: CardDisplayProps) {
   // Guard against missing card data
   const bonus = card.bonus || 'white';
@@ -61,7 +63,7 @@ export default function CardDisplay({
       className={`
         dev-card group relative rounded-xl overflow-hidden
         h-full w-full
-        ${canBuy ? 'afford-glow' : ''}
+        ${isAffordable || canBuy ? 'afford-glow' : ''}
         ${isNewCard ? 'new-card-appear' : ''}
         cursor-default shadow-lg
         hover:z-50 transition-transform hover:scale-[1.02]

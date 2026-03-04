@@ -4,25 +4,29 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useGameHeader } from '@/contexts/GameHeaderContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { getPendingFriendRequests, logout } from '@/lib/api';
+import { getPendingFriendRequests, logout, type FriendRequest } from '@/lib/api';
+import FriendRequestsModal from './FriendRequestsModal';
 
 export default function Header() {
   const { headerState } = useGameHeader();
   const { showLeaveButton, gameCode, connected, onLeaveGame } = headerState;
   const { user, clearAuth } = useAuth();
-  const [friendRequestCount, setFriendRequestCount] = useState(0);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [showFriendRequestsModal, setShowFriendRequestsModal] = useState(false);
+
+  const friendRequestCount = friendRequests.length;
 
   // Fetch friend requests once when logged in (on page load/refresh)
   useEffect(() => {
     if (!user) {
-      setFriendRequestCount(0);
+      setFriendRequests([]);
       return;
     }
 
     const checkFriendRequests = async () => {
       try {
         const data = await getPendingFriendRequests();
-        setFriendRequestCount(data.count || 0);
+        setFriendRequests(data.requests || []);
       } catch {
         // Silently fail
       }
@@ -31,7 +35,16 @@ export default function Header() {
     checkFriendRequests();
   }, [user]);
 
+  const handleRequestHandled = (requestId: number) => {
+    setFriendRequests(prev => prev.filter(r => r.id !== requestId));
+    // Close modal if no more requests
+    if (friendRequests.length <= 1) {
+      setShowFriendRequestsModal(false);
+    }
+  };
+
   return (
+    <>
     <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-3 bg-[#0b0f1a]/80 backdrop-blur-md border-b border-white/5">
       <div className="flex items-center gap-3">
         {/* Gem row accent */}
@@ -72,8 +85,8 @@ export default function Header() {
       <div className="flex items-center gap-3">
         {/* Mobile friend notification - only show when not in game */}
         {user && !gameCode && friendRequestCount > 0 && (
-          <Link 
-            href="/profile" 
+          <button 
+            onClick={() => setShowFriendRequestsModal(true)}
             className="sm:hidden relative p-2"
             title={`${friendRequestCount} friend request${friendRequestCount > 1 ? 's' : ''}`}
           >
@@ -84,7 +97,7 @@ export default function Header() {
                 {friendRequestCount > 9 ? '9+' : friendRequestCount}
               </span>
             </span>
-          </Link>
+          </button>
         )}
         
         {gameCode && (
@@ -117,5 +130,15 @@ export default function Header() {
         )}
       </div>
     </header>
+
+    {/* Friend Requests Modal */}
+    {showFriendRequestsModal && (
+      <FriendRequestsModal
+        requests={friendRequests}
+        onClose={() => setShowFriendRequestsModal(false)}
+        onRequestHandled={handleRequestHandled}
+      />
+    )}
+    </>
   );
 }

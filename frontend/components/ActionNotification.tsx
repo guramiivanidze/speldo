@@ -94,8 +94,8 @@ export default function ActionNotification({ lastAction, myUserId }: ActionNotif
   }
 
   return (
-    <div className="px-3 py-1.5 bg-slate-700/80 backdrop-blur-sm rounded-lg border border-slate-600/50 text-center animate-fade-in">
-      <div className="text-sm text-slate-200 font-medium">
+    <div className="fixed top-16 left-4 z-40 px-4 py-2 bg-slate-800/95 backdrop-blur-sm rounded-xl border border-slate-600/50 shadow-lg shadow-black/25 text-left animate-fade-in pointer-events-none">
+      <div className="text-sm text-slate-200 font-medium whitespace-nowrap">
         {message}
       </div>
       {details && (
