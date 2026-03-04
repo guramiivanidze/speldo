@@ -104,32 +104,14 @@ else:
         }
     }
 
-# Channel layers - use Redis in production for scalability
-REDIS_URL = os.environ.get('REDIS_URL')
-
-if REDIS_URL:
-    # Parse Redis URL for Upstash (requires SSL)
-    # Upstash URLs are like: redis://default:password@host:port
-    # We need to use rediss:// (with SSL) for Upstash
-    redis_ssl_url = REDIS_URL.replace('redis://', 'rediss://') if not REDIS_URL.startswith('rediss://') else REDIS_URL
-    
-    CHANNEL_LAYERS = {
-        'default': {
-            'BACKEND': 'channels_redis.core.RedisChannelLayer',
-            'CONFIG': {
-                'hosts': [redis_ssl_url],
-                'capacity': 1500,  # Max messages per channel
-                'expiry': 10,  # Message expiry in seconds
-            },
-        },
-    }
-else:
-    # Development: use in-memory channel layer
-    CHANNEL_LAYERS = {
-        'default': {
-            'BACKEND': 'channels.layers.InMemoryChannelLayer',
-        },
-    }
+# Channel layers
+# Note: InMemoryChannelLayer works for single-instance deployment
+# For multi-instance scaling, you'd need Redis with proper SSL config
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
 
 AUTH_PASSWORD_VALIDATORS = []
 
