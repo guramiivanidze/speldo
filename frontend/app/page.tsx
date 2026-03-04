@@ -153,6 +153,15 @@ export default function Home() {
     }
   }, [user]);
 
+  // Refresh pending requests when mobile menu opens to stay in sync
+  useEffect(() => {
+    if (mobileMenuOpen && user) {
+      getPendingFriendRequests(true)
+        .then(data => setPendingRequests(data.requests || []))
+        .catch(() => {});
+    }
+  }, [mobileMenuOpen, user]);
+
   // Password validation helper
   const validatePassword = (pass: string): string | null => {
     if (!pass) return 'Password is required.';
