@@ -9,6 +9,7 @@ import { useMatchmaking } from '@/hooks/useMatchmaking';
 import type { PlayerProfile, Season } from '@/types/competitive';
 import DivisionBadge from '@/components/DivisionBadge';
 import MatchFoundModal from '@/components/MatchFoundModal';
+import HowToPlayModal from '@/components/HowToPlayModal';
 
 interface GameInfo {
   id: string;
@@ -64,6 +65,9 @@ export default function Home() {
   
   // Mobile menu state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // How to Play modal state
+  const [howToPlayOpen, setHowToPlayOpen] = useState(false);
   
   // Competitive state
   const [rankedProfile, setRankedProfile] = useState<PlayerProfile | null>(null);
@@ -882,7 +886,15 @@ export default function Home() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Create */}
           <div className="glass rounded-2xl p-6 border border-white/5">
-            <h3 className="font-bold text-slate-200 mb-1">New Game</h3>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-bold text-slate-200">New Game</h3>
+              <button
+                onClick={() => setHowToPlayOpen(true)}
+                className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+              >
+                <span>📖</span> How to Play
+              </button>
+            </div>
             <p className="text-slate-500 text-xs mb-4">Create a room and invite friends</p>
 
           <div className="flex items-center gap-2 mb-4">
@@ -1128,6 +1140,12 @@ export default function Home() {
           onClose={clearMatchFound}
         />
       )}
+      
+      {/* How to Play Modal */}
+      <HowToPlayModal
+        isOpen={howToPlayOpen}
+        onClose={() => setHowToPlayOpen(false)}
+      />
 
       {/* My games */}
       {myGames.length > 0 && (

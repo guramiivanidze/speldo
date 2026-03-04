@@ -175,6 +175,18 @@ export async function listGames() {
   return apiFetch('/api/games/');
 }
 
+export interface GameRulesResponse {
+  title: string;
+  content: string;
+}
+
+export async function getGameRules(): Promise<GameRulesResponse> {
+  // Public endpoint, no auth required
+  const res = await fetch(`${API_BASE}/api/games/rules/`);
+  if (!res.ok) throw new Error('Failed to fetch game rules');
+  return res.json();
+}
+
 export async function createGame(max_players: number) {
   return apiFetch('/api/games/', {
     method: 'POST',

@@ -33,6 +33,9 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      # Redis for WebSocket scaling (Upstash or other Redis provider)
+      - key: REDIS_URL
+        sync: false  # Set manually in Render dashboard (e.g. Upstash Redis URL)
 
   # ============================================
   # FRONTEND - Next.js
