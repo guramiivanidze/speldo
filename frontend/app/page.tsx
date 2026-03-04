@@ -81,28 +81,19 @@ export default function Home() {
     clearMatchFound
   } = useMatchmaking();
 
-  async function fetchGames() {
+  async function fetchAllUserData() {
     try {
-      const mine = await getMyGames();
-      setMyGames(mine);
-    } catch { /* ignore */ }
-  }
-  
-  async function fetchCompetitiveData() {
-    try {
-      const [profile, season] = await Promise.all([
+      // Batch all user data requests in parallel
+      const [games, profile, season, friendsData] = await Promise.all([
+        getMyGames().catch(() => []),
         getMyProfile().catch(() => null),
-        getCurrentSeason().catch(() => null)
+        getCurrentSeason().catch(() => null),
+        getFriendsWithStats().catch(() => ({ friends: [] }))
       ]);
+      setMyGames(games);
       setRankedProfile(profile);
       setCurrentSeason(season);
-    } catch { /* ignore */ }
-  }
-  
-  async function fetchFriends() {
-    try {
-      const data = await getFriendsWithStats();
-      setFriends(data.friends);
+      setFriends(friendsData.friends || []);
     } catch { /* ignore */ }
   }
   
@@ -123,20 +114,18 @@ export default function Home() {
     }
   }
 
-  useEffect(() => { 
-    if (user) {
-      fetchGames();
-      fetchCompetitiveData();
-      fetchFriends();
-    }
-  }, [user]);
-  
-  // Fetch auth config (e.g., email verification enabled)
+  // Fetch auth config on mount (doesn't need auth)
   useEffect(() => {
     getAuthConfig()
       .then(config => setEmailVerificationEnabled(config.email_verification_enabled))
-      .catch(() => setEmailVerificationEnabled(true)); // Default to enabled on error
+      .catch(() => setEmailVerificationEnabled(true));
   }, []);
+
+  useEffect(() => { 
+    if (user) {
+      fetchAllUserData();
+    }
+  }, [user]);
 
   // Password validation helper
   const validatePassword = (pass: string): string | null => {
@@ -1147,7 +1136,7 @@ export default function Home() {
             <h3 className="font-bold text-slate-200 text-sm">My Games</h3>
             <button
               className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold uppercase tracking-wider"
-              onClick={fetchGames}
+              onClick={fetchAllUserData}
             >
               Refresh
             </button>

@@ -114,6 +114,22 @@ export async function login(email: string, password: string, rememberMe: boolean
   return data;
 }
 
+// Cache ws token to avoid duplicate requests
+let wsTokenCache: { token: string; expires: number } | null = null;
+let wsTokenPromise: Promise<string> | null = null;
+// Forward declaration for friend requests cache (defined later)
+let _clearFriendRequestsCache: (() => void) | null = null;
+
+function clearWsTokenCache() {
+  wsTokenCache = null;
+  wsTokenPromise = null;
+}
+
+function clearAllCaches() {
+  clearWsTokenCache();
+  if (_clearFriendRequestsCache) _clearFriendRequestsCache();
+}
+
 export async function logout() {
   try {
     await apiFetch('/api/auth/logout/', { method: 'POST' });
@@ -121,6 +137,7 @@ export async function logout() {
     // Ignore errors on logout
   }
   setStoredToken(null);
+  clearAllCaches();
   return { message: 'Logged out.' };
 }
 
@@ -129,8 +146,29 @@ export async function getMe() {
 }
 
 export async function getWebSocketToken(): Promise<string> {
-  const data = await apiFetch('/api/auth/ws-token/');
-  return data.token;
+  // Return cached token if still valid (with 30s buffer)
+  if (wsTokenCache && wsTokenCache.expires > Date.now() + 30000) {
+    return wsTokenCache.token;
+  }
+  
+  // If a request is already in flight, wait for it
+  if (wsTokenPromise) {
+    return wsTokenPromise;
+  }
+  
+  // Make the request and cache it
+  wsTokenPromise = (async () => {
+    try {
+      const data = await apiFetch('/api/auth/ws-token/');
+      // Cache for 5 minutes
+      wsTokenCache = { token: data.token, expires: Date.now() + 5 * 60 * 1000 };
+      return data.token;
+    } finally {
+      wsTokenPromise = null;
+    }
+  })();
+  
+  return wsTokenPromise;
 }
 
 export async function listGames() {
@@ -267,12 +305,45 @@ export async function sendFriendRequest(nickname: string) {
   });
 }
 
-export async function getPendingFriendRequests(): Promise<{ requests: FriendRequest[]; count: number }> {
-  return apiFetch('/api/auth/friend-requests/');
+// Cache friend requests to avoid duplicate calls on initial page load
+let friendRequestsCache: { data: { requests: FriendRequest[]; count: number }; expires: number } | null = null;
+let friendRequestsPromise: Promise<{ requests: FriendRequest[]; count: number }> | null = null;
+
+export async function getPendingFriendRequests(forceRefresh = false): Promise<{ requests: FriendRequest[]; count: number }> {
+  // Return cached data if still valid (10 second cache for initial load dedup)
+  if (!forceRefresh && friendRequestsCache && friendRequestsCache.expires > Date.now()) {
+    return friendRequestsCache.data;
+  }
+  
+  // If a request is already in flight, wait for it
+  if (friendRequestsPromise) {
+    return friendRequestsPromise;
+  }
+  
+  friendRequestsPromise = (async () => {
+    try {
+      const data = await apiFetch('/api/auth/friend-requests/');
+      friendRequestsCache = { data, expires: Date.now() + 10000 }; // 10 second cache
+      return data;
+    } finally {
+      friendRequestsPromise = null;
+    }
+  })();
+  
+  return friendRequestsPromise;
 }
 
+export function invalidateFriendRequestsCache() {
+  friendRequestsCache = null;
+}
+
+// Register the clear function for logout
+_clearFriendRequestsCache = invalidateFriendRequestsCache;
+
 export async function respondToFriendRequest(requestId: number, action: 'accept' | 'reject') {
-  return apiFetch(`/api/auth/friend-request/${requestId}/${action}/`, { method: 'POST' });
+  const result = await apiFetch(`/api/auth/friend-request/${requestId}/${action}/`, { method: 'POST' });
+  invalidateFriendRequestsCache();
+  return result;
 }
 
 export async function getFriendsList(): Promise<{ friends: Friend[]; count: number }> {
