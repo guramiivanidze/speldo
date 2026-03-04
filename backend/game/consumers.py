@@ -1127,6 +1127,7 @@ class GameConsumer(AsyncWebsocketConsumer):
                     # Update game state
                     game.tokens_in_bank = new_gd['tokens_in_bank']
                     game.visible_cards = new_gd['visible_cards']
+                    game.decks = new_gd['decks']  # Restore deck if replacement card was put back
                     
                     # Update player state
                     current_gp.tokens = new_pd['tokens']

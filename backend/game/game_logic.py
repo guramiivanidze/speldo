@@ -275,11 +275,13 @@ def apply_cancel_pending_discard(game_data, player_data, pending_action_data):
         # Undo a reserve action:
         # 1. Remove card from reserved_card_ids
         # 2. Return gold to bank if received
-        # 3. Put card back to visible (at end of appropriate level)
+        # 3. Remove replacement card from visible and put back in deck
+        # 4. Put original card back to visible
         card_id = pending_action_data.get('card_id')
         gold_received = pending_action_data.get('gold_received', False)
         card_level = pending_action_data.get('level')  # The level of the card
         from_visible = pending_action_data.get('from_visible', not pending_action_data.get('from_deck', False))
+        new_card_id = pending_action_data.get('new_card_id')  # The replacement card drawn
         
         reserved = list(player_data['reserved_card_ids'])
         if card_id not in reserved:
@@ -287,6 +289,7 @@ def apply_cancel_pending_discard(game_data, player_data, pending_action_data):
         reserved.remove(card_id)
         
         visible = {k: list(v) for k, v in game_data['visible_cards'].items()}
+        decks = {k: list(v) for k, v in game_data['decks'].items()}
         bank = dict(game_data['tokens_in_bank'])
         ptokens = dict(player_data['tokens'])
         
@@ -295,15 +298,24 @@ def apply_cancel_pending_discard(game_data, player_data, pending_action_data):
             ptokens['gold'] = max(0, ptokens.get('gold', 0) - 1)
             bank['gold'] = bank.get('gold', 0) + 1
         
-        # Put card back to visible if it came from visible
-        # (if from deck, we don't put it back - it's lost, but that's acceptable UX)
+        # If card came from visible cards, restore the original state
         if from_visible and card_level:
             lvl = str(card_level)
-            if len(visible.get(lvl, [])) < 4:
-                visible[lvl].append(card_id)
+            
+            # First, remove the replacement card (new_card_id) if it exists
+            # and put it back at the front of the deck
+            if new_card_id and new_card_id in visible.get(lvl, []):
+                idx = visible[lvl].index(new_card_id)
+                visible[lvl].pop(idx)
+                # Put replacement card back at front of deck
+                decks[lvl].insert(0, new_card_id)
+            
+            # Now put the original card back in visible
+            visible[lvl].append(card_id)
         
         game_data = dict(game_data)
         game_data['visible_cards'] = visible
+        game_data['decks'] = decks
         game_data['tokens_in_bank'] = bank
         player_data = dict(player_data)
         player_data['tokens'] = ptokens
