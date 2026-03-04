@@ -105,18 +105,25 @@ class GameStartView(APIView):
         if len(players) < 2:
             return Response({'error': 'Need at least 2 players.'}, status=400)
 
-        # Shuffle player order randomly so the first player is chosen randomly
-        random.shuffle(players)
+        # Pick a random starting player, move them to position 0
+        # Other players keep their relative join order
+        player_count = len(players)
+        starting_index = random.randint(0, player_count - 1)
+        starting_player = players[starting_index]
+        reordered = [starting_player] + [p for p in players if p != starting_player]
+        
         # First, set all orders to temporary negative values to avoid unique constraint
-        for i, player in enumerate(players):
+        for i, player in enumerate(reordered):
             player.order = -(i + 1)
             player.save()
-        # Now assign the final shuffled order
-        for new_order, player in enumerate(players):
+        # Now assign the final order
+        for new_order, player in enumerate(reordered):
             player.order = new_order
             player.save()
 
-        player_count = len(players)
+        # Refresh players list to get correct order
+        players = reordered
+
         bank = initial_bank(player_count)
         decks, visible, nobles = initial_decks_and_nobles(player_count)
 

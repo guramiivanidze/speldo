@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, Noble, GemColor, TokenColor } from '@/types/game';
 import { GEM_GRADIENT, TOKEN_GRADIENT, TOKEN_LABEL, LEVEL_COLOR, GEM_COLORS } from '@/lib/colors';
 import { API_BASE } from '@/lib/api';
@@ -63,8 +63,20 @@ export default function MobileBoardView({
     newCardId = null,
 }: MobileBoardViewProps) {
     const [zoomedCard, setZoomedCard] = useState<Card | null>(null);
-    const [zoomedNoble, setZoomedNoble] = useState<Noble | null>(null);
-    const levels: ('3' | '2' | '1')[] = ['3', '2', '1'];
+    const [zoomedNoble, setZoomedNoble] = useState<Noble | null>(null);    
+    // Nobles section collapse state with localStorage persistence
+    const [noblesCollapsed, setNoblesCollapsed] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('noblesCollapsed') === 'true';
+        }
+        return false;
+    });
+
+    const toggleNoblesCollapsed = () => {
+        const newValue = !noblesCollapsed;
+        setNoblesCollapsed(newValue);
+        localStorage.setItem('noblesCollapsed', String(newValue));
+    };    const levels: ('3' | '2' | '1')[] = ['3', '2', '1'];
 
     const isPlaying = gameStatus === 'playing';
 
@@ -109,12 +121,19 @@ export default function MobileBoardView({
                 </div>
             </div>
 
-            {/* Nobles Row - Horizontal Scroll */}
+            {/* Nobles Row - Collapsible */}
             <div className="shrink-0 px-2 py-1.5 border-b border-white/10">
-                <div className="flex items-center gap-2 mb-1">
+                <button
+                    onClick={toggleNoblesCollapsed}
+                    className="flex items-center gap-2 mb-1 w-full"
+                >
                     <span className="text-amber-400 text-sm">♛</span>
                     <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Nobles</span>
-                </div>
+                    <span className="text-amber-400 text-base ml-auto transition-transform duration-200" style={{ transform: noblesCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>
+                        ▼
+                    </span>
+                </button>
+                {!noblesCollapsed && (
                 <div className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
                     {nobles.map((nid) => {
                         const noble = noblesData[String(nid)];
@@ -169,6 +188,7 @@ export default function MobileBoardView({
                         );
                     })}
                 </div>
+                )}
             </div>
 
             {/* Card Tiers - Vertical scroll, horizontal per tier */}

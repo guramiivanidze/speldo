@@ -250,15 +250,16 @@ class MatchmakingService:
             decks=decks,
             visible_cards=visible,
             available_nobles=nobles,
-            current_player_index=0,  # First player in shuffled order always starts
+            current_player_index=0,  # First player always starts
         )
         
-        # Shuffle the entries to randomize player order
-        shuffled_entries = list(entries)
-        random.shuffle(shuffled_entries)
+        # Pick a random starting player, others keep their queue order
+        starting_index = random.randint(0, player_count - 1)
+        starting_entry = entries[starting_index]
+        reordered_entries = [starting_entry] + [e for e in entries if e != starting_entry]
         
-        # Create GamePlayer entries for each matched player in shuffled order
-        for i, entry in enumerate(shuffled_entries):
+        # Create GamePlayer entries for each matched player in reordered order
+        for i, entry in enumerate(reordered_entries):
             GamePlayer.objects.create(
                 game=game,
                 user=entry.player.user,
