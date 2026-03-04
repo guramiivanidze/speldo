@@ -160,12 +160,42 @@ class GameConsumer(AsyncWebsocketConsumer):
         await self.send_game_state()
 
     async def disconnect(self, close_code):
-        # Clean up waiting room games when player disconnects
-        await self._cleanup_waiting_game()
+        # Mark player as offline for waiting games (don't delete - they might come back)
+        await self._mark_offline_waiting_game()
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
+    async def _mark_offline_waiting_game(self):
+        """Mark player as offline in waiting game (but don't remove them)."""
+        @database_sync_to_async
+        def _db():
+            try:
+                game = Game.objects.get(code=self.game_code)
+                if game.status != Game.STATUS_WAITING:
+                    return None
+                player = game.players.filter(user=self.user).first()
+                if player:
+                    player.is_online = False
+                    player.save(update_fields=['is_online'])
+                    return {'user_id': self.user.id, 'username': self.user.username}
+                return None
+            except Game.DoesNotExist:
+                return None
+        
+        result = await _db()
+        
+        # Notify others in waiting room about temporary disconnect
+        if result:
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'player_temporarily_offline',
+                    'user_id': result['user_id'],
+                    'username': result['username'],
+                }
+            )
+
     async def _cleanup_waiting_game(self):
-        """Remove player from waiting game when they disconnect."""
+        """Remove player from waiting game - called on explicit leave action."""
         @database_sync_to_async
         def _db():
             from django.db import transaction
@@ -268,6 +298,10 @@ class GameConsumer(AsyncWebsocketConsumer):
                         player.left_at = None
                         player.save()
                         
+                        # Handle waiting game rejoin
+                        if game.status == Game.STATUS_WAITING:
+                            return 'waiting_online' if was_offline else None
+                        
                         # Check if pause has expired
                         if game.status == Game.STATUS_PAUSED and game.pause_expires_at:
                             if timezone.now() > game.pause_expires_at:
@@ -319,6 +353,12 @@ class GameConsumer(AsyncWebsocketConsumer):
                 {'type': 'player_rejoined', 'user_id': self.user.id, 'username': self.user.username}
             )
             await self.send_game_state()
+        elif result == 'waiting_online':
+            # Player came back online in waiting room - notify all
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {'type': 'player_back_online', 'user_id': self.user.id, 'username': self.user.username}
+            )
         elif result == 'online':
             await self.send_game_state()
 
@@ -485,6 +525,46 @@ class GameConsumer(AsyncWebsocketConsumer):
             'username': event['username'],
         }))
         # Send updated game state to remaining players
+        game, players = await self.get_game_and_players()
+        if game:
+            @database_sync_to_async
+            def _serialize():
+                return serialize_game_state(game, players)
+            
+            state = await _serialize()
+            await self.send(text_data=json.dumps({
+                'type': 'game_state',
+                'state': state,
+            }))
+
+    async def player_temporarily_offline(self, event):
+        """Notify that a player went temporarily offline in waiting room."""
+        await self.send(text_data=json.dumps({
+            'type': 'player_temporarily_offline',
+            'user_id': event['user_id'],
+            'username': event['username'],
+        }))
+        # Send updated game state with player's offline status
+        game, players = await self.get_game_and_players()
+        if game:
+            @database_sync_to_async
+            def _serialize():
+                return serialize_game_state(game, players)
+            
+            state = await _serialize()
+            await self.send(text_data=json.dumps({
+                'type': 'game_state',
+                'state': state,
+            }))
+
+    async def player_back_online(self, event):
+        """Notify that a player came back online in waiting room."""
+        await self.send(text_data=json.dumps({
+            'type': 'player_back_online',
+            'user_id': event['user_id'],
+            'username': event['username'],
+        }))
+        # Send updated game state with player's online status
         game, players = await self.get_game_and_players()
         if game:
             @database_sync_to_async

@@ -71,6 +71,7 @@ export default function ReservedCardsModal({
                     card={card}
                     onBuy={onBuyCard ? () => { onBuyCard(cid); onClose(); } : undefined}
                     canBuy={!!onBuyCard && affordable}
+                    isAffordable={affordable}
                     showActions={!!onBuyCard}
                     compact
                   />
