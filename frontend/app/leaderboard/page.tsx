@@ -39,8 +39,8 @@ export default function LeaderboardPage() {
       const seasonData = await getCurrentSeason().catch(() => null);
       setSeason(seasonData);
       setSeasonChecked(true);
-      // Default to casual if no season, ranked otherwise
-      setMode(seasonData ? 'ranked' : 'casual');
+      // Always use casual mode (ranked leaderboard hidden)
+      setMode('casual');
     }
     checkSeason();
   }, []);
@@ -103,35 +103,7 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
-      {/* Mode Switcher - Only show both options if season exists */}
-      <div className="flex gap-2 mb-4">
-        {season && (
-          <button
-            onClick={() => { setMode('ranked'); setPage(1); }}
-            className={`
-              px-4 py-2 rounded-lg text-sm font-medium transition-all
-              ${mode === 'ranked' 
-                ? 'bg-indigo-600 text-white' 
-                : 'glass border border-white/10 text-slate-400 hover:text-slate-200'
-              }
-            `}
-          >
-            🏆 Ranked
-          </button>
-        )}
-        <button
-          onClick={() => { setMode('casual'); setPage(1); }}
-          className={`
-            px-4 py-2 rounded-lg text-sm font-medium transition-all
-            ${mode === 'casual' 
-              ? 'bg-emerald-600 text-white' 
-              : 'glass border border-white/10 text-slate-400 hover:text-slate-200'
-            }
-          `}
-        >
-          🎮 Casual
-        </button>
-      </div>
+      {/* Mode Switcher - Hidden (ranked leaderboard disabled) */}
 
       {/* Division Tabs (Ranked only) */}
       {mode === 'ranked' && (
