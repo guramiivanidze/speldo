@@ -10,6 +10,7 @@ interface MobileTokenSelectorProps {
   onConfirm: () => void;
   onCancel: () => void;
   disabledColors: TokenColor[];
+  viewOnly?: boolean;
 }
 
 export default function MobileTokenSelector({
@@ -19,6 +20,7 @@ export default function MobileTokenSelector({
   onConfirm,
   onCancel,
   disabledColors,
+  viewOnly = false,
 }: MobileTokenSelectorProps) {
   // Count selections per color
   const selectionCounts: Partial<Record<TokenColor, number>> = {};
@@ -47,7 +49,7 @@ export default function MobileTokenSelector({
       {/* Header */}
       <div className="p-4 border-b border-white/10">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white">Select Tokens</h2>
+          <h2 className="text-lg font-bold text-white">{viewOnly ? 'Gem Bank' : 'Select Tokens'}</h2>
           <button
             className="w-8 h-8 rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 flex items-center justify-center"
             onClick={onCancel}
@@ -55,14 +57,18 @@ export default function MobileTokenSelector({
             ✕
           </button>
         </div>
-        <p className="text-slate-400 text-sm mt-1">{getActionText()}</p>
+        <p className="text-slate-400 text-sm mt-1">
+          {viewOnly ? 'View available gems (not your turn)' : getActionText()}
+        </p>
       </div>
 
       {/* Rules reminder */}
-      <div className="px-4 py-2 bg-slate-800/50 text-xs text-slate-400">
-        <p>• Take 3 different colors OR</p>
-        <p>• Take 2 of same color (if 4+ available)</p>
-      </div>
+      {!viewOnly && (
+        <div className="px-4 py-2 bg-slate-800/50 text-xs text-slate-400">
+          <p>• Take 3 different colors OR</p>
+          <p>• Take 2 of same color (if 4+ available)</p>
+        </div>
+      )}
 
       {/* Token grid */}
       <div className="flex-1 flex items-center justify-center p-4">
@@ -79,17 +85,19 @@ export default function MobileTokenSelector({
                 className={`
                   w-20 h-20 rounded-2xl flex flex-col items-center justify-center gap-1
                   transition-all active:scale-95 relative
-                  ${disabled 
-                    ? 'opacity-40 cursor-not-allowed' 
-                    : 'cursor-pointer hover:scale-105'}
+                  ${viewOnly 
+                    ? 'cursor-default'
+                    : disabled 
+                      ? 'opacity-40 cursor-not-allowed' 
+                      : 'cursor-pointer hover:scale-105'}
                   ${selected > 0 
                     ? 'ring-4 ring-amber-400 ring-offset-2 ring-offset-slate-900' 
                     : ''}
                   ${color === 'white' ? 'text-slate-800' : ''}
                 `}
                 style={{ background: TOKEN_GRADIENT[color] }}
-                onClick={() => !disabled && onSelectToken(color)}
-                disabled={disabled}
+                onClick={() => !viewOnly && !disabled && onSelectToken(color)}
+                disabled={viewOnly || disabled}
               >
                 <span className="text-2xl font-black drop-shadow-lg">
                   {count}
@@ -141,20 +149,22 @@ export default function MobileTokenSelector({
           className="flex-1 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold"
           onClick={onCancel}
         >
-          Cancel
+          {viewOnly ? 'Close' : 'Cancel'}
         </button>
-        <button
-          className={`
-            flex-1 py-3 rounded-xl font-bold transition-all
-            ${canConfirm
-              ? 'bg-emerald-500 hover:bg-emerald-400 text-white'
-              : 'bg-slate-600 text-slate-400 cursor-not-allowed'}
-          `}
-          onClick={canConfirm ? onConfirm : undefined}
-          disabled={!canConfirm}
-        >
-          Confirm
-        </button>
+        {!viewOnly && (
+          <button
+            className={`
+              flex-1 py-3 rounded-xl font-bold transition-all
+              ${canConfirm
+                ? 'bg-emerald-500 hover:bg-emerald-400 text-white'
+                : 'bg-slate-600 text-slate-400 cursor-not-allowed'}
+            `}
+            onClick={canConfirm ? onConfirm : undefined}
+            disabled={!canConfirm}
+          >
+            Confirm
+          </button>
+        )}
       </div>
     </div>
   );

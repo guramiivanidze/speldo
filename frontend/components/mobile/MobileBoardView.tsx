@@ -63,135 +63,124 @@ export default function MobileBoardView({
     newCardId = null,
 }: MobileBoardViewProps) {
     const [zoomedCard, setZoomedCard] = useState<Card | null>(null);
-    const [zoomedNoble, setZoomedNoble] = useState<Noble | null>(null);    
-    // Nobles section collapse state with localStorage persistence
-    const [noblesCollapsed, setNoblesCollapsed] = useState(() => {
-        if (typeof window !== 'undefined') {
-            return localStorage.getItem('noblesCollapsed') === 'true';
-        }
-        return false;
-    });
+    const [zoomedNoble, setZoomedNoble] = useState<Noble | null>(null);
+    const [showNoblesPanel, setShowNoblesPanel] = useState(false);
 
-    const toggleNoblesCollapsed = () => {
-        const newValue = !noblesCollapsed;
-        setNoblesCollapsed(newValue);
-        localStorage.setItem('noblesCollapsed', String(newValue));
-    };    const levels: ('3' | '2' | '1')[] = ['3', '2', '1'];
+    const levels: ('3' | '2' | '1')[] = ['3', '2', '1'];
 
     const isPlaying = gameStatus === 'playing';
 
     return (
-        <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Token Bank - Compact */}
-            <div className="shrink-0 px-2 py-1.5 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                    <button
-                        className={`
-                            px-3 py-1.5 rounded-lg flex items-center gap-2 text-sm font-bold
-                            ${isMyTurn && isPlaying
-                                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
-                                : 'bg-slate-800 text-slate-400 cursor-not-allowed'}
-                        `}
-                        onClick={isMyTurn && isPlaying ? onOpenTokenSelector : undefined}
-                        disabled={!isMyTurn || !isPlaying}
-                    >
-                        <span>💎</span>
-                        <span>Take</span>
-                    </button>
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+            {/* Floating indicators on the right */}
+            <div className="absolute right-2 top-30 z-30 flex flex-col gap-2">
+                {/* Nobles indicator */}
+                <button
+                    onClick={() => setShowNoblesPanel(!showNoblesPanel)}
+                    className={`
+                        w-10 h-10 rounded-xl flex items-center justify-center shadow-lg
+                        ${showNoblesPanel 
+                            ? 'bg-amber-600 text-white' 
+                            : 'bg-slate-800/90 text-amber-400 border border-amber-500/30'}
+                        transition-all active:scale-95
+                    `}
+                >
+                    <span className="text-lg">♛</span>
+                </button>
+                
+                {/* Bank indicator - opens token selector */}
+                <button
+                    onClick={() => onOpenTokenSelector()}
+                    className={`
+                        w-10 h-10 rounded-xl flex items-center justify-center shadow-lg
+                        bg-slate-800/90 text-indigo-400 border border-indigo-500/30
+                        transition-all active:scale-95
+                    `}
+                >
+                    <span className="text-lg">💎</span>
+                </button>
+            </div>
 
-                    {/* Bank preview */}
-                    <div className="flex gap-1.5 flex-1 justify-center">
-                        {GEM_COLORS.map((color) => (
-                            <div
-                                key={color}
-                                className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shadow-sm
-                                    ${color === 'white' ? 'text-slate-800' : ''}`}
-                                style={{ background: TOKEN_GRADIENT[color] }}
-                            >
-                                {tokensInBank[color] ?? 0}
-                            </div>
-                        ))}
-                        <div
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shadow-sm text-slate-900"
-                            style={{ background: TOKEN_GRADIENT.gold }}
-                        >
-                            {tokensInBank.gold ?? 0}
+            {/* Nobles Slide-in Panel */}
+            <div 
+                className={`
+                    absolute inset-x-0 top-0 z-20 bg-slate-900/95 backdrop-blur-sm
+                    border-b border-amber-500/30 shadow-lg
+                    transition-transform duration-300 ease-out
+                    ${showNoblesPanel ? 'translate-y-0' : '-translate-y-full'}
+                `}
+            >
+                <div className="p-3">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                            <span className="text-amber-400 text-sm">♛</span>
+                            <span className="text-xs text-slate-300 font-semibold">Nobles</span>
                         </div>
+                        <button 
+                            onClick={() => setShowNoblesPanel(false)}
+                            className="text-slate-400 p-1"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                        {nobles.map((nid) => {
+                            const noble = noblesData[String(nid)];
+                            if (!noble) return null;
+                            const nobleImage = getNobleImageUrl(noble);
+                            return (
+                                <button
+                                    key={nid}
+                                    className="shrink-0 w-24 h-16 rounded-lg overflow-hidden border border-amber-500/30 relative transition-transform active:scale-95"
+                                    onClick={() => { setZoomedNoble(noble); setShowNoblesPanel(false); }}
+                                >
+                                    {nobleImage ? (
+                                        <>
+                                            <div
+                                                className="absolute inset-0 bg-cover bg-center"
+                                                style={{ backgroundImage: `url(${nobleImage})` }}
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-amber-950/80 to-transparent" />
+                                        </>
+                                    ) : (
+                                        <div className="absolute inset-0 bg-gradient-to-br from-amber-950 to-slate-900" />
+                                    )}
+                                    <div className="relative z-10 h-full p-2 flex flex-col justify-between">
+                                        <div className="flex justify-between items-start">
+                                            <span className="text-amber-400 text-xs">♛</span>
+                                            <div className="bg-amber-500 text-amber-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
+                                                {noble.points}
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-1 flex-wrap">
+                                            {GEM_COLORS.map((color) => {
+                                                const req = noble.requirements[color];
+                                                if (!req) return null;
+                                                return (
+                                                    <div
+                                                        key={color}
+                                                        className="flex items-center gap-0.5 bg-black/40 rounded px-1 py-0.5"
+                                                    >
+                                                        <div
+                                                            className="w-2 h-3 rounded-0"
+                                                            style={{ background: GEM_GRADIENT[color] }}
+                                                        />
+                                                        <span className="text-[8px] font-bold text-white">{req}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
 
-            {/* Nobles Row - Collapsible */}
-            <div className="shrink-0 px-2 py-1.5 border-b border-white/10">
-                <button
-                    onClick={toggleNoblesCollapsed}
-                    className="flex items-center gap-2 mb-1 w-full"
-                >
-                    <span className="text-amber-400 text-sm">♛</span>
-                    <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Nobles</span>
-                    <span className="text-amber-400 text-base ml-auto transition-transform duration-200" style={{ transform: noblesCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>
-                        ▼
-                    </span>
-                </button>
-                {!noblesCollapsed && (
-                <div className="flex gap-2 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
-                    {nobles.map((nid) => {
-                        const noble = noblesData[String(nid)];
-                        if (!noble) return null;
-                        const nobleImage = getNobleImageUrl(noble);
-                        return (
-                            <button
-                                key={nid}
-                                className="shrink-0 w-24 h-16 snap-start rounded-lg overflow-hidden border border-amber-500/30 relative transition-transform active:scale-95"
-                                onClick={() => setZoomedNoble(noble)}
-                            >
-                                {/* Background: image or gradient */}
-                                {nobleImage ? (
-                                    <>
-                                        <div
-                                            className="absolute inset-0 bg-cover bg-center"
-                                            style={{ backgroundImage: `url(${nobleImage})` }}
-                                        />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-amber-950/80 to-transparent" />
-                                    </>
-                                ) : (
-                                    <div className="absolute inset-0 bg-gradient-to-br from-amber-950 to-slate-900" />
-                                )}
-                                {/* Content */}
-                                <div className="relative z-10 h-full p-2 flex flex-col justify-between">
-                                    <div className="flex justify-between items-start">
-                                        <span className="text-amber-400 text-xs">♛</span>
-                                        <div className="bg-amber-500 text-amber-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
-                                            {noble.points}
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-1 flex-wrap">
-                                        {GEM_COLORS.map((color) => {
-                                            const req = noble.requirements[color];
-                                            if (!req) return null;
-                                            return (
-                                                <div
-                                                    key={color}
-                                                    className="flex items-center gap-0.5 bg-black/40 rounded px-1 py-0.5"
-                                                >
-                                                    <div
-                                                        className="w-2 h-3 rounded-0"
-                                                        style={{ background: GEM_GRADIENT[color] }}
-                                                    />
-                                                    <span className="text-[8px] font-bold text-white">{req}</span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </button>
-                        );
-                    })}
-                </div>
-                )}
-            </div>
-
-            {/* Card Tiers - Vertical scroll, horizontal per tier */}
+            {/* Card Tiers - Full height now */}
             <div className="flex-1 overflow-y-auto p-2 space-y-0">
                 {levels.map((level) => (
                     <div key={level} className="bg-slate-800/50 rounded-xl p-2">

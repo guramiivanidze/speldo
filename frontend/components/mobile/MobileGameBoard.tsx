@@ -306,6 +306,7 @@ export default function MobileGameBoard({
           onConfirm={handleConfirmTokens}
           onCancel={handleCancelTokens}
           disabledColors={disabledTokenColors}
+          viewOnly={!isMyTurn || gameState.status !== 'playing'}
         />
       )}
 
