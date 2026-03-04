@@ -11,6 +11,7 @@ import DiscardTokensModal from './DiscardTokensModal';
 import { GEM_COLORS, TOKEN_LABEL } from '@/lib/colors';
 import useIsMobile from '@/hooks/useIsMobile';
 import MobileGameBoard from './mobile/MobileGameBoard';
+import ActionNotification from './ActionNotification';
 import { ChatMessage } from '@/hooks/useGameSocket';
 
 interface GameBoardProps {
@@ -44,6 +45,35 @@ export default function GameBoard({
   // Track the new card for animation (only for buy/reserve actions)
   const prevTurnNumberRef = useRef<number>(0);
   const [newCardId, setNewCardId] = useState<number | null>(null);
+
+  // Track action notification visibility (temporary, 7 seconds)
+  const [showNotification, setShowNotification] = useState(false);
+  const lastNotifiedTurnRef = useRef<number>(0);
+  const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const lastAction = gameState.last_action;
+    if (lastAction && lastAction.turn_number > lastNotifiedTurnRef.current && lastAction.player_id !== myUserId) {
+      lastNotifiedTurnRef.current = lastAction.turn_number;
+      setShowNotification(true);
+      
+      // Clear any existing timeout
+      if (notificationTimeoutRef.current) {
+        clearTimeout(notificationTimeoutRef.current);
+      }
+      
+      notificationTimeoutRef.current = setTimeout(() => {
+        setShowNotification(false);
+        notificationTimeoutRef.current = null;
+      }, 7000);
+    }
+    
+    return () => {
+      if (notificationTimeoutRef.current) {
+        clearTimeout(notificationTimeoutRef.current);
+      }
+    };
+  }, [gameState.last_action?.turn_number, gameState.last_action?.player_id, myUserId]);
 
   // Detect the new card when a card is bought or reserved (not for take_tokens)
   useEffect(() => {
@@ -408,8 +438,13 @@ export default function GameBoard({
         {/* Bottom-left corner */}
         <div />
 
-        {/* Bottom - My Player Area */}
-        <div className="flex justify-center">
+        {/* Bottom - Action Notification + My Player Area */}
+        <div className="flex flex-col items-center gap-1">
+          {/* Action Notification - temporary, 7 seconds */}
+          {showNotification && gameState.last_action && (
+            <ActionNotification lastAction={gameState.last_action} myUserId={myUserId} />
+          )}
+          
           {me && (
             <div className="w-full max-w-3xl">
               <PlayerArea

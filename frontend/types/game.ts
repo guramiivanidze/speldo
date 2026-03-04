@@ -41,6 +41,7 @@ export interface LastAction {
     from_reserved?: boolean;
     level?: number;
     colors?: string[];
+    gold_received?: boolean;
     noble_id?: number;
     tokens_spent?: Record<string, number>;
     new_card_id?: number;    // The card that replaced the bought/reserved one

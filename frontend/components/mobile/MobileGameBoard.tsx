@@ -12,6 +12,7 @@ import MobilePlayerView from './MobilePlayerView';
 import MobileOpponentsView from './MobileOpponentsView';
 import MobileTokenSelector from './MobileTokenSelector';
 import DiscardTokensModal from '../DiscardTokensModal';
+import ActionNotification from '../ActionNotification';
 import GameChat from '../GameChat';
 
 type MobileTab = 'board' | 'me' | 'opponents' | 'chat';
@@ -103,6 +104,35 @@ export default function MobileGameBoard({
   // Track the new card for animation (only for buy/reserve actions)
   const prevTurnNumberRef = useRef<number>(0);
   const [newCardId, setNewCardId] = useState<number | null>(null);
+
+  // Track action notification visibility (temporary, 7 seconds)
+  const [showNotification, setShowNotification] = useState(false);
+  const lastNotifiedTurnRef = useRef<number>(0);
+  const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const lastAction = gameState.last_action;
+    if (lastAction && lastAction.turn_number > lastNotifiedTurnRef.current && lastAction.player_id !== myUserId) {
+      lastNotifiedTurnRef.current = lastAction.turn_number;
+      setShowNotification(true);
+      
+      // Clear any existing timeout
+      if (notificationTimeoutRef.current) {
+        clearTimeout(notificationTimeoutRef.current);
+      }
+      
+      notificationTimeoutRef.current = setTimeout(() => {
+        setShowNotification(false);
+        notificationTimeoutRef.current = null;
+      }, 7000);
+    }
+    
+    return () => {
+      if (notificationTimeoutRef.current) {
+        clearTimeout(notificationTimeoutRef.current);
+      }
+    };
+  }, [gameState.last_action?.turn_number, gameState.last_action?.player_id, myUserId]);
 
   // Detect the new card when a card is bought or reserved (not for take_tokens)
   useEffect(() => {
@@ -206,6 +236,13 @@ export default function MobileGameBoard({
         currentPlayerIndex={gameState.current_player_index}
         myUserId={myUserId}
       />
+
+      {/* Action Notification - temporary, 7 seconds */}
+      {showNotification && gameState.last_action && (
+        <div className="px-2 py-1">
+          <ActionNotification lastAction={gameState.last_action} myUserId={myUserId} />
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
