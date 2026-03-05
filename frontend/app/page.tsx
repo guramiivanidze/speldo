@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { register, login, logout, createGame, joinGame, getMyGames, getMyProfile, getCurrentSeason, sendVerificationCode, getAuthConfig, getFriendsWithStats, sendFriendRequest, getPendingFriendRequests, respondToFriendRequest, type FriendWithStats, type FriendRequest } from '@/lib/api';
+import { register, login, logout, createGame, joinGame, getMyGames, getMyProfile, getCurrentSeason, sendVerificationCode, getAuthConfig, getFriendsWithStats, sendFriendRequest, getPendingFriendRequests, respondToFriendRequest, getFriendsWaitingGames, type FriendWithStats, type FriendRequest, type FriendWaitingGame } from '@/lib/api';
 import { useMatchmaking } from '@/hooks/useMatchmaking';
 import type { PlayerProfile, Season } from '@/types/competitive';
 import DivisionBadge from '@/components/DivisionBadge';
@@ -64,6 +64,8 @@ export default function Home() {
   const [friendRequestError, setFriendRequestError] = useState<string | null>(null);
   const [friendRequestSuccess, setFriendRequestSuccess] = useState<string | null>(null);
   const [respondingTo, setRespondingTo] = useState<number | null>(null);
+  const [friendsWaitingGames, setFriendsWaitingGames] = useState<FriendWaitingGame[]>([]);
+  const [friendsGamesLoading, setFriendsGamesLoading] = useState(false);
   
   // Mobile menu state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -90,18 +92,20 @@ export default function Home() {
   async function fetchAllUserData() {
     try {
       // Batch all user data requests in parallel
-      const [games, profile, season, friendsData, requestsData] = await Promise.all([
+      const [games, profile, season, friendsData, requestsData, friendsGamesData] = await Promise.all([
         getMyGames().catch(() => []),
         getMyProfile().catch(() => null),
         getCurrentSeason().catch(() => null),
         getFriendsWithStats().catch(() => ({ friends: [] })),
-        getPendingFriendRequests(true).catch(() => ({ requests: [] }))
+        getPendingFriendRequests(true).catch(() => ({ requests: [] })),
+        getFriendsWaitingGames().catch(() => ({ games: [] }))
       ]);
       setMyGames(games);
       setRankedProfile(profile);
       setCurrentSeason(season);
       setFriends(friendsData.friends || []);
       setPendingRequests(requestsData.requests || []);
+      setFriendsWaitingGames(friendsGamesData.games || []);
     } catch { /* ignore */ }
   }
   
@@ -385,9 +389,9 @@ export default function Home() {
     }
   }
 
-  async function handleJoin() {
+  async function handleJoin(codeOverride?: string) {
     setActionError('');
-    const code = joinCode.trim().toUpperCase();
+    const code = (codeOverride || joinCode).trim().toUpperCase();
     if (!code) return;
     try {
       const result = await joinGame(code);
@@ -1035,12 +1039,82 @@ export default function Home() {
                 bg-emerald-600 hover:bg-emerald-500
                 text-white transition-all active:scale-95
               "
-              onClick={handleJoin}
+              onClick={() => handleJoin()}
             >
               Join
             </button>
           </div>
         </div>
+        </div>
+      </div>
+
+      {/* Friends' Games Section */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-slate-300 flex items-center gap-2">
+            <span className="text-lg">👥</span> Friends&apos; Games
+          </h3>
+          <button
+            onClick={async () => {
+              setFriendsGamesLoading(true);
+              try {
+                const data = await getFriendsWaitingGames();
+                setFriendsWaitingGames(data.games || []);
+              } catch { /* ignore */ }
+              setFriendsGamesLoading(false);
+            }}
+            disabled={friendsGamesLoading}
+            className="px-3 py-1.5 text-sm font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center gap-1.5 transition-colors disabled:opacity-50 border border-slate-700"
+          >
+            <span className={`text-base ${friendsGamesLoading ? 'animate-spin' : ''}`}>↻</span>
+            Refresh
+          </button>
+        </div>
+        <div className="glass rounded-2xl border border-white/5">
+          {friendsGamesLoading ? (
+            <div className="p-8 text-center text-slate-500">
+              <div className="animate-spin w-6 h-6 border-2 border-slate-500 border-t-transparent rounded-full mx-auto mb-2" />
+              Loading...
+            </div>
+          ) : friendsWaitingGames.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 text-sm">
+              No friends are waiting in a game right now.
+            </div>
+          ) : (
+            <div className="divide-y divide-white/5">
+              {friendsWaitingGames.map((game) => (
+                <div 
+                  key={game.code}
+                  className="p-4 flex items-center justify-between hover:bg-slate-800/30 transition-colors"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-slate-200 font-medium">
+                        {game.friend_names.join(', ')}
+                      </span>
+                      <span className="text-slate-500 text-xs">
+                        is waiting
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-400">
+                      <span>
+                        {game.player_count}/{game.max_players} players
+                      </span>
+                      <span className="font-mono text-slate-500">
+                        {game.code}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleJoin(game.code)}
+                    className="px-4 py-2 rounded-xl font-bold text-sm bg-emerald-600 hover:bg-emerald-500 text-white transition-all active:scale-95"
+                  >
+                    Join
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

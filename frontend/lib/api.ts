@@ -222,6 +222,18 @@ export async function getMyGames() {
   return apiFetch('/api/games/mine/');
 }
 
+export interface FriendWaitingGame {
+  code: string;
+  player_count: number;
+  max_players: number;
+  friend_names: string[];
+  created_at: string;
+}
+
+export async function getFriendsWaitingGames(): Promise<{ games: FriendWaitingGame[] }> {
+  return apiFetch('/api/games/friends-waiting/');
+}
+
 export async function getUserGameHistory(page = 1, perPage = 20) {
   return apiFetch(`/api/games/history/?page=${page}&per_page=${perPage}`);
 }

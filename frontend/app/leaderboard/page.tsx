@@ -13,8 +13,10 @@ interface CasualEntry {
   rank: number;
   username: string;
   games: number;
-  wins: number;
-  losses: number;
+  pos_1: number;
+  pos_2: number;
+  pos_3: number;
+  pos_4: number;
 }
 
 const DIVISION_TABS: Division[] = ['Grandmaster', 'Master', 'Diamond', 'Platinum', 'Gold', 'Silver', 'Bronze'];
@@ -159,12 +161,14 @@ export default function LeaderboardPage() {
           ) : (
             <>
               {/* Casual Table Header */}
-              <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-800/50 border-b border-white/5 text-xs font-medium text-slate-400 uppercase tracking-wider">
+              <div className="grid grid-cols-12 gap-2 px-6 py-3 bg-slate-800/50 border-b border-white/5 text-xs font-medium text-slate-400 uppercase tracking-wider">
                 <div className="col-span-1">Rank</div>
-                <div className="col-span-5">Player</div>
+                <div className="col-span-3">Player</div>
                 <div className="col-span-2 text-center">Games</div>
-                <div className="col-span-2 text-center">Wins</div>
-                <div className="col-span-2 text-center">Losses</div>
+                <div className="col-span-1 text-center" title="1st Place">🥇</div>
+                <div className="col-span-1 text-center" title="2nd Place">🥈</div>
+                <div className="col-span-1 text-center" title="3rd Place">🥉</div>
+                <div className="col-span-1 text-center" title="4th Place">4th</div>
               </div>
 
               {/* Casual Table Body */}
@@ -175,7 +179,7 @@ export default function LeaderboardPage() {
                     <div 
                       key={entry.username}
                       className={`
-                        grid grid-cols-12 gap-4 px-6 py-4 items-center
+                        grid grid-cols-12 gap-2 px-6 py-4 items-center
                         transition-colors hover:bg-slate-800/30
                         ${isTop3 ? 'bg-gradient-to-r from-emerald-900/10 to-transparent' : ''}
                       `}
@@ -192,10 +196,10 @@ export default function LeaderboardPage() {
                       </div>
 
                       {/* Player */}
-                      <div className="col-span-5">
+                      <div className="col-span-3">
                         <button
                           onClick={() => router.push(`/profile/${entry.username}`)}
-                          className="font-medium text-slate-100 hover:text-emerald-400 transition-colors"
+                          className="font-medium text-slate-100 hover:text-emerald-400 transition-colors truncate"
                         >
                           {entry.username}
                         </button>
@@ -206,14 +210,24 @@ export default function LeaderboardPage() {
                         {entry.games}
                       </div>
 
-                      {/* Wins */}
-                      <div className="col-span-2 text-center text-emerald-400 font-medium">
-                        {entry.wins}
+                      {/* 1st Place */}
+                      <div className="col-span-1 text-center text-amber-400 font-bold">
+                        {entry.pos_1}
                       </div>
 
-                      {/* Losses */}
-                      <div className="col-span-2 text-center text-red-400 font-medium">
-                        {entry.losses}
+                      {/* 2nd Place */}
+                      <div className="col-span-1 text-center text-slate-300 font-medium">
+                        {entry.pos_2}
+                      </div>
+
+                      {/* 3rd Place */}
+                      <div className="col-span-1 text-center text-amber-700 font-medium">
+                        {entry.pos_3}
+                      </div>
+
+                      {/* 4th Place */}
+                      <div className="col-span-1 text-center text-slate-500 font-medium">
+                        {entry.pos_4}
                       </div>
                     </div>
                   );

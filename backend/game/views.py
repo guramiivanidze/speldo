@@ -200,6 +200,51 @@ class MyGamesView(APIView):
         return Response(data)
 
 
+class FriendsWaitingGamesView(APIView):
+    """Get waiting games created by friends that the user can join."""
+    
+    def get(self, request):
+        # Get friend IDs
+        friend_ids = list(
+            Friendship.objects.filter(user=request.user).values_list('friend_id', flat=True)
+        )
+        
+        if not friend_ids:
+            return Response({'games': []})
+        
+        # Get waiting games where a friend is a player AND user is NOT already in the game
+        my_game_ids = set(
+            GamePlayer.objects.filter(user=request.user).values_list('game_id', flat=True)
+        )
+        
+        # Find games where friends are players with status=waiting
+        friend_games = Game.objects.filter(
+            status=Game.STATUS_WAITING,
+            players__user_id__in=friend_ids
+        ).exclude(
+            id__in=my_game_ids
+        ).distinct().prefetch_related('players__user')
+        
+        games = []
+        for game in friend_games:
+            players = list(game.players.all())
+            # Find which friend(s) created/are in this game
+            friend_names = [p.user.username for p in players if p.user_id in friend_ids]
+            
+            games.append({
+                'code': game.code,
+                'player_count': len(players),
+                'max_players': game.max_players,
+                'friend_names': friend_names,
+                'created_at': game.created_at.isoformat(),
+            })
+        
+        # Sort by most recent
+        games.sort(key=lambda g: g['created_at'], reverse=True)
+        
+        return Response({'games': games})
+
+
 class UserGameHistoryView(APIView):
     """Get the game history for a user showing all finished games."""
     
@@ -643,45 +688,67 @@ class PendingGameInvitationsView(APIView):
 
 
 class CasualLeaderboardView(APIView):
-    """Get casual game leaderboard - top 50 players by wins."""
+    """Get casual game leaderboard - top 50 players by 1st place finishes."""
     permission_classes = []  # Public endpoint
     
     def get(self, request):
         from django.contrib.auth import get_user_model
-        from django.db.models import Count, Q
+        from collections import defaultdict
         
         User = get_user_model()
         
-        # Get users with their casual game stats
-        # Casual games are games without a ranked_match
-        users_with_stats = User.objects.annotate(
-            casual_games=Count(
-                'gameplayer__game',
-                filter=Q(
-                    gameplayer__game__status=Game.STATUS_FINISHED,
-                    gameplayer__game__ranked_match__isnull=True
-                ),
-                distinct=True
-            ),
-            casual_wins=Count(
-                'won_games',
-                filter=Q(
-                    won_games__ranked_match__isnull=True
-                )
-            )
-        ).filter(
-            casual_games__gt=0  # Only users who have played at least one casual game
-        ).order_by('-casual_wins', '-casual_games')[:50]  # Top 50 only
+        # Get all finished casual games (games without ranked_match)
+        casual_games = Game.objects.filter(
+            status=Game.STATUS_FINISHED,
+            ranked_match__isnull=True
+        ).prefetch_related('players__user')
         
+        # Track position counts for each user
+        # user_id -> {1: count, 2: count, 3: count, 4: count, 'games': count}
+        user_stats = defaultdict(lambda: {1: 0, 2: 0, 3: 0, 4: 0, 'games': 0})
+        
+        for game in casual_games:
+            players = list(game.players.all())
+            if not players:
+                continue
+            
+            # Sort by prestige_points desc, then by card count asc (tiebreaker)
+            players.sort(key=lambda p: (-p.prestige_points, len(p.purchased_card_ids)))
+            
+            # Assign positions
+            for position, player in enumerate(players, start=1):
+                user_id = player.user_id
+                user_stats[user_id]['games'] += 1
+                if position <= 4:
+                    user_stats[user_id][position] += 1
+        
+        # Get user objects for those with stats
+        user_ids = list(user_stats.keys())
+        users_by_id = {u.id: u for u in User.objects.filter(id__in=user_ids)}
+        
+        # Build entries and sort by 1st places, then 2nd, then 3rd, then 4th, then games
         entries = []
-        for rank, user in enumerate(users_with_stats, start=1):
-            entries.append({
-                'rank': rank,
-                'username': user.username,
-                'games': user.casual_games,
-                'wins': user.casual_wins,
-                'losses': user.casual_games - user.casual_wins,
-            })
+        for user_id, stats in user_stats.items():
+            user = users_by_id.get(user_id)
+            if user:
+                entries.append({
+                    'user_id': user_id,
+                    'username': user.username,
+                    'games': stats['games'],
+                    'pos_1': stats[1],
+                    'pos_2': stats[2],
+                    'pos_3': stats[3],
+                    'pos_4': stats[4],
+                })
+        
+        # Sort: most 1st places, then 2nd, then 3rd, then 4th, then fewest games (more efficient)
+        entries.sort(key=lambda e: (-e['pos_1'], -e['pos_2'], -e['pos_3'], -e['pos_4'], e['games']))
+        
+        # Take top 50 and assign ranks
+        entries = entries[:50]
+        for rank, entry in enumerate(entries, start=1):
+            entry['rank'] = rank
+            del entry['user_id']  # Don't expose user_id
         
         return Response({
             'entries': entries,
