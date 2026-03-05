@@ -892,7 +892,8 @@ class GameConsumer(AsyncWebsocketConsumer):
 
             # Check noble visits (auto-assign if only one eligible, else return choices)
             eligible_nobles = check_nobles(game_data, player_data)
-            if len(eligible_nobles) == 1:
+            if len(eligible_nobles) >= 1:
+                # Auto-pick first noble (TODO: add choose_noble flow for multiple)
                 gd2, pd2 = apply_noble_visit(game_data, player_data, eligible_nobles[0])
                 game.tokens_in_bank = gd2['tokens_in_bank']
                 game.visible_cards = gd2['visible_cards']
@@ -902,10 +903,6 @@ class GameConsumer(AsyncWebsocketConsumer):
                 current_gp.prestige_points = pd2['prestige_points']
                 player_data = pd2
                 game_data = gd2
-            elif len(eligible_nobles) > 1:
-                # Need player to choose - handled separately
-                # For now still auto-pick first (TODO: add choose_noble flow)
-                pass
 
             # Check end condition
             all_player_data = []
@@ -1333,7 +1330,8 @@ class GameConsumer(AsyncWebsocketConsumer):
                     # Check noble visits
                     noble_visited_id = None
                     eligible = check_nobles(new_gd, new_pd)
-                    if len(eligible) == 1:
+                    if len(eligible) >= 1:
+                        # Auto-pick first noble (TODO: add choose_noble flow for multiple)
                         noble_visited_id = eligible[0]
                         noble = get_noble(eligible[0])
                         logger.info(
