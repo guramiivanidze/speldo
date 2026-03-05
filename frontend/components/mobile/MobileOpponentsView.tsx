@@ -131,6 +131,25 @@ function OpponentCard({
           </div>
         </div>
 
+        {/* Total Power row */}
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-amber-400 uppercase w-12 shrink-0 font-semibold">Total</span>
+          <div className="flex gap-1">
+            {GEM_COLORS.map((color) => {
+              const total = (player.tokens[color] || 0) + (bonuses[color] || 0);
+              return (
+                <div
+                  key={color}
+                  className={`w-6 h-6 rounded-full flex items-center justify-center ring-1 ring-amber-500/30 ${total === 0 ? 'opacity-30' : ''}`}
+                  style={{ background: GEM_GRADIENT[color] }}
+                >
+                  <span className="text-[10px] font-bold">{total}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Reserved & Nobles row */}
         <div className="flex items-center gap-3">
           {/* Reserved */}

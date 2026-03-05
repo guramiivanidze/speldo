@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { PlayerState, Card } from '@/types/game';
 import { TokenRow } from './TokenDisplay';
-import { GEM_COLORS, GEM_DOT_STYLE, TOKEN_GRADIENT, TOKEN_TEXT } from '@/lib/colors';
+import { GEM_COLORS, GEM_DOT_STYLE, GEM_GRADIENT, TOKEN_GRADIENT, TOKEN_TEXT } from '@/lib/colors';
 import ReservedCardsModal from './ReservedCardsModal';
 
 interface PlayerAreaProps {
@@ -164,6 +164,25 @@ export default function PlayerArea({
                     >
                       <span className="text-[10px] font-black text-white drop-shadow">{count}</span>
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Total Power Row */}
+          <div className="flex items-center gap-1">
+            <span className="text-[9px] text-amber-400 w-12 shrink-0 font-semibold">Total</span>
+            <div className="flex gap-1">
+              {GEM_COLORS.map((color) => {
+                const total = (player.tokens[color] || 0) + (bonuses[color] || 0);
+                return (
+                  <div
+                    key={color}
+                    className={`w-6 h-6 rounded-full flex items-center justify-center ring-1 ring-amber-500/30 transition-all ${total > 0 ? 'scale-100' : 'scale-90 opacity-40'}`}
+                    style={{ background: GEM_GRADIENT[color] }}
+                  >
+                    <span className="text-[10px] font-bold">{total}</span>
                   </div>
                 );
               })}
