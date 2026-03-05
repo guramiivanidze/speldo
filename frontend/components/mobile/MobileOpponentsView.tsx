@@ -143,7 +143,7 @@ function OpponentCard({
                   className={`w-6 h-6 rounded-full flex items-center justify-center ring-1 ring-amber-500/30 ${total === 0 ? 'opacity-30' : ''}`}
                   style={{ background: GEM_GRADIENT[color] }}
                 >
-                  <span className="text-[10px] font-bold">{total}</span>
+                  <span className={`text-[10px] font-bold ${color === 'white' ? 'text-slate-800' : ''}`}>{total}</span>
                 </div>
               );
             })}

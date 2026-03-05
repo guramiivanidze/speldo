@@ -206,7 +206,7 @@ export default function CompactPlayerPanel({
                                     className={`w-5 h-5 rounded-full flex items-center justify-center ring-1 ring-amber-500/30 transition-all ${total > 0 ? 'opacity-100' : 'opacity-40'}`}
                                     style={{ background: GEM_GRADIENT[color] }}
                                 >
-                                    <span className="text-[8px] font-bold">{total}</span>
+                                    <span className={`text-[8px] font-bold ${color === 'white' ? 'text-slate-800' : ''}`}>{total}</span>
                                 </div>
                             );
                         })}
@@ -273,7 +273,7 @@ export default function CompactPlayerPanel({
                                     className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${total > 0 ? 'opacity-100' : 'opacity-40'}`}
                                     style={{ background: GEM_GRADIENT[color] }}
                                 >
-                                    <span className="text-[8px] font-bold">{total}</span>
+                                    <span className={`text-[8px] font-bold ${color === 'white' ? 'text-slate-800' : ''}`}>{total}</span>
                                 </div>
                             );
                         })}

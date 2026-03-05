@@ -182,7 +182,7 @@ export default function PlayerArea({
                     className={`w-6 h-6 rounded-full flex items-center justify-center ring-1 ring-amber-500/30 transition-all ${total > 0 ? 'scale-100' : 'scale-90 opacity-40'}`}
                     style={{ background: GEM_GRADIENT[color] }}
                   >
-                    <span className="text-[10px] font-bold">{total}</span>
+                    <span className={`text-[10px] font-bold ${color === 'white' ? 'text-slate-800' : ''}`}>{total}</span>
                   </div>
                 );
               })}
