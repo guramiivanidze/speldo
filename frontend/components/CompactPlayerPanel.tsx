@@ -1,7 +1,7 @@
 'use client';
 
 import { PlayerState, Card, Noble } from '@/types/game';
-import { GEM_COLORS, GEM_DOT_STYLE, TOKEN_GRADIENT, TOKEN_TEXT } from '@/lib/colors';
+import { GEM_COLORS, GEM_DOT_STYLE, GEM_GRADIENT, TOKEN_GRADIENT, TOKEN_TEXT } from '@/lib/colors';
 
 interface CompactPlayerPanelProps {
     player: PlayerState;
@@ -195,6 +195,22 @@ export default function CompactPlayerPanel({
                             );
                         })}
                     </div>
+
+                    {/* Total Power */}
+                    <div className="mt-2 flex gap-0.5 flex-wrap justify-center ring-2 ring-amber-500/30 rounded">
+                        {GEM_COLORS.map((color) => {
+                            const total = (player.tokens[color] || 0) + (bonuses[color] || 0);
+                            return (
+                                <div
+                                    key={color}
+                                    className={`w-5 h-5 rounded-full flex items-center justify-center ring-1 ring-amber-500/30 transition-all ${total > 0 ? 'opacity-100' : 'opacity-40'}`}
+                                    style={{ background: GEM_GRADIENT[color] }}
+                                >
+                                    <span className="text-[8px] font-bold">{total}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </>
             ) : (
                 /* Top position: tokens and bonuses inline */
@@ -241,6 +257,23 @@ export default function CompactPlayerPanel({
                                     >
                                         <span className="text-[8px] font-black text-white drop-shadow">{count}</span>
                                     </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Total Power */}
+                    <div className="w-px h-4 bg-white/10" />
+                    <div className="flex gap-0.5 px-1.5 py-0.5 rounded ring-2 ring-amber-500/40 bg-amber-500/5">
+                        {GEM_COLORS.map((color) => {
+                            const total = (player.tokens[color] || 0) + (bonuses[color] || 0);
+                            return (
+                                <div
+                                    key={color}
+                                    className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${total > 0 ? 'opacity-100' : 'opacity-40'}`}
+                                    style={{ background: GEM_GRADIENT[color] }}
+                                >
+                                    <span className="text-[8px] font-bold">{total}</span>
                                 </div>
                             );
                         })}
