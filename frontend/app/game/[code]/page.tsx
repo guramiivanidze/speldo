@@ -74,6 +74,7 @@ export default function GamePage({ params }: PageProps) {
     leaveGame,
     voteResponse,
     cancelPendingDiscard,
+    checkTurnTimeout,
     refreshState,
     sendChat,
     clearError,
@@ -230,6 +231,10 @@ export default function GamePage({ params }: PageProps) {
       setTimeout(() => setNotification(null), 3000);
       refreshState();
       clearPauseEvent();
+    } else if (pauseEvent.type === 'turn_skipped') {
+      setNotification(`${pauseEvent.skippedUsername}'s turn was skipped (timeout).`);
+      setTimeout(() => setNotification(null), 3000);
+      clearPauseEvent();
     }
   }, [pauseEvent, clearPauseEvent, refreshState, router]);
 
@@ -354,6 +359,7 @@ export default function GamePage({ params }: PageProps) {
             onBuyCard={handleBuyCard}
             onDiscardTokens={discardTokens}
             onCancelPendingDiscard={cancelPendingDiscard}
+            onCheckTurnTimeout={checkTurnTimeout}
             chatMessages={chatMessages}
             onSendChat={sendChat}
           />

@@ -75,10 +75,13 @@ export interface GameState {
   has_history: boolean;
   // Last action for animations
   last_action: LastAction | null;
+  // Turn timer
+  turn_remaining_seconds: number | null;
+  turn_warning: boolean;
 }
 
 export interface WebSocketMessage {
-  type: 'game_state' | 'error' | 'player_left_survey' | 'game_resumed' | 'player_rejoined' | 'game_ended_by_vote' | 'game_ended_all_left' | 'all_voted_wait' | 'pause_timeout_ended' | 'waiting_room_closed' | 'player_left_waiting' | 'chat_message';
+  type: 'game_state' | 'error' | 'player_left_survey' | 'game_resumed' | 'player_rejoined' | 'game_ended_by_vote' | 'game_ended_all_left' | 'all_voted_wait' | 'pause_timeout_ended' | 'waiting_room_closed' | 'player_left_waiting' | 'chat_message' | 'turn_skipped';
   state?: GameState;
   message?: string;
   left_user_id?: number;

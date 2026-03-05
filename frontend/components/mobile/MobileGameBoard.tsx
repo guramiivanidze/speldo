@@ -14,6 +14,7 @@ import MobileTokenSelector from './MobileTokenSelector';
 import DiscardTokensModal from '../DiscardTokensModal';
 import ActionNotification from '../ActionNotification';
 import GameChat from '../GameChat';
+import TurnTimer from '../TurnTimer';
 
 type MobileTab = 'board' | 'me' | 'opponents' | 'chat';
 
@@ -25,6 +26,7 @@ interface MobileGameBoardProps {
   onBuyCard: (cardId: number) => void;
   onDiscardTokens: (tokens: Record<string, number>) => void;
   onCancelPendingDiscard?: () => void;
+  onCheckTurnTimeout?: () => void;
   chatMessages?: ChatMessage[];
   onSendChat?: (message: string) => void;
 }
@@ -37,6 +39,7 @@ export default function MobileGameBoard({
   onBuyCard,
   onDiscardTokens,
   onCancelPendingDiscard,
+  onCheckTurnTimeout,
   chatMessages = [],
   onSendChat,
 }: MobileGameBoardProps) {
@@ -238,12 +241,24 @@ export default function MobileGameBoard({
 
   return (
     <div className="h-full w-full flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pt-4">
-      {/* Turn Banner */}
-      <MobileTurnBanner
-        players={gameState.players}
-        currentPlayerIndex={gameState.current_player_index}
-        myUserId={myUserId}
-      />
+      {/* Turn Banner with Timer */}
+      <div className="flex items-center justify-between px-2">
+        <div className="flex-1">
+          <MobileTurnBanner
+            players={gameState.players}
+            currentPlayerIndex={gameState.current_player_index}
+            myUserId={myUserId}
+          />
+        </div>
+        {gameState.status === 'playing' && currentPlayer && (
+          <TurnTimer
+            currentPlayerIndex={gameState.current_player_index}
+            onTimeout={onCheckTurnTimeout || (() => {})}
+            isMyTurn={isMyTurn}
+            currentPlayerName={currentPlayer.username}
+          />
+        )}
+      </div>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">

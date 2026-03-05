@@ -91,6 +91,16 @@ def serialize_game_state(game, players):
         remaining = game.pause_expires_at - timezone.now()
         pause_remaining_seconds = max(0, int(remaining.total_seconds()))
 
+    # Calculate turn timer info (30 seconds main + 10 seconds warning)
+    turn_remaining_seconds = None
+    turn_warning = False
+    if game.status == Game.STATUS_PLAYING and game.turn_started_at:
+        elapsed = (timezone.now() - game.turn_started_at).total_seconds()
+        total_time = 40  # 30 seconds main + 10 seconds warning = 40 total
+        remaining_time = total_time - elapsed
+        turn_remaining_seconds = max(0, int(remaining_time))
+        turn_warning = elapsed >= 30  # Warning period after 30 seconds
+
     # Build cards_data and nobles_data from database
     cards_data = {str(c['id']): c for c in get_all_cards()}
     nobles_data = {str(n['id']): n for n in get_all_nobles()}
@@ -131,6 +141,9 @@ def serialize_game_state(game, players):
         'pause_remaining_seconds': pause_remaining_seconds,
         'left_player_id': game.left_player_id,
         'player_votes': game.player_votes,
+        # Turn timer state
+        'turn_remaining_seconds': turn_remaining_seconds,
+        'turn_warning': turn_warning,
         # Token discard state
         'pending_discard': pending_discard,
         'pending_discard_count': pending_discard_count,
@@ -275,6 +288,7 @@ class GameConsumer(AsyncWebsocketConsumer):
             'refresh_state': self.handle_refresh_state,
             'cancel_pending_discard': self.handle_cancel_pending_discard,
             'chat_message': self.handle_chat_message,
+            'check_turn_timeout': self.handle_check_turn_timeout,
         }
 
         handler = handlers.get(action)
@@ -696,6 +710,19 @@ class GameConsumer(AsyncWebsocketConsumer):
         """Handle refresh state request - just sends current game state."""
         await self.send_game_state()
 
+    async def handle_check_turn_timeout(self, payload):
+        """Check if current player's turn has timed out and skip if so."""
+        # Just trigger a game state send which will check and handle timeout
+        await self.send_game_state()
+
+    async def turn_skipped(self, event):
+        """Notify that a player's turn was skipped due to timeout."""
+        await self.send(text_data=json.dumps({
+            'type': 'turn_skipped',
+            'user_id': event['user_id'],
+            'username': event['username'],
+        }))
+
     async def handle_chat_message(self, payload):
         """Handle chat message from a player."""
         message = payload.get('message', '').strip()
@@ -731,6 +758,9 @@ class GameConsumer(AsyncWebsocketConsumer):
         # First check pause status
         await self.check_pause_status()
         
+        # Check if current turn has timed out and skip if needed
+        await self._check_and_skip_timeout()
+        
         game, players = await self.get_game_and_players()
         if game is None:
             await self.send_error("Game not found.")
@@ -745,6 +775,55 @@ class GameConsumer(AsyncWebsocketConsumer):
             self.room_group_name,
             {'type': 'game_state_update', 'state': state}
         )
+    
+    async def _check_and_skip_timeout(self):
+        """Check if current player's turn has timed out and skip if so. Silent helper."""
+        @database_sync_to_async
+        def _db():
+            from django.db import transaction
+            try:
+                with transaction.atomic():
+                    game = Game.objects.select_for_update().get(code=self.game_code)
+                    players = list(game.players.select_related('user').order_by('order'))
+                    
+                    if game.status != Game.STATUS_PLAYING:
+                        return None, None
+                    
+                    if not game.turn_started_at:
+                        return None, None
+                    
+                    # Check if 40 seconds have passed
+                    elapsed = (timezone.now() - game.turn_started_at).total_seconds()
+                    if elapsed < 40:
+                        return None, None
+                    
+                    current_gp = players[game.current_player_index]
+                    skipped_username = current_gp.user.username
+                    skipped_user_id = current_gp.user.id
+                    
+                    if current_gp.pending_action_data:
+                        current_gp.pending_action_data = None
+                        current_gp.save()
+                    
+                    game.current_player_index = (game.current_player_index + 1) % len(players)
+                    game.turn_started_at = timezone.now()
+                    game.save()
+                    
+                    return skipped_username, skipped_user_id
+            except Game.DoesNotExist:
+                return None, None
+        
+        skipped_username, skipped_user_id = await _db()
+        
+        if skipped_username:
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {
+                    'type': 'turn_skipped',
+                    'user_id': skipped_user_id,
+                    'username': skipped_username,
+                }
+            )
 
     async def check_pause_status(self):
         """Check if pause has timed out or if it's time for a new survey."""
@@ -1476,5 +1555,8 @@ class GameConsumer(AsyncWebsocketConsumer):
                 finalize_ranked_match(game, players)
 
         game.current_player_index = (game.current_player_index + 1) % len(players)
+        # Reset turn timer for next player
+        if game.status == Game.STATUS_PLAYING:
+            game.turn_started_at = timezone.now()
         game.save()
         current_gp.save()

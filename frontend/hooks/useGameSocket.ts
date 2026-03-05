@@ -8,11 +8,13 @@ const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000]; // Exponential backoff
 
 export interface PauseEvent {
-  type: 'player_left' | 'game_resumed' | 'game_ended_vote' | 'game_ended_all_left' | 'all_voted_wait' | 'pause_timeout' | 'player_rejoined' | 'waiting_room_closed' | 'player_left_waiting';
+  type: 'player_left' | 'game_resumed' | 'game_ended_vote' | 'game_ended_all_left' | 'all_voted_wait' | 'pause_timeout' | 'player_rejoined' | 'waiting_room_closed' | 'player_left_waiting' | 'turn_skipped';
   leftUserId?: number;
   leftUsername?: string;
   rejoinedUserId?: number;
   rejoinedUsername?: string;
+  skippedUserId?: number;
+  skippedUsername?: string;
 }
 
 export interface ChatMessage {
@@ -111,6 +113,12 @@ export function useGameSocket(gameCode: string | null) {
               message,
               timestamp,
             }];
+          });
+        } else if (msg.type === 'turn_skipped') {
+          setPauseEvent({
+            type: 'turn_skipped',
+            skippedUserId: msg.user_id,
+            skippedUsername: msg.username,
           });
         }
       };
@@ -220,6 +228,11 @@ export function useGameSocket(gameCode: string | null) {
     sendAction('cancel_pending_discard', {});
   }, [sendAction]);
 
+  // Check if current player's turn has timed out
+  const checkTurnTimeout = useCallback(() => {
+    sendAction('check_turn_timeout', {});
+  }, [sendAction]);
+
   // Request fresh game state (triggers pause checks on backend)
   const refreshState = useCallback(() => {
     sendAction('refresh_state', {});
@@ -244,6 +257,7 @@ export function useGameSocket(gameCode: string | null) {
     leaveGame,
     voteResponse,
     cancelPendingDiscard,
+    checkTurnTimeout,
     refreshState,
     sendChat,
     clearError: () => setError(null),

@@ -103,6 +103,9 @@ class Game(models.Model):
     current_turn_number = models.IntegerField(default=0)  # Total turns taken so far
     created_at = models.DateTimeField(auto_now_add=True)
     
+    # Turn timer fields
+    turn_started_at = models.DateTimeField(null=True, blank=True)  # When current player's turn started
+    
     # Pause state fields
     paused_at = models.DateTimeField(null=True, blank=True)
     pause_expires_at = models.DateTimeField(null=True, blank=True)

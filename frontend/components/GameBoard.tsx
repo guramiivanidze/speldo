@@ -12,6 +12,7 @@ import { GEM_COLORS, TOKEN_LABEL } from '@/lib/colors';
 import useIsMobile from '@/hooks/useIsMobile';
 import MobileGameBoard from './mobile/MobileGameBoard';
 import ActionNotification from './ActionNotification';
+import TurnTimer from './TurnTimer';
 import { ChatMessage } from '@/hooks/useGameSocket';
 
 interface GameBoardProps {
@@ -22,6 +23,7 @@ interface GameBoardProps {
   onBuyCard: (cardId: number) => void;
   onDiscardTokens: (tokens: Record<string, number>) => void;
   onCancelPendingDiscard?: () => void;
+  onCheckTurnTimeout?: () => void;
   chatMessages?: ChatMessage[];
   onSendChat?: (message: string) => void;
 }
@@ -36,6 +38,7 @@ export default function GameBoard({
   onBuyCard,
   onDiscardTokens,
   onCancelPendingDiscard,
+  onCheckTurnTimeout,
   chatMessages = [],
   onSendChat,
 }: GameBoardProps) {
@@ -125,6 +128,7 @@ export default function GameBoard({
         onBuyCard={onBuyCard}
         onDiscardTokens={onDiscardTokens}
         onCancelPendingDiscard={onCancelPendingDiscard}
+        onCheckTurnTimeout={onCheckTurnTimeout}
         chatMessages={chatMessages}
         onSendChat={onSendChat}
       />
@@ -280,8 +284,17 @@ export default function GameBoard({
       {/* Main Board Grid */}
       <div className="flex-1 grid grid-rows-[auto_1fr_auto] grid-cols-[auto_1fr_auto] gap-0.5 min-h-0">
         
-        {/* Top-left corner */}
-        <div />
+        {/* Top-left corner - Turn Timer */}
+        <div className="flex items-center justify-start pl-2">
+          {gameState.status === 'playing' && currentPlayer && (
+            <TurnTimer
+              currentPlayerIndex={gameState.current_player_index}
+              onTimeout={onCheckTurnTimeout || (() => {})}
+              isMyTurn={isMyTurn}
+              currentPlayerName={currentPlayer.username}
+            />
+          )}
+        </div>
         
         {/* Top opponent */}
         <div className="flex justify-center gap-2">

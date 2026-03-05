@@ -133,6 +133,7 @@ class GameStartView(APIView):
         game.available_nobles = nobles
         game.current_player_index = 0  # First player in shuffled order always starts
         game.status = Game.STATUS_PLAYING
+        game.turn_started_at = timezone.now()  # Start turn timer for first player
         game.save()
 
         # Expire all pending invitations and notify invitees
