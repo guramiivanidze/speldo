@@ -54,6 +54,7 @@ export default function Home() {
   const [myGames, setMyGames] = useState<GameInfo[]>([]);
   const [joinCode, setJoinCode] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(2);
+  const [timerEnabled, setTimerEnabled] = useState(false);
   const [actionError, setActionError] = useState('');
   
   // Friends state
@@ -382,7 +383,7 @@ export default function Home() {
   async function handleCreate() {
     setActionError('');
     try {
-      const game = await createGame(maxPlayers);
+      const game = await createGame(maxPlayers, timerEnabled);
       router.push(`/game/${game.code}`);
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Error');
@@ -997,6 +998,30 @@ export default function Home() {
                 {n}
               </button>
             ))}
+          </div>
+
+          {/* Timer Toggle */}
+          <div className="flex items-center justify-between mb-4 px-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">Turn Timer:</span>
+              <span className="text-[10px] text-slate-500">(40s per turn)</span>
+            </div>
+            <button
+              onClick={() => setTimerEnabled(!timerEnabled)}
+              className={`
+                relative w-11 h-6 rounded-full transition-all duration-200
+                ${timerEnabled 
+                  ? 'bg-amber-500' 
+                  : 'bg-slate-700 border border-slate-600'}
+              `}
+            >
+              <div
+                className={`
+                  absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200
+                  ${timerEnabled ? 'left-[22px]' : 'left-0.5'}
+                `}
+              />
+            </button>
           </div>
 
           <button

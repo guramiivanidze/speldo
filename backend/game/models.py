@@ -103,6 +103,9 @@ class Game(models.Model):
     current_turn_number = models.IntegerField(default=0)  # Total turns taken so far
     created_at = models.DateTimeField(auto_now_add=True)
     
+    # Turn timer setting (optional per game)
+    timer_enabled = models.BooleanField(default=False)  # Whether turn timer is active
+    
     # Turn timer fields
     turn_started_at = models.DateTimeField(null=True, blank=True)  # When current player's turn started
     

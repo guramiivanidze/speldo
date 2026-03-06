@@ -187,10 +187,10 @@ export async function getGameRules(): Promise<GameRulesResponse> {
   return res.json();
 }
 
-export async function createGame(max_players: number) {
+export async function createGame(max_players: number, timer_enabled: boolean = false) {
   return apiFetch('/api/games/', {
     method: 'POST',
-    body: JSON.stringify({ max_players }),
+    body: JSON.stringify({ max_players, timer_enabled }),
   });
 }
 

@@ -286,7 +286,7 @@ export default function GameBoard({
         
         {/* Top-left corner - Turn Timer */}
         <div className="flex items-center justify-start pl-2">
-          {gameState.status === 'playing' && currentPlayer && (
+          {gameState.timer_enabled && gameState.status === 'playing' && currentPlayer && (
             <TurnTimer
               currentPlayerIndex={gameState.current_player_index}
               onTimeout={onCheckTurnTimeout || (() => {})}

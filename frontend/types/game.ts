@@ -76,6 +76,7 @@ export interface GameState {
   // Last action for animations
   last_action: LastAction | null;
   // Turn timer
+  timer_enabled: boolean;
   turn_remaining_seconds: number | null;
   turn_warning: boolean;
 }

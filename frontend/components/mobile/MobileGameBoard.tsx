@@ -250,7 +250,7 @@ export default function MobileGameBoard({
             myUserId={myUserId}
           />
         </div>
-        {gameState.status === 'playing' && currentPlayer && (
+        {gameState.timer_enabled && gameState.status === 'playing' && currentPlayer && (
           <TurnTimer
             currentPlayerIndex={gameState.current_player_index}
             onTimeout={onCheckTurnTimeout || (() => {})}

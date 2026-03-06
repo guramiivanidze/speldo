@@ -91,10 +91,10 @@ def serialize_game_state(game, players):
         remaining = game.pause_expires_at - timezone.now()
         pause_remaining_seconds = max(0, int(remaining.total_seconds()))
 
-    # Calculate turn timer info (30 seconds main + 10 seconds warning)
+    # Calculate turn timer info (30 seconds main + 10 seconds warning) - only if timer enabled
     turn_remaining_seconds = None
     turn_warning = False
-    if game.status == Game.STATUS_PLAYING and game.turn_started_at:
+    if game.timer_enabled and game.status == Game.STATUS_PLAYING and game.turn_started_at:
         elapsed = (timezone.now() - game.turn_started_at).total_seconds()
         total_time = 40  # 30 seconds main + 10 seconds warning = 40 total
         remaining_time = total_time - elapsed
@@ -142,6 +142,7 @@ def serialize_game_state(game, players):
         'left_player_id': game.left_player_id,
         'player_votes': game.player_votes,
         # Turn timer state
+        'timer_enabled': game.timer_enabled,
         'turn_remaining_seconds': turn_remaining_seconds,
         'turn_warning': turn_warning,
         # Token discard state
@@ -787,6 +788,10 @@ class GameConsumer(AsyncWebsocketConsumer):
                     players = list(game.players.select_related('user').order_by('order'))
                     
                     if game.status != Game.STATUS_PLAYING:
+                        return None, None
+                    
+                    # Only skip turns if timer is enabled for this game
+                    if not game.timer_enabled:
                         return None, None
                     
                     if not game.turn_started_at:

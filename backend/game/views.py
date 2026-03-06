@@ -27,12 +27,14 @@ class GameListCreateView(APIView):
         max_players = request.data.get('max_players', 4)
         if max_players not in [2, 3, 4]:
             return Response({'error': 'max_players must be 2, 3, or 4.'}, status=400)
+        
+        timer_enabled = request.data.get('timer_enabled', False)
 
         code = generate_code()
         while Game.objects.filter(code=code).exists():
             code = generate_code()
 
-        game = Game.objects.create(code=code, max_players=max_players)
+        game = Game.objects.create(code=code, max_players=max_players, timer_enabled=timer_enabled)
         GamePlayer.objects.create(
             game=game, user=request.user, order=0,
             tokens={c: 0 for c in ['white', 'blue', 'green', 'red', 'black', 'gold']},
