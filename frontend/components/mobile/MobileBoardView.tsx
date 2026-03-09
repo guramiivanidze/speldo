@@ -72,8 +72,8 @@ export default function MobileBoardView({
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden relative">
-            {/* Floating indicators on the right */}
-            <div className="absolute right-2 top-30 z-30 flex flex-col gap-2">
+            {/* Floating indicators on the left */}
+            <div className="absolute left-2 top-40 z-30 flex flex-col gap-2">
                 {/* Nobles indicator */}
                 <button
                     onClick={() => setShowNoblesPanel(!showNoblesPanel)}
