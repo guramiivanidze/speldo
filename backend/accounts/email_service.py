@@ -4,6 +4,7 @@ OTP codes are stored in the database and visible in Django admin.
 """
 import random
 import time
+import threading
 from datetime import timedelta
 from django.conf import settings
 from django.core import signing
@@ -85,12 +86,23 @@ def send_verification_email(email: str, otp: str) -> tuple[bool, str]:
 
     # Check if email sending is configured
     email_host = getattr(settings, 'EMAIL_HOST', '')
+    email_user = getattr(settings, 'EMAIL_HOST_USER', '')
+    email_password = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
+    is_debug = getattr(settings, 'DEBUG', False)
 
-    if not email_host or getattr(settings, 'DEBUG', False):
-        # Development mode - skip email, use static code
-        print(
-            f"[DEV MODE] Verification code for {email}: {otp} (static: 123456)")
+    # Log email configuration status
+    print(f"[EMAIL] Attempting to send to {email}")
+    print(f"[EMAIL] Config: HOST={email_host}, USER={email_user[:3] + '***' if email_user else 'NOT SET'}, DEBUG={is_debug}")
+
+    # Skip email in debug mode
+    if is_debug:
+        print(f"[DEV MODE] Verification code for {email}: {otp} (static: 123456)")
         return True, ''
+
+    # Check if email is properly configured
+    if not email_host or not email_user or not email_password:
+        print(f"[EMAIL ERROR] SMTP not configured! HOST={bool(email_host)}, USER={bool(email_user)}, PASS={bool(email_password)}")
+        return False, 'Email service not configured. Please set EMAIL_HOST, EMAIL_HOST_USER, and EMAIL_HOST_PASSWORD.'
 
     # Simple, minimalistic email content
     html_content = f"""
@@ -148,16 +160,24 @@ def send_verification_email(email: str, otp: str) -> tuple[bool, str]:
     from_email = getattr(settings, 'DEFAULT_FROM_EMAIL',
                          settings.EMAIL_HOST_USER)
 
-    try:
-        send_mail(
-            subject=f"Your Spledor verification code: {otp}",
-            message=text_content,
-            from_email=from_email,
-            recipient_list=[email],
-            html_message=html_content,
-            fail_silently=False,
-        )
-        return True, ''
+    def send_email_thread():
+        """Send email in background thread to avoid blocking ASGI."""
+        try:
+            print(f"[EMAIL] Connecting to SMTP server {email_host}:{getattr(settings, 'EMAIL_PORT', 587)}...")
+            send_mail(
+                subject=f"Your Spledor verification code: {otp}",
+                message=text_content,
+                from_email=from_email,
+                recipient_list=[email],
+                html_message=html_content,
+                fail_silently=False,
+            )
+            print(f"[EMAIL] Successfully sent verification email to {email}")
+        except Exception as e:
+            print(f"[EMAIL ERROR] Failed to send email to {email}: {type(e).__name__}: {e}")
 
-    except Exception as e:
-        return False, f'Email service error: {str(e)}'
+    # Send email in background thread to avoid ASGI timeout
+    thread = threading.Thread(target=send_email_thread, daemon=True)
+    thread.start()
+    
+    return True, ''

@@ -33,6 +33,21 @@ services:
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      # Email SMTP settings (set these in Render dashboard)
+      - key: EMAIL_HOST
+        sync: false  # e.g., smtp.gmail.com
+      - key: EMAIL_PORT
+        sync: false  # e.g., 587
+      - key: EMAIL_HOST_USER
+        sync: false  # Your email address
+      - key: EMAIL_HOST_PASSWORD
+        sync: false  # App password (not regular password)
+      - key: EMAIL_USE_TLS
+        sync: false  # True for Gmail
+      - key: DEFAULT_FROM_EMAIL
+        sync: false  # Sender email address
+      - key: EMAIL_VERIFICATION_ENABLED
+        value: "True"
 
   # ============================================
   # FRONTEND - Next.js
