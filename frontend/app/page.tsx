@@ -10,6 +10,8 @@ import type { PlayerProfile, Season } from '@/types/competitive';
 import DivisionBadge from '@/components/DivisionBadge';
 import MatchFoundModal from '@/components/MatchFoundModal';
 import HowToPlayModal from '@/components/HowToPlayModal';
+import EmailVerificationModal from '@/components/EmailVerificationModal';
+import ForgotPasswordModal from '@/components/ForgotPasswordModal';
 
 interface GameInfo {
   id: string;
@@ -22,7 +24,7 @@ interface GameInfo {
 const GEM_COLORS_HEX = ['#f1f5f9', '#3b82f6', '#10b981', '#ef4444', '#475569', '#fde047'];
 
 export default function Home() {
-  const { user, loading, setUser, clearAuth } = useAuth();
+  const { user, loading, setUser, clearAuth, updateEmailVerified } = useAuth();
   const router = useRouter();
 
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -73,6 +75,12 @@ export default function Home() {
   
   // How to Play modal state
   const [howToPlayOpen, setHowToPlayOpen] = useState(false);
+  
+  // Email verification modal state
+  const [showEmailVerificationModal, setShowEmailVerificationModal] = useState(false);
+  
+  // Forgot password modal state
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   
   // Competitive state
   const [rankedProfile, setRankedProfile] = useState<PlayerProfile | null>(null);
@@ -155,6 +163,10 @@ export default function Home() {
   useEffect(() => { 
     if (user) {
       fetchAllUserData();
+      // Show email verification modal if not verified
+      if (user.email_verified === false && user.email) {
+        setShowEmailVerificationModal(true);
+      }
     }
   }, [user]);
 
@@ -297,6 +309,7 @@ export default function Home() {
     
     setSendingCode(true);
     setCodeError('');
+    setEmailError('');
     
     try {
       const result = await sendVerificationCode(email);
@@ -304,7 +317,8 @@ export default function Home() {
       setCodeSent(true);
       setEmailVerified(false);
     } catch (err: unknown) {
-      setCodeError(err instanceof Error ? err.message : 'Failed to send code');
+      // Show error on email field since code section isn't visible yet
+      setEmailError(err instanceof Error ? err.message : 'Failed to send code');
     } finally {
       setSendingCode(false);
     }
@@ -423,6 +437,7 @@ export default function Home() {
   // ── Auth screen ──────────────────────────────────────
   if (!user) {
     return (
+      <>
       <div className="min-h-[80vh] flex flex-col items-center justify-center">
         {/* Hero */}
         <div className="text-center mb-10">
@@ -636,19 +651,28 @@ export default function Home() {
 
             {/* Remember Me - only for login */}
             {authMode === 'login' && (
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="
-                    w-4 h-4 rounded border-slate-600 bg-slate-800
-                    text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0
-                    cursor-pointer
-                  "
-                />
-                <span className="text-sm text-slate-400">Remember me for 30 days</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="
+                      w-4 h-4 rounded border-slate-600 bg-slate-800
+                      text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0
+                      cursor-pointer
+                    "
+                  />
+                  <span className="text-sm text-slate-400">Remember me for 30 days</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPasswordModal(true)}
+                  className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+                >
+                  Forgot password?
+                </button>
+              </div>
             )}
 
             {authError && (
@@ -709,6 +733,14 @@ export default function Home() {
           </form>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal
+        isOpen={showForgotPasswordModal}
+        onClose={() => setShowForgotPasswordModal(false)}
+        onSuccess={() => setShowForgotPasswordModal(false)}
+      />
+      </>
     );
   }
 
@@ -1324,6 +1356,17 @@ export default function Home() {
       <HowToPlayModal
         isOpen={howToPlayOpen}
         onClose={() => setHowToPlayOpen(false)}
+      />
+
+      {/* Email Verification Modal */}
+      <EmailVerificationModal
+        isOpen={showEmailVerificationModal}
+        email={user?.email || ''}
+        onVerified={() => {
+          updateEmailVerified(true);
+          setShowEmailVerificationModal(false);
+        }}
+        onClose={() => setShowEmailVerificationModal(false)}
       />
 
       {/* My games */}

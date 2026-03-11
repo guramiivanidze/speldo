@@ -12,6 +12,7 @@ import MobilePlayerView from './MobilePlayerView';
 import MobileOpponentsView from './MobileOpponentsView';
 import MobileTokenSelector from './MobileTokenSelector';
 import DiscardTokensModal from '../DiscardTokensModal';
+import NobleChoiceModal from '../NobleChoiceModal';
 import ActionNotification from '../ActionNotification';
 import GameChat from '../GameChat';
 import TurnTimer from '../TurnTimer';
@@ -25,6 +26,7 @@ interface MobileGameBoardProps {
   onReserveCard: (cardId?: number, level?: number) => void;
   onBuyCard: (cardId: number) => void;
   onDiscardTokens: (tokens: Record<string, number>) => void;
+  onChooseNoble: (nobleId: number) => void;
   onCancelPendingDiscard?: () => void;
   onCheckTurnTimeout?: () => void;
   chatMessages?: ChatMessage[];
@@ -38,6 +40,7 @@ export default function MobileGameBoard({
   onReserveCard,
   onBuyCard,
   onDiscardTokens,
+  onChooseNoble,
   onCancelPendingDiscard,
   onCheckTurnTimeout,
   chatMessages = [],
@@ -58,7 +61,14 @@ export default function MobileGameBoard({
   // Check if I need to discard tokens
   const showDiscardModal = gameState.pending_discard && isMyTurn && me;
 
+  // Check if I need to choose a noble
+  const pendingNobleChoice = gameState.pending_noble_choice || [];
+  const showNobleChoiceModal = pendingNobleChoice.length > 0 && isMyTurn;
+
   const { cards_data, nobles_data, visible_cards, deck_counts, tokens_in_bank, available_nobles } = gameState;
+
+  // Get eligible nobles for modal
+  const eligibleNobles = pendingNobleChoice.map(id => nobles_data[String(id)]).filter(Boolean);
 
   // Compute which cards I can afford
   const canAfford = useCallback((cardId: number): boolean => {
@@ -347,6 +357,14 @@ export default function MobileGameBoard({
           discardCount={gameState.pending_discard_count}
           onDiscard={onDiscardTokens}
           onCancel={onCancelPendingDiscard}
+        />
+      )}
+
+      {/* Noble Choice Modal */}
+      {showNobleChoiceModal && eligibleNobles.length > 0 && (
+        <NobleChoiceModal
+          eligibleNobles={eligibleNobles}
+          onChoose={onChooseNoble}
         />
       )}
 

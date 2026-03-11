@@ -1,0 +1,183 @@
+'use client';
+
+import { useState } from 'react';
+import { sendUserVerificationCode, verifyUserEmail } from '@/lib/api';
+
+interface EmailVerificationModalProps {
+  isOpen: boolean;
+  email: string;
+  onVerified: () => void;
+  onClose: () => void;
+}
+
+export default function EmailVerificationModal({ 
+  isOpen, 
+  email, 
+  onVerified, 
+  onClose 
+}: EmailVerificationModalProps) {
+  const [step, setStep] = useState<'initial' | 'code'>('initial');
+  const [verificationToken, setVerificationToken] = useState('');
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  if (!isOpen) return null;
+
+  const handleSendCode = async () => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      const result = await sendUserVerificationCode();
+      setVerificationToken(result.verification_token);
+      setStep('code');
+      setSuccess('Verification code sent to your email!');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (code.length !== 6) {
+      setError('Please enter the 6-digit code');
+      return;
+    }
+    
+    setLoading(true);
+    setError('');
+    
+    try {
+      await verifyUserEmail(code, verificationToken);
+      setSuccess('Email verified successfully!');
+      setTimeout(() => {
+        onVerified();
+      }, 1000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Verification failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCodeChange = (value: string) => {
+    // Only allow digits, max 6 chars
+    const cleaned = value.replace(/\D/g, '').slice(0, 6);
+    setCode(cleaned);
+    if (error) setError('');
+  };
+
+  return (
+    <div 
+      className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onClick={onClose}
+    >
+      <div 
+        className="max-w-md w-full animate-fade-in"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="glass rounded-2xl border border-white/10 overflow-hidden">
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">✉️</span>
+              <div>
+                <h2 className="text-lg font-bold text-slate-100">Verify Your Email</h2>
+                <p className="text-slate-400 text-sm">One-time verification required</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-slate-200 text-2xl leading-none hover:bg-slate-700/50 w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+            >
+              ×
+            </button>
+          </div>
+          
+          {/* Content */}
+          <div className="p-6 space-y-4">
+            {step === 'initial' ? (
+              <>
+                <p className="text-slate-300">
+                  To continue using all features, please verify your email address:
+                </p>
+                <div className="bg-slate-800/50 rounded-xl p-4 text-center">
+                  <p className="text-slate-400 text-sm">Your email</p>
+                  <p className="text-lg font-medium text-slate-100">{email}</p>
+                </div>
+                <p className="text-slate-400 text-sm">
+                  We'll send a 6-digit verification code to this email address.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-slate-300">
+                  Enter the 6-digit code sent to <span className="font-medium text-slate-100">{email}</span>
+                </p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className={`
+                    w-full px-4 py-3 rounded-xl text-center
+                    bg-slate-800 border text-slate-100 placeholder-slate-500
+                    focus:outline-none focus:ring-1 transition-colors
+                    font-mono text-2xl tracking-[0.3em]
+                    ${error 
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/50' 
+                      : code.length === 6
+                        ? 'border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/50'
+                        : 'border-slate-700 focus:border-indigo-500 focus:ring-indigo-500/50'}
+                  `}
+                  placeholder="000000"
+                  value={code}
+                  onChange={(e) => handleCodeChange(e.target.value)}
+                  maxLength={6}
+                  autoComplete="one-time-code"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => { setStep('initial'); setCode(''); setError(''); }}
+                  className="text-sm text-indigo-400 hover:text-indigo-300"
+                >
+                  ← Send a new code
+                </button>
+              </>
+            )}
+
+            {error && (
+              <p className="text-red-400 text-sm text-center">{error}</p>
+            )}
+            {success && !error && (
+              <p className="text-emerald-400 text-sm text-center">{success}</p>
+            )}
+          </div>
+          
+          {/* Actions */}
+          <div className="px-6 pb-6">
+            {step === 'initial' ? (
+              <button
+                onClick={handleSendCode}
+                disabled={loading}
+                className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Sending...' : 'Send Verification Code'}
+              </button>
+            ) : (
+              <button
+                onClick={handleVerify}
+                disabled={loading || code.length !== 6}
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Verifying...' : 'Verify Email'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

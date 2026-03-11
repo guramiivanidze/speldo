@@ -6,6 +6,8 @@ import { getMe, getStoredToken, setStoredToken } from '@/lib/api';
 interface User {
   id: number;
   username: string;
+  email?: string;
+  email_verified?: boolean;
 }
 
 interface AuthContextType {
@@ -13,6 +15,7 @@ interface AuthContextType {
   loading: boolean;
   setUser: (user: User | null) => void;
   clearAuth: () => void;
+  updateEmailVerified: (verified: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -20,6 +23,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   setUser: () => {},
   clearAuth: () => {},
+  updateEmailVerified: () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -48,8 +52,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStoredToken(null);
   };
 
+  const updateEmailVerified = (verified: boolean) => {
+    if (user) {
+      setUser({ ...user, email_verified: verified });
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, setUser, clearAuth }}>
+    <AuthContext.Provider value={{ user, loading, setUser, clearAuth, updateEmailVerified }}>
       {children}
     </AuthContext.Provider>
   );

@@ -71,6 +71,7 @@ export default function GamePage({ params }: PageProps) {
     discardTokens,
     reserveCard,
     buyCard,
+    chooseNoble,
     leaveGame,
     voteResponse,
     cancelPendingDiscard,
@@ -358,6 +359,7 @@ export default function GamePage({ params }: PageProps) {
             onReserveCard={handleReserveCard}
             onBuyCard={handleBuyCard}
             onDiscardTokens={discardTokens}
+            onChooseNoble={chooseNoble}
             onCancelPendingDiscard={cancelPendingDiscard}
             onCheckTurnTimeout={checkTurnTimeout}
             chatMessages={chatMessages}
@@ -585,6 +587,7 @@ export default function GamePage({ params }: PageProps) {
                 onReserveCard={() => {}}
                 onBuyCard={() => {}}
                 onDiscardTokens={() => {}}
+                onChooseNoble={() => {}}
               />
             </div>
           </details>

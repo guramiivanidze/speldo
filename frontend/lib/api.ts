@@ -80,6 +80,44 @@ export async function verifyCode(email: string, code: string, verificationToken:
   });
 }
 
+// For existing logged-in users to verify their email
+export async function sendUserVerificationCode(): Promise<{ message: string; verification_token: string; email: string }> {
+  return apiFetch('/api/auth/send-user-verification/', {
+    method: 'POST',
+  });
+}
+
+export async function verifyUserEmail(code: string, verificationToken: string): Promise<{ message: string; email_verified: boolean }> {
+  return apiFetch('/api/auth/verify-user-email/', {
+    method: 'POST',
+    body: JSON.stringify({ code, verification_token: verificationToken }),
+  });
+}
+
+export async function sendPasswordResetCode(email: string): Promise<{ message: string; verification_token: string }> {
+  return apiFetch('/api/auth/send-password-reset-code/', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resetPassword(
+  email: string,
+  code: string,
+  verificationToken: string,
+  newPassword: string
+): Promise<{ message: string }> {
+  return apiFetch('/api/auth/reset-password/', {
+    method: 'POST',
+    body: JSON.stringify({
+      email,
+      code,
+      verification_token: verificationToken,
+      new_password: newPassword,
+    }),
+  });
+}
+
 export async function register(
   username: string,
   email: string,

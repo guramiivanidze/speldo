@@ -8,6 +8,7 @@ import { TokenRow } from './TokenDisplay';
 import CompactPlayerPanel from './CompactPlayerPanel';
 import PlayerArea from './PlayerArea';
 import DiscardTokensModal from './DiscardTokensModal';
+import NobleChoiceModal from './NobleChoiceModal';
 import { GEM_COLORS, TOKEN_LABEL } from '@/lib/colors';
 import useIsMobile from '@/hooks/useIsMobile';
 import MobileGameBoard from './mobile/MobileGameBoard';
@@ -22,6 +23,7 @@ interface GameBoardProps {
   onReserveCard: (cardId?: number, level?: number) => void;
   onBuyCard: (cardId: number) => void;
   onDiscardTokens: (tokens: Record<string, number>) => void;
+  onChooseNoble: (nobleId: number) => void;
   onCancelPendingDiscard?: () => void;
   onCheckTurnTimeout?: () => void;
   chatMessages?: ChatMessage[];
@@ -37,6 +39,7 @@ export default function GameBoard({
   onReserveCard,
   onBuyCard,
   onDiscardTokens,
+  onChooseNoble,
   onCancelPendingDiscard,
   onCheckTurnTimeout,
   chatMessages = [],
@@ -127,6 +130,7 @@ export default function GameBoard({
         onReserveCard={onReserveCard}
         onBuyCard={onBuyCard}
         onDiscardTokens={onDiscardTokens}
+        onChooseNoble={onChooseNoble}
         onCancelPendingDiscard={onCancelPendingDiscard}
         onCheckTurnTimeout={onCheckTurnTimeout}
         chatMessages={chatMessages}
@@ -146,6 +150,11 @@ export default function GameBoard({
   const showDiscardModal = gameState.pending_discard && isMyTurn && me;
 
   const { cards_data, nobles_data, visible_cards, deck_counts, tokens_in_bank, available_nobles } = gameState;
+
+  // Check if I need to choose a noble (pending_noble_choice is not empty and it's my turn)
+  const pendingNobleChoice = gameState.pending_noble_choice || [];
+  const showNobleChoiceModal = pendingNobleChoice.length > 0 && isMyTurn;
+  const eligibleNobles = pendingNobleChoice.map(id => nobles_data[String(id)]).filter(Boolean);
 
   // Find my index in the player order
   const myIndex = gameState.players.findIndex(p => p.id === myUserId);
@@ -478,6 +487,14 @@ export default function GameBoard({
           discardCount={gameState.pending_discard_count}
           onDiscard={onDiscardTokens}
           onCancel={onCancelPendingDiscard}
+        />
+      )}
+
+      {/* Noble choice modal */}
+      {showNobleChoiceModal && eligibleNobles.length > 0 && (
+        <NobleChoiceModal
+          eligibleNobles={eligibleNobles}
+          onChoose={onChooseNoble}
         />
       )}
 

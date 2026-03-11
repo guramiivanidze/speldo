@@ -70,6 +70,8 @@ export interface GameState {
   // Token discard state
   pending_discard: boolean;
   pending_discard_count: number;
+  // Noble choice state
+  pending_noble_choice: number[];
   // History info
   total_turns: number;
   has_history: boolean;
