@@ -440,8 +440,9 @@ export async function getLeaderboardByDivision(division: string) {
   return apiFetch(`/api/competitive/leaderboard/${division.toLowerCase()}/`);
 }
 
-export async function getCasualLeaderboard() {
-  return apiFetch('/api/games/casual-leaderboard/');
+export async function getCasualLeaderboard(playerCount?: number) {
+  const params = playerCount ? `?player_count=${playerCount}` : '';
+  return apiFetch(`/api/games/casual-leaderboard/${params}`);
 }
 
 export async function joinMatchmaking() {

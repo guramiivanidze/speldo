@@ -696,9 +696,21 @@ class CasualLeaderboardView(APIView):
     
     def get(self, request):
         from django.contrib.auth import get_user_model
+        from django.db.models import Count
         from collections import defaultdict
         
         User = get_user_model()
+        
+        # Get player_count filter (2, 3, or 4)
+        player_count_param = request.query_params.get('player_count')
+        player_count = None
+        if player_count_param:
+            try:
+                player_count = int(player_count_param)
+                if player_count not in [2, 3, 4]:
+                    player_count = None
+            except ValueError:
+                player_count = None
         
         # Get all finished casual games (games without ranked_match)
         casual_games = Game.objects.filter(
@@ -706,13 +718,29 @@ class CasualLeaderboardView(APIView):
             ranked_match__isnull=True
         ).prefetch_related('players__user')
         
+        # If player_count is specified, filter by annotated count
+        if player_count:
+            casual_games = casual_games.annotate(
+                num_players=Count('players')
+            ).filter(num_players=player_count)
+        
+        # Determine max positions based on filter
+        max_positions = player_count if player_count else 4
+        
         # Track position counts for each user
-        # user_id -> {1: count, 2: count, 3: count, 4: count, 'games': count}
-        user_stats = defaultdict(lambda: {1: 0, 2: 0, 3: 0, 4: 0, 'games': 0})
+        # user_id -> {1: count, 2: count, ..., 'games': count}
+        default_stats = lambda: {i: 0 for i in range(1, max_positions + 1)}
+        default_stats_with_games = lambda: {**{i: 0 for i in range(1, max_positions + 1)}, 'games': 0}
+        user_stats = defaultdict(default_stats_with_games)
         
         for game in casual_games:
             players = list(game.players.all())
             if not players:
+                continue
+            
+            # If filtering by player_count, skip games that don't match
+            # (This is a backup check in case annotation didn't work perfectly)
+            if player_count and len(players) != player_count:
                 continue
             
             # Sort by prestige_points desc, then by card count asc (tiebreaker)
@@ -722,30 +750,31 @@ class CasualLeaderboardView(APIView):
             for position, player in enumerate(players, start=1):
                 user_id = player.user_id
                 user_stats[user_id]['games'] += 1
-                if position <= 4:
+                if position <= max_positions:
                     user_stats[user_id][position] += 1
         
         # Get user objects for those with stats
         user_ids = list(user_stats.keys())
         users_by_id = {u.id: u for u in User.objects.filter(id__in=user_ids)}
         
-        # Build entries and sort by 1st places, then 2nd, then 3rd, then 4th, then games
+        # Build entries and sort by 1st places, then 2nd, etc.
         entries = []
         for user_id, stats in user_stats.items():
             user = users_by_id.get(user_id)
             if user:
-                entries.append({
+                entry = {
                     'user_id': user_id,
                     'username': user.username,
                     'games': stats['games'],
-                    'pos_1': stats[1],
-                    'pos_2': stats[2],
-                    'pos_3': stats[3],
-                    'pos_4': stats[4],
-                })
+                }
+                # Add position counts dynamically
+                for pos in range(1, max_positions + 1):
+                    entry[f'pos_{pos}'] = stats[pos]
+                entries.append(entry)
         
-        # Sort: most 1st places, then 2nd, then 3rd, then 4th, then fewest games (more efficient)
-        entries.sort(key=lambda e: (-e['pos_1'], -e['pos_2'], -e['pos_3'], -e['pos_4'], e['games']))
+        # Sort: most 1st places, then 2nd, then 3rd, then 4th, then fewest games
+        sort_keys = [f'pos_{i}' for i in range(1, max_positions + 1)]
+        entries.sort(key=lambda e: tuple(-e[k] for k in sort_keys) + (e['games'],))
         
         # Take top 50 and assign ranks
         entries = entries[:50]
@@ -756,4 +785,6 @@ class CasualLeaderboardView(APIView):
         return Response({
             'entries': entries,
             'total': len(entries),
+            'player_count': player_count,
+            'max_positions': max_positions,
         })

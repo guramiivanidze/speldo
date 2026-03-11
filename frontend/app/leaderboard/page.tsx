@@ -8,24 +8,27 @@ import DivisionBadge from '@/components/DivisionBadge';
 
 type LeaderboardMode = 'ranked' | 'casual';
 type Tab = 'global' | Division;
+type PlayerCountTab = 2 | 3 | 4;
 
 interface CasualEntry {
   rank: number;
   username: string;
   games: number;
   pos_1: number;
-  pos_2: number;
-  pos_3: number;
-  pos_4: number;
+  pos_2?: number;
+  pos_3?: number;
+  pos_4?: number;
 }
 
 const DIVISION_TABS: Division[] = ['Grandmaster', 'Master', 'Diamond', 'Platinum', 'Gold', 'Silver', 'Bronze'];
+const PLAYER_COUNT_TABS: PlayerCountTab[] = [2, 3, 4];
 
 export default function LeaderboardPage() {
   const router = useRouter();
   
   const [mode, setMode] = useState<LeaderboardMode | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('global');
+  const [playerCountTab, setPlayerCountTab] = useState<PlayerCountTab>(2);
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [casualEntries, setCasualEntries] = useState<CasualEntry[]>([]);
   const [season, setSeason] = useState<Season | null>(null);
@@ -54,7 +57,7 @@ export default function LeaderboardPage() {
       setLoading(true);
       try {
         if (mode === 'casual') {
-          const data = await getCasualLeaderboard().catch(() => ({ entries: [], total: 0 }));
+          const data = await getCasualLeaderboard(playerCountTab).catch(() => ({ entries: [], total: 0 }));
           setCasualEntries(data.entries || []);
           setTotal(data.total || 0);
         } else {
@@ -73,7 +76,7 @@ export default function LeaderboardPage() {
     }
 
     loadData();
-  }, [mode, activeTab, page]);
+  }, [mode, activeTab, page, playerCountTab]);
 
   const totalPages = Math.ceil(total / perPage);
 
@@ -90,7 +93,7 @@ export default function LeaderboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-slate-100">
-              {mode === 'casual' ? 'Top 50 Casual Players' : 'Leaderboard'}
+              {mode === 'casual' ? `Top 50 Casual Players (${playerCountTab}-Player Games)` : 'Leaderboard'}
             </h1>
             {season && mode === 'ranked' && (
               <p className="text-sm text-slate-400 mt-1">{season.name}</p>
@@ -104,6 +107,29 @@ export default function LeaderboardPage() {
           )}
         </div>
       </div>
+
+      {/* Player Count Tabs (Casual mode) */}
+      {mode === 'casual' && (
+        <div className="glass rounded-xl p-1 mb-6 border border-white/10">
+          <div className="flex gap-1">
+            {PLAYER_COUNT_TABS.map((count) => (
+              <button
+                key={count}
+                onClick={() => setPlayerCountTab(count)}
+                className={`
+                  flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all
+                  ${playerCountTab === count 
+                    ? 'bg-emerald-600 text-white shadow-lg' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+                  }
+                `}
+              >
+                {count}-Player
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Mode Switcher - Hidden (ranked leaderboard disabled) */}
 
@@ -156,19 +182,21 @@ export default function LeaderboardPage() {
           /* Casual Leaderboard */
           casualEntries.length === 0 ? (
             <div className="text-center py-16 text-slate-400">
-              No casual games played yet.
+              No {playerCountTab}-player casual games played yet.
             </div>
           ) : (
             <>
-              {/* Casual Table Header */}
-              <div className="grid grid-cols-12 gap-2 px-6 py-3 bg-slate-800/50 border-b border-white/5 text-xs font-medium text-slate-400 uppercase tracking-wider">
+              {/* Casual Table Header - Dynamic based on player count */}
+              <div className={`grid gap-2 px-6 py-3 bg-slate-800/50 border-b border-white/5 text-xs font-medium text-slate-400 uppercase tracking-wider ${
+                playerCountTab === 2 ? 'grid-cols-8' : playerCountTab === 3 ? 'grid-cols-9' : 'grid-cols-10'
+              }`}>
                 <div className="col-span-1">Rank</div>
                 <div className="col-span-3">Player</div>
                 <div className="col-span-2 text-center">Games</div>
                 <div className="col-span-1 text-center" title="1st Place">🥇</div>
                 <div className="col-span-1 text-center" title="2nd Place">🥈</div>
-                <div className="col-span-1 text-center" title="3rd Place">🥉</div>
-                <div className="col-span-1 text-center" title="4th Place">4th</div>
+                {playerCountTab >= 3 && <div className="col-span-1 text-center" title="3rd Place">🥉</div>}
+                {playerCountTab >= 4 && <div className="col-span-1 text-center" title="4th Place">4th</div>}
               </div>
 
               {/* Casual Table Body */}
@@ -179,9 +207,10 @@ export default function LeaderboardPage() {
                     <div 
                       key={entry.username}
                       className={`
-                        grid grid-cols-12 gap-2 px-6 py-4 items-center
+                        grid gap-2 px-6 py-4 items-center
                         transition-colors hover:bg-slate-800/30
                         ${isTop3 ? 'bg-gradient-to-r from-emerald-900/10 to-transparent' : ''}
+                        ${playerCountTab === 2 ? 'grid-cols-8' : playerCountTab === 3 ? 'grid-cols-9' : 'grid-cols-10'}
                       `}
                     >
                       {/* Rank */}
@@ -217,18 +246,22 @@ export default function LeaderboardPage() {
 
                       {/* 2nd Place */}
                       <div className="col-span-1 text-center text-slate-300 font-medium">
-                        {entry.pos_2}
+                        {entry.pos_2 ?? 0}
                       </div>
 
                       {/* 3rd Place */}
-                      <div className="col-span-1 text-center text-amber-700 font-medium">
-                        {entry.pos_3}
-                      </div>
+                      {playerCountTab >= 3 && (
+                        <div className="col-span-1 text-center text-amber-700 font-medium">
+                          {entry.pos_3 ?? 0}
+                        </div>
+                      )}
 
                       {/* 4th Place */}
-                      <div className="col-span-1 text-center text-slate-500 font-medium">
-                        {entry.pos_4}
-                      </div>
+                      {playerCountTab >= 4 && (
+                        <div className="col-span-1 text-center text-slate-500 font-medium">
+                          {entry.pos_4 ?? 0}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
