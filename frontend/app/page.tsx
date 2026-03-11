@@ -1362,8 +1362,12 @@ export default function Home() {
       <EmailVerificationModal
         isOpen={showEmailVerificationModal}
         email={user?.email || ''}
-        onVerified={() => {
+        onVerified={(newEmail) => {
           updateEmailVerified(true);
+          // If user changed their email, update it in context
+          if (newEmail && user) {
+            setUser({ ...user, email: newEmail, email_verified: true });
+          }
           setShowEmailVerificationModal(false);
         }}
         onClose={() => setShowEmailVerificationModal(false)}

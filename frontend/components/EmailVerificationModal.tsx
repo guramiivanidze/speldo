@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { sendUserVerificationCode, verifyUserEmail } from '@/lib/api';
+import { sendUserVerificationCode, verifyUserEmail, sendEmailChangeCode, changeEmail } from '@/lib/api';
 
 interface EmailVerificationModalProps {
   isOpen: boolean;
   email: string;
-  onVerified: () => void;
+  onVerified: (newEmail?: string) => void;
   onClose: () => void;
 }
 
@@ -16,9 +16,10 @@ export default function EmailVerificationModal({
   onVerified, 
   onClose 
 }: EmailVerificationModalProps) {
-  const [step, setStep] = useState<'initial' | 'code'>('initial');
+  const [step, setStep] = useState<'initial' | 'code' | 'changeEmail' | 'changeEmailCode'>('initial');
   const [verificationToken, setVerificationToken] = useState('');
   const [code, setCode] = useState('');
+  const [newEmail, setNewEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -63,6 +64,49 @@ export default function EmailVerificationModal({
     }
   };
 
+  const handleSendChangeEmailCode = async () => {
+    if (!newEmail.trim()) {
+      setError('Please enter a new email address');
+      return;
+    }
+    
+    setLoading(true);
+    setError('');
+    
+    try {
+      const result = await sendEmailChangeCode(newEmail.trim());
+      setVerificationToken(result.verification_token);
+      setStep('changeEmailCode');
+      setSuccess(`Verification code sent to ${newEmail}!`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChangeEmail = async () => {
+    if (code.length !== 6) {
+      setError('Please enter the 6-digit code');
+      return;
+    }
+    
+    setLoading(true);
+    setError('');
+    
+    try {
+      await changeEmail(newEmail.trim(), verificationToken, code);
+      setSuccess('Email changed and verified successfully!');
+      setTimeout(() => {
+        onVerified(newEmail.trim());
+      }, 1000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to change email');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCodeChange = (value: string) => {
     // Only allow digits, max 6 chars
     const cleaned = value.replace(/\D/g, '').slice(0, 6);
@@ -99,7 +143,7 @@ export default function EmailVerificationModal({
           
           {/* Content */}
           <div className="p-6 space-y-4">
-            {step === 'initial' ? (
+            {step === 'initial' && (
               <>
                 <p className="text-slate-300">
                   To continue using all features, please verify your email address:
@@ -111,8 +155,17 @@ export default function EmailVerificationModal({
                 <p className="text-slate-400 text-sm">
                   We'll send a 6-digit verification code to this email address.
                 </p>
+                <button
+                  type="button"
+                  onClick={() => { setStep('changeEmail'); setError(''); setSuccess(''); }}
+                  className="text-sm text-indigo-400 hover:text-indigo-300"
+                >
+                  Wrong email? Change it →
+                </button>
               </>
-            ) : (
+            )}
+            
+            {step === 'code' && (
               <>
                 <p className="text-slate-300">
                   Enter the 6-digit code sent to <span className="font-medium text-slate-100">{email}</span>
@@ -138,12 +191,94 @@ export default function EmailVerificationModal({
                   autoComplete="one-time-code"
                   autoFocus
                 />
+                <div className="flex justify-between">
+                  <button
+                    type="button"
+                    onClick={() => { setStep('initial'); setCode(''); setError(''); }}
+                    className="text-sm text-indigo-400 hover:text-indigo-300"
+                  >
+                    ← Send a new code
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setStep('changeEmail'); setCode(''); setError(''); setSuccess(''); }}
+                    className="text-sm text-indigo-400 hover:text-indigo-300"
+                  >
+                    Change email →
+                  </button>
+                </div>
+              </>
+            )}
+            
+            {step === 'changeEmail' && (
+              <>
+                <p className="text-slate-300">
+                  Enter your new email address:
+                </p>
+                <div className="bg-slate-800/50 rounded-xl p-3 mb-2">
+                  <p className="text-slate-500 text-xs">Current email</p>
+                  <p className="text-slate-400 text-sm">{email}</p>
+                </div>
+                <input
+                  type="email"
+                  className={`
+                    w-full px-4 py-3 rounded-xl
+                    bg-slate-800 border text-slate-100 placeholder-slate-500
+                    focus:outline-none focus:ring-1 transition-colors
+                    ${error 
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/50' 
+                      : 'border-slate-700 focus:border-indigo-500 focus:ring-indigo-500/50'}
+                  `}
+                  placeholder="newemail@example.com"
+                  value={newEmail}
+                  onChange={(e) => { setNewEmail(e.target.value); if (error) setError(''); }}
+                  autoFocus
+                />
+                <p className="text-slate-400 text-sm">
+                  We'll send a verification code to this new email.
+                </p>
                 <button
                   type="button"
-                  onClick={() => { setStep('initial'); setCode(''); setError(''); }}
+                  onClick={() => { setStep('initial'); setNewEmail(''); setError(''); setSuccess(''); }}
                   className="text-sm text-indigo-400 hover:text-indigo-300"
                 >
-                  ← Send a new code
+                  ← Back to current email
+                </button>
+              </>
+            )}
+            
+            {step === 'changeEmailCode' && (
+              <>
+                <p className="text-slate-300">
+                  Enter the 6-digit code sent to <span className="font-medium text-slate-100">{newEmail}</span>
+                </p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className={`
+                    w-full px-4 py-3 rounded-xl text-center
+                    bg-slate-800 border text-slate-100 placeholder-slate-500
+                    focus:outline-none focus:ring-1 transition-colors
+                    font-mono text-2xl tracking-[0.3em]
+                    ${error 
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-500/50' 
+                      : code.length === 6
+                        ? 'border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/50'
+                        : 'border-slate-700 focus:border-indigo-500 focus:ring-indigo-500/50'}
+                  `}
+                  placeholder="000000"
+                  value={code}
+                  onChange={(e) => handleCodeChange(e.target.value)}
+                  maxLength={6}
+                  autoComplete="one-time-code"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => { setStep('changeEmail'); setCode(''); setError(''); }}
+                  className="text-sm text-indigo-400 hover:text-indigo-300"
+                >
+                  ← Change email or resend code
                 </button>
               </>
             )}
@@ -158,7 +293,7 @@ export default function EmailVerificationModal({
           
           {/* Actions */}
           <div className="px-6 pb-6">
-            {step === 'initial' ? (
+            {step === 'initial' && (
               <button
                 onClick={handleSendCode}
                 disabled={loading}
@@ -166,13 +301,35 @@ export default function EmailVerificationModal({
               >
                 {loading ? 'Sending...' : 'Send Verification Code'}
               </button>
-            ) : (
+            )}
+            
+            {step === 'code' && (
               <button
                 onClick={handleVerify}
                 disabled={loading || code.length !== 6}
                 className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Verifying...' : 'Verify Email'}
+              </button>
+            )}
+            
+            {step === 'changeEmail' && (
+              <button
+                onClick={handleSendChangeEmailCode}
+                disabled={loading || !newEmail.trim()}
+                className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Sending...' : 'Send Code to New Email'}
+              </button>
+            )}
+            
+            {step === 'changeEmailCode' && (
+              <button
+                onClick={handleChangeEmail}
+                disabled={loading || code.length !== 6}
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Changing...' : 'Change & Verify Email'}
               </button>
             )}
           </div>

@@ -572,7 +572,12 @@ class ChangeEmailView(APIView):
         request.user.email = new_email
         request.user.save()
         
-        return Response({'message': 'Email changed successfully.'})
+        # Mark email as verified since they proved ownership via OTP
+        profile = request.user.profile
+        profile.email_verified = True
+        profile.save()
+        
+        return Response({'message': 'Email changed successfully.', 'email_verified': True})
 
 
 class ChangePasswordView(APIView):
