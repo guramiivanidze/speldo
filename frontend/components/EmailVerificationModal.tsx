@@ -117,7 +117,6 @@ export default function EmailVerificationModal({
   return (
     <div 
       className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      onClick={onClose}
     >
       <div 
         className="max-w-md w-full animate-fade-in"
@@ -125,7 +124,7 @@ export default function EmailVerificationModal({
       >
         <div className="glass rounded-2xl border border-white/10 overflow-hidden">
           {/* Header */}
-          <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-white/10">
             <div className="flex items-center gap-3">
               <span className="text-2xl">✉️</span>
               <div>
@@ -133,12 +132,6 @@ export default function EmailVerificationModal({
                 <p className="text-slate-400 text-sm">One-time verification required</p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="text-slate-400 hover:text-slate-200 text-2xl leading-none hover:bg-slate-700/50 w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-            >
-              ×
-            </button>
           </div>
           
           {/* Content */}
