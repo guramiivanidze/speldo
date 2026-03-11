@@ -66,10 +66,12 @@ SURVEY_INTERVAL_MINUTES = 1
 def serialize_game_state(game, players):
     players_data = []
     current_player_tokens = {}
+    current_player_pending_action = None
     for gp in players:
         player_tokens = gp.tokens if isinstance(gp.tokens, dict) else {}
         if gp.order == game.current_player_index:
             current_player_tokens = player_tokens
+            current_player_pending_action = gp.pending_action_data
         players_data.append({
             'id': gp.user.id,
             'username': gp.user.username,
@@ -110,6 +112,11 @@ def serialize_game_state(game, players):
     pending_discard = current_player_token_count > 10
     pending_discard_count = max(0, current_player_token_count - 10) if pending_discard else 0
 
+    # Check if current player has pending noble choice
+    pending_noble_choice = []
+    if current_player_pending_action and current_player_pending_action.get('type') == 'noble_choice':
+        pending_noble_choice = current_player_pending_action.get('eligible_nobles', [])
+
     # Get the last action for animations
     last_action = None
     last_action_obj = game.actions.order_by('-turn_number').first()
@@ -148,6 +155,8 @@ def serialize_game_state(game, players):
         # Token discard state
         'pending_discard': pending_discard,
         'pending_discard_count': pending_discard_count,
+        # Noble choice state
+        'pending_noble_choice': pending_noble_choice,
         # History info
         'total_turns': game.current_turn_number,
         'has_history': game.current_turn_number > 0,
@@ -1411,11 +1420,22 @@ class GameConsumer(AsyncWebsocketConsumer):
                         len(new_pd['purchased_card_ids'])
                     )
 
+                    # Determine if card was from reserved
+                    from_reserved = card_id in player_data['reserved_card_ids']
+                    
+                    # Calculate tokens spent
+                    tokens_spent = {}
+                    for color in ['white', 'blue', 'green', 'red', 'black', 'gold']:
+                        diff = player_data['tokens'].get(color, 0) - new_pd['tokens'].get(color, 0)
+                        if diff > 0:
+                            tokens_spent[color] = diff
+
                     # Check noble visits
                     noble_visited_id = None
                     eligible = check_nobles(new_gd, new_pd)
-                    if len(eligible) >= 1:
-                        # Auto-pick first noble (TODO: add choose_noble flow for multiple)
+                    
+                    if len(eligible) == 1:
+                        # Auto-award single eligible noble
                         noble_visited_id = eligible[0]
                         noble = get_noble(eligible[0])
                         logger.info(
@@ -1428,16 +1448,31 @@ class GameConsumer(AsyncWebsocketConsumer):
                             "[BUY_CARD] Game=%s User=%s | AFTER_NOBLE | PrestigePoints=%d",
                             self.game_code, self.user.username, new_pd['prestige_points']
                         )
-
-                    # Determine if card was from reserved
-                    from_reserved = card_id in player_data['reserved_card_ids']
-                    
-                    # Calculate tokens spent
-                    tokens_spent = {}
-                    for color in ['white', 'blue', 'green', 'red', 'black', 'gold']:
-                        diff = player_data['tokens'].get(color, 0) - new_pd['tokens'].get(color, 0)
-                        if diff > 0:
-                            tokens_spent[color] = diff
+                    elif len(eligible) >= 2:
+                        # Multiple nobles eligible - player must choose
+                        logger.info(
+                            "[BUY_CARD] Game=%s User=%s | MULTIPLE_NOBLES | Eligible=%s | Must choose",
+                            self.game_code, self.user.username, eligible
+                        )
+                        # Save pending action for noble choice
+                        current_gp.pending_action_data = {
+                            'type': 'noble_choice',
+                            'eligible_nobles': eligible,
+                            'buy_card_action': {
+                                'card_id': card_id,
+                                'from_reserved': from_reserved,
+                                'tokens_spent': tokens_spent,
+                                'new_card_id': new_card_id,
+                                'player_tokens_before': player_data['tokens'].copy(),
+                                'player_tokens_after': new_pd['tokens'].copy(),
+                                'bank_before': game_data['tokens_in_bank'].copy(),
+                                'bank_after': new_gd['tokens_in_bank'].copy(),
+                            }
+                        }
+                        self._save_state(game, current_gp, new_gd, new_pd)
+                        game.save()
+                        current_gp.save()
+                        return None  # Don't advance turn - wait for noble choice
                     
                     action_info = {
                         'card_id': card_id,
@@ -1477,19 +1512,52 @@ class GameConsumer(AsyncWebsocketConsumer):
                     current_gp = self._get_current_player(game, players)
                     if current_gp is None or current_gp.user != self.user:
                         return "Not your turn."
+                    
+                    # Check if there's a pending noble choice
+                    pending = current_gp.pending_action_data
+                    if not pending or pending.get('type') != 'noble_choice':
+                        return "No pending noble choice."
+                    
+                    eligible = pending.get('eligible_nobles', [])
+                    if noble_id not in eligible:
+                        return "Not eligible for that noble."
+                    
                     game_data = self._game_data_from_game(game)
                     player_data = self._player_data_from_gp(current_gp)
 
-                    eligible = check_nobles(game_data, player_data)
-                    if noble_id not in eligible:
-                        return "Not eligible for that noble."
-
+                    # Apply the noble visit
+                    noble = get_noble(noble_id)
+                    logger.info(
+                        "[CHOOSE_NOBLE] Game=%s User=%s | NobleID=%s (points=%d) | PrestigeBefore=%d",
+                        self.game_code, self.user.username, noble_id,
+                        noble['points'] if noble else 0, player_data['prestige_points']
+                    )
                     new_gd, new_pd = apply_noble_visit(game_data, player_data, noble_id)
-                    self._save_state(game, current_gp, new_gd, new_pd)
+                    logger.info(
+                        "[CHOOSE_NOBLE] Game=%s User=%s | AFTER_NOBLE | PrestigePoints=%d",
+                        self.game_code, self.user.username, new_pd['prestige_points']
+                    )
                     
-                    action_info = {'noble_id': noble_id}
+                    # Build action info from the original buy_card action + chosen noble
+                    buy_card_action = pending.get('buy_card_action', {})
+                    action_info = {
+                        'card_id': buy_card_action.get('card_id'),
+                        'from_reserved': buy_card_action.get('from_reserved', False),
+                        'tokens_spent': buy_card_action.get('tokens_spent', {}),
+                        'noble_id': noble_id,  # The chosen noble
+                        'new_card_id': buy_card_action.get('new_card_id'),
+                        'player_tokens_before': buy_card_action.get('player_tokens_before', {}),
+                        'player_tokens_after': buy_card_action.get('player_tokens_after', {}),
+                        'bank_before': buy_card_action.get('bank_before', {}),
+                        'bank_after': buy_card_action.get('bank_after', {}),
+                    }
+                    
+                    # Clear pending action
+                    current_gp.pending_action_data = None
+                    
+                    self._save_state(game, current_gp, new_gd, new_pd)
                     self._post_action(game, current_gp, players, new_gd, new_pd,
-                                      action_type='noble_visit', action_data=action_info)
+                                      action_type='buy_card', action_data=action_info)
                     return None
             except Game.DoesNotExist:
                 return "Game not found."
