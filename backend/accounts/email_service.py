@@ -1,10 +1,9 @@
 """
-Email service using Django SMTP for sending verification codes.
+Email service using Brevo API for sending verification codes.
 OTP codes are stored in the database and visible in Django admin.
 """
 import random
 import time
-import threading
 from datetime import timedelta
 from django.conf import settings
 from django.core import signing
@@ -85,69 +84,37 @@ def save_otp_to_db(email: str, otp: str):
 
 def send_verification_email(email: str, otp: str) -> tuple[bool, str]:
     """
-    Send verification email via Django SMTP.
+    Send verification email via Brevo API.
     Also saves the OTP to database for admin visibility.
     Returns (success, error_message).
     """
     # Always save to DB for admin visibility
     save_otp_to_db(email, otp)
 
-
-    # Use Brevo API if configured
-    brevo_api_key = os.environ.get('BREVO_API_KEY') or getattr(settings, 'BREVO_API_KEY', None)
-    brevo_sender = os.environ.get('BREVO_SENDER_EMAIL') or getattr(settings, 'BREVO_SENDER_EMAIL', None)
+    # Check for DEBUG mode
     is_debug = getattr(settings, 'DEBUG', False)
-
     print(f"[EMAIL] Attempting to send to {email}")
     if is_debug:
         print(f"[DEV MODE] Verification code for {email}: {otp} (static: 123456)")
         return True, ''
 
-    if brevo_api_key and brevo_sender and sib_api_v3_sdk:
-        print("[EMAIL] Using Brevo API for email delivery.")
-        configuration = sib_api_v3_sdk.Configuration()
-        configuration.api_key['api-key'] = brevo_api_key
-        api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
-        subject = "Your Spledor verification code: {}".format(otp)
-        sender = {"email": brevo_sender}
-        to = [{"email": email}]
-        html_content = f"""
-<html><body>
-<h1>Verify your email</h1>
-<p>Your Spledor verification code is:</p>
-<div style='font-size:2em;font-weight:bold'>{otp}</div>
-<p>This code expires in 5 minutes.</p>
-</body></html>
-"""
-        text_content = f"Your Splendor verification code is: {otp}\n\nThis code expires in 5 minutes."
-        email_obj = sib_api_v3_sdk.SendSmtpEmail(
-            to=to,
-            sender=sender,
-            subject=subject,
-            html_content=html_content,
-            text_content=text_content
-        )
-        try:
-            api_instance.send_transac_email(email_obj)
-            print(f"[EMAIL] Brevo: Successfully sent verification email to {email}")
-            return True, ''
-        except ApiException as e:
-            print(f"[EMAIL ERROR] Brevo API error: {e}")
-            return False, f'Brevo API error: {e}'
-        except Exception as e:
-            print(f"[EMAIL ERROR] Brevo general error: {e}")
-            return False, f'Brevo error: {e}'
+    # Brevo API configuration
+    brevo_api_key = os.environ.get('BREVO_API_KEY') or getattr(settings, 'BREVO_API_KEY', None)
+    brevo_sender = os.environ.get('BREVO_SENDER_EMAIL') or getattr(settings, 'BREVO_SENDER_EMAIL', None)
 
-    # Fallback: SMTP (legacy, not recommended for production on Render)
-    from django.core.mail import send_mail
-    email_host = getattr(settings, 'EMAIL_HOST', '')
-    email_user = getattr(settings, 'EMAIL_HOST_USER', '')
-    email_password = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
-    if not email_host or not email_user or not email_password:
-        print(f"[EMAIL ERROR] SMTP not configured! HOST={bool(email_host)}, USER={bool(email_user)}, PASS={bool(email_password)}")
-        return False, 'Email service not configured. Please set EMAIL_HOST, EMAIL_HOST_USER, and EMAIL_HOST_PASSWORD or use Brevo.'
+    if not brevo_api_key or not brevo_sender:
+        print(f"[EMAIL ERROR] Brevo not configured! API_KEY={bool(brevo_api_key)}, SENDER={bool(brevo_sender)}")
+        return False, 'Email service not configured. Please set BREVO_API_KEY and BREVO_SENDER_EMAIL.'
 
-    # Simple, minimalistic email content
+    if not sib_api_v3_sdk:
+        print("[EMAIL ERROR] sib_api_v3_sdk package not installed!")
+        return False, 'Brevo SDK not installed. Run: pip install sib-api-v3-sdk'
+
+    print("[EMAIL] Using Brevo API for email delivery.")
+    configuration = sib_api_v3_sdk.Configuration()
+    configuration.api_key['api-key'] = brevo_api_key
+    api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
+
     html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -198,26 +165,23 @@ def send_verification_email(email: str, otp: str) -> tuple[bool, str]:
 </body>
 </html>
 """
-
     text_content = f"Your Splendor verification code is: {otp}\n\nThis code expires in 5 minutes."
-    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL',
-                         settings.EMAIL_HOST_USER)
 
-    def send_email_thread():
-        from django.core.mail import send_mail
-        try:
-            print(f"[EMAIL] Connecting to SMTP server {email_host}:{getattr(settings, 'EMAIL_PORT', 587)}...")
-            send_mail(
-                subject=f"Your Spledor verification code: {otp}",
-                message=text_content,
-                from_email=from_email,
-                recipient_list=[email],
-                html_message=html_content,
-                fail_silently=False,
-            )
-            print(f"[EMAIL] Successfully sent verification email to {email}")
-        except Exception as e:
-            print(f"[EMAIL ERROR] Failed to send email to {email}: {type(e).__name__}: {e}")
-    thread = threading.Thread(target=send_email_thread, daemon=True)
-    thread.start()
-    return True, ''
+    email_obj = sib_api_v3_sdk.SendSmtpEmail(
+        to=[{"email": email}],
+        sender={"email": brevo_sender},
+        subject=f"Your Spledor verification code: {otp}",
+        html_content=html_content,
+        text_content=text_content
+    )
+
+    try:
+        api_instance.send_transac_email(email_obj)
+        print(f"[EMAIL] Brevo: Successfully sent verification email to {email}")
+        return True, ''
+    except ApiException as e:
+        print(f"[EMAIL ERROR] Brevo API error: {e}")
+        return False, f'Failed to send email. Please try again.'
+    except Exception as e:
+        print(f"[EMAIL ERROR] Brevo general error: {e}")
+        return False, f'Failed to send email. Please try again.'
