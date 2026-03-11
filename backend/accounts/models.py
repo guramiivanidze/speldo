@@ -1,6 +1,34 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+
+class UserProfile(models.Model):
+    """Extended user profile with email verification status."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    email_verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        verified = '✓' if self.email_verified else '✗'
+        return f"{self.user.username} ({verified} verified)"
+
+
+@receiver(post_save, sender=User)
+def create_user_profile(sender, instance, created, **kwargs):
+    """Auto-create UserProfile when User is created."""
+    if created:
+        UserProfile.objects.get_or_create(user=instance)
+
+
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    """Ensure profile exists and is saved."""
+    if not hasattr(instance, 'profile'):
+        UserProfile.objects.get_or_create(user=instance)
 
 
 class EmailVerificationCode(models.Model):

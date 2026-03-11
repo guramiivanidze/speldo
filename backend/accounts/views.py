@@ -116,6 +116,70 @@ class VerifyCodeView(APIView):
         return Response({'message': 'Email verified.', 'verified': True})
 
 
+class SendUserVerificationCodeView(APIView):
+    """Send OTP verification code to logged-in user's email for verification."""
+
+    def post(self, request):
+        from .models import UserProfile
+        
+        user = request.user
+        email = user.email
+        
+        if not email:
+            return Response({'error': 'No email associated with this account.'}, status=400)
+        
+        # Check if already verified
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        if profile.email_verified:
+            return Response({'error': 'Email already verified.'}, status=400)
+        
+        # Generate and send OTP
+        otp = generate_otp()
+        success, error = send_verification_email(email, otp)
+        
+        if not success:
+            return Response({'error': error or 'Failed to send verification code.'}, status=500)
+        
+        # Create verification token
+        verification_token = create_otp_token(email, otp)
+        
+        return Response({
+            'message': 'Verification code sent.',
+            'verification_token': verification_token,
+            'email': email,
+        })
+
+
+class VerifyUserEmailView(APIView):
+    """Verify logged-in user's email with OTP code."""
+
+    def post(self, request):
+        from .models import UserProfile
+        
+        user = request.user
+        code = request.data.get('code', '').strip()
+        verification_token = request.data.get('verification_token', '')
+        
+        if not code or not verification_token:
+            return Response({'error': 'Code and verification token are required.'}, status=400)
+        
+        # Check if already verified
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        if profile.email_verified:
+            return Response({'error': 'Email already verified.'}, status=400)
+        
+        success, error = verify_otp_token(verification_token, user.email, code)
+        
+        if not success:
+            return Response({'error': error}, status=400)
+        
+        # Mark email as verified
+        profile.email_verified = True
+        profile.save()
+        
+        return Response({'message': 'Email verified successfully.', 'email_verified': True})
+
+
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
@@ -173,9 +237,16 @@ class RegisterView(APIView):
         
         # Create user
         user = User.objects.create_user(username=nickname, email=email, password=password)
+        
+        # Mark email as verified (they just verified it)
+        from .models import UserProfile
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile.email_verified = True
+        profile.save()
+        
         login(request, user)
         token = create_auth_token(user)
-        return Response({'id': user.id, 'username': user.username, 'token': token}, status=201)
+        return Response({'id': user.id, 'username': user.username, 'token': token, 'email_verified': True}, status=201)
 
 
 class LoginView(APIView):
@@ -203,11 +274,18 @@ class LoginView(APIView):
             return Response({'error': 'Invalid credentials.'}, status=400)
         login(request, user)
         token = create_auth_token(user, remember_me=bool(remember_me))
+        
+        # Get email_verified status
+        from .models import UserProfile
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        
         return Response({
             'id': user.id,
             'username': user.username,
+            'email': user.email,
             'token': token,
             'remember_me': bool(remember_me),
+            'email_verified': profile.email_verified,
         })
 
 
@@ -221,7 +299,14 @@ class LogoutView(APIView):
 
 class MeView(APIView):
     def get(self, request):
-        return Response({'id': request.user.id, 'username': request.user.username})
+        from .models import UserProfile
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+        return Response({
+            'id': request.user.id,
+            'username': request.user.username,
+            'email': request.user.email,
+            'email_verified': profile.email_verified,
+        })
 
 
 # ============ FRIEND VIEWS ============
@@ -530,3 +615,87 @@ class ChangePasswordView(APIView):
             login(request, user)
         
         return Response({'message': 'Password changed successfully.'})
+
+
+class SendPasswordResetCodeView(APIView):
+    """Send OTP code to email for password reset."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip().lower()
+        
+        if not email:
+            return Response({'error': 'Email is required.'}, status=400)
+        
+        try:
+            validate_email(email)
+        except ValidationError:
+            return Response({'error': 'Invalid email format.'}, status=400)
+        
+        # Check if user exists with this email
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            # Don't reveal if email exists - just say code sent
+            return Response({
+                'message': 'If an account exists with this email, a reset code has been sent.',
+                'verification_token': '',
+            })
+        
+        # Generate and send OTP
+        otp = generate_otp()
+        success, error = send_verification_email(email, otp)
+        
+        if not success:
+            return Response({'error': error or 'Failed to send reset code.'}, status=500)
+        
+        # Create verification token
+        verification_token = create_otp_token(email, otp)
+        
+        return Response({
+            'message': 'Password reset code sent.',
+            'verification_token': verification_token,
+        })
+
+
+class ResetPasswordView(APIView):
+    """Reset password using OTP code."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip().lower()
+        code = request.data.get('code', '').strip()
+        verification_token = request.data.get('verification_token', '')
+        new_password = request.data.get('new_password', '')
+        
+        if not email or not code or not verification_token or not new_password:
+            return Response({'error': 'Email, code, verification token, and new password are required.'}, status=400)
+        
+        # Verify OTP
+        success, error = verify_otp_token(verification_token, email, code)
+        if not success:
+            return Response({'error': error}, status=400)
+        
+        # Find user
+        try:
+            user = User.objects.get(email__iexact=email)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found.'}, status=404)
+        
+        # Validate new password
+        if len(new_password) < 8:
+            return Response({'error': 'Password must be at least 8 characters.'}, status=400)
+        if not re.search(r'[a-z]', new_password):
+            return Response({'error': 'Password must contain a lowercase letter.'}, status=400)
+        if not re.search(r'[A-Z]', new_password):
+            return Response({'error': 'Password must contain an uppercase letter.'}, status=400)
+        if not re.search(r'\d', new_password):
+            return Response({'error': 'Password must contain a number.'}, status=400)
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;\'`~]', new_password):
+            return Response({'error': 'Password must contain a special character.'}, status=400)
+        
+        # Set new password
+        user.set_password(new_password)
+        user.save()
+        
+        return Response({'message': 'Password reset successfully.'})

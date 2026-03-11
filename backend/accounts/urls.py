@@ -1,10 +1,11 @@
 from django.urls import path
 from .views import (
     CsrfTokenView, AuthConfigView, WebSocketTokenView, RegisterView, LoginView, LogoutView, MeView,
-    SendVerificationCodeView, VerifyCodeView,
+    SendVerificationCodeView, VerifyCodeView, SendUserVerificationCodeView, VerifyUserEmailView,
     SendFriendRequestView, PendingFriendRequestsView, RespondFriendRequestView,
     FriendsListView, FriendsWithStatsView, RemoveFriendView,
     SendEmailChangeCodeView, ChangeEmailView, ChangePasswordView,
+    SendPasswordResetCodeView, ResetPasswordView,
 )
 
 urlpatterns = [
@@ -13,6 +14,8 @@ urlpatterns = [
     path('ws-token/', WebSocketTokenView.as_view(), name='ws-token'),
     path('send-verification/', SendVerificationCodeView.as_view(), name='send-verification'),
     path('verify-code/', VerifyCodeView.as_view(), name='verify-code'),
+    path('send-user-verification/', SendUserVerificationCodeView.as_view(), name='send-user-verification'),
+    path('verify-user-email/', VerifyUserEmailView.as_view(), name='verify-user-email'),
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
     path('logout/', LogoutView.as_view(), name='logout'),
@@ -30,4 +33,8 @@ urlpatterns = [
     path('send-email-change-code/', SendEmailChangeCodeView.as_view(), name='send-email-change-code'),
     path('change-email/', ChangeEmailView.as_view(), name='change-email'),
     path('change-password/', ChangePasswordView.as_view(), name='change-password'),
+    
+    # Password reset endpoints
+    path('send-password-reset-code/', SendPasswordResetCodeView.as_view(), name='send-password-reset-code'),
+    path('reset-password/', ResetPasswordView.as_view(), name='reset-password'),
 ]
