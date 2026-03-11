@@ -8,8 +8,16 @@ import threading
 from datetime import timedelta
 from django.conf import settings
 from django.core import signing
-from django.core.mail import send_mail
 from django.utils import timezone
+import os
+
+# Brevo (Sendinblue) API
+try:
+    import sib_api_v3_sdk
+    from sib_api_v3_sdk.rest import ApiException
+except ImportError:
+    sib_api_v3_sdk = None
+    ApiException = Exception
 
 
 # OTP settings
@@ -84,25 +92,60 @@ def send_verification_email(email: str, otp: str) -> tuple[bool, str]:
     # Always save to DB for admin visibility
     save_otp_to_db(email, otp)
 
-    # Check if email sending is configured
-    email_host = getattr(settings, 'EMAIL_HOST', '')
-    email_user = getattr(settings, 'EMAIL_HOST_USER', '')
-    email_password = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
+
+    # Use Brevo API if configured
+    brevo_api_key = os.environ.get('BREVO_API_KEY') or getattr(settings, 'BREVO_API_KEY', None)
+    brevo_sender = os.environ.get('BREVO_SENDER_EMAIL') or getattr(settings, 'BREVO_SENDER_EMAIL', None)
     is_debug = getattr(settings, 'DEBUG', False)
 
-    # Log email configuration status
     print(f"[EMAIL] Attempting to send to {email}")
-    print(f"[EMAIL] Config: HOST={email_host}, USER={email_user[:3] + '***' if email_user else 'NOT SET'}, DEBUG={is_debug}")
-
-    # Skip email in debug mode
     if is_debug:
         print(f"[DEV MODE] Verification code for {email}: {otp} (static: 123456)")
         return True, ''
 
-    # Check if email is properly configured
+    if brevo_api_key and brevo_sender and sib_api_v3_sdk:
+        print("[EMAIL] Using Brevo API for email delivery.")
+        configuration = sib_api_v3_sdk.Configuration()
+        configuration.api_key['api-key'] = brevo_api_key
+        api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
+        subject = "Your Spledor verification code: {}".format(otp)
+        sender = {"email": brevo_sender}
+        to = [{"email": email}]
+        html_content = f"""
+<html><body>
+<h1>Verify your email</h1>
+<p>Your Spledor verification code is:</p>
+<div style='font-size:2em;font-weight:bold'>{otp}</div>
+<p>This code expires in 5 minutes.</p>
+</body></html>
+"""
+        text_content = f"Your Splendor verification code is: {otp}\n\nThis code expires in 5 minutes."
+        email_obj = sib_api_v3_sdk.SendSmtpEmail(
+            to=to,
+            sender=sender,
+            subject=subject,
+            html_content=html_content,
+            text_content=text_content
+        )
+        try:
+            api_instance.send_transac_email(email_obj)
+            print(f"[EMAIL] Brevo: Successfully sent verification email to {email}")
+            return True, ''
+        except ApiException as e:
+            print(f"[EMAIL ERROR] Brevo API error: {e}")
+            return False, f'Brevo API error: {e}'
+        except Exception as e:
+            print(f"[EMAIL ERROR] Brevo general error: {e}")
+            return False, f'Brevo error: {e}'
+
+    # Fallback: SMTP (legacy, not recommended for production on Render)
+    from django.core.mail import send_mail
+    email_host = getattr(settings, 'EMAIL_HOST', '')
+    email_user = getattr(settings, 'EMAIL_HOST_USER', '')
+    email_password = getattr(settings, 'EMAIL_HOST_PASSWORD', '')
     if not email_host or not email_user or not email_password:
         print(f"[EMAIL ERROR] SMTP not configured! HOST={bool(email_host)}, USER={bool(email_user)}, PASS={bool(email_password)}")
-        return False, 'Email service not configured. Please set EMAIL_HOST, EMAIL_HOST_USER, and EMAIL_HOST_PASSWORD.'
+        return False, 'Email service not configured. Please set EMAIL_HOST, EMAIL_HOST_USER, and EMAIL_HOST_PASSWORD or use Brevo.'
 
     # Simple, minimalistic email content
     html_content = f"""
@@ -161,7 +204,7 @@ def send_verification_email(email: str, otp: str) -> tuple[bool, str]:
                          settings.EMAIL_HOST_USER)
 
     def send_email_thread():
-        """Send email in background thread to avoid blocking ASGI."""
+        from django.core.mail import send_mail
         try:
             print(f"[EMAIL] Connecting to SMTP server {email_host}:{getattr(settings, 'EMAIL_PORT', 587)}...")
             send_mail(
@@ -175,9 +218,6 @@ def send_verification_email(email: str, otp: str) -> tuple[bool, str]:
             print(f"[EMAIL] Successfully sent verification email to {email}")
         except Exception as e:
             print(f"[EMAIL ERROR] Failed to send email to {email}: {type(e).__name__}: {e}")
-
-    # Send email in background thread to avoid ASGI timeout
     thread = threading.Thread(target=send_email_thread, daemon=True)
     thread.start()
-    
     return True, ''
