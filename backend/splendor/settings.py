@@ -13,7 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Security settings from environment
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-zm1s08e(3i4y5wu=+&r$5)88mg_t_3wj&bgks_=(9zuk_pum^w')
-DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
+DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1', 'yes')
 
 # Hosts
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
@@ -232,10 +232,22 @@ LOGGING = {
     },
 }
 
-# Mailgun Email Configuration
-MAILGUN_API_KEY = os.environ.get('MAILGUN_API_KEY', '')
-MAILGUN_DOMAIN = os.environ.get('MAILGUN_DOMAIN', '')
-MAILGUN_FROM_EMAIL = os.environ.get('MAILGUN_FROM_EMAIL', '')
+# SMTP Email Configuration (for sending verification codes from personal email)
+# Configure these environment variables:
+#   EMAIL_HOST - SMTP server (e.g., smtp.gmail.com)
+#   EMAIL_PORT - SMTP port (e.g., 587 for TLS)
+#   EMAIL_HOST_USER - Your email address
+#   EMAIL_HOST_PASSWORD - App password (not your regular password)
+#   EMAIL_USE_TLS - Set to True for TLS
+#   DEFAULT_FROM_EMAIL - From address for emails
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes')
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() in ('true', '1', 'yes')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 
 # Email verification toggle - set to False to disable during development
 EMAIL_VERIFICATION_ENABLED = os.environ.get('EMAIL_VERIFICATION_ENABLED', 'True').lower() in ('true', '1', 'yes')

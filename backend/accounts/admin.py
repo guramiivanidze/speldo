@@ -1,5 +1,24 @@
 from django.contrib import admin
-from .models import FriendRequest, Friendship
+from django.utils import timezone
+from .models import FriendRequest, Friendship, EmailVerificationCode
+
+
+@admin.register(EmailVerificationCode)
+class EmailVerificationCodeAdmin(admin.ModelAdmin):
+    list_display = ('email', 'code', 'status', 'created_at', 'expires_at', 'used_at')
+    list_filter = ('used', 'created_at')
+    search_fields = ('email', 'code')
+    ordering = ('-created_at',)
+    readonly_fields = ('email', 'code', 'created_at', 'expires_at', 'used', 'used_at')
+    
+    def status(self, obj):
+        if obj.used:
+            return '✓ Used'
+        elif obj.is_expired:
+            return '⏰ Expired'
+        else:
+            return '🟢 Active'
+    status.short_description = 'Status'
 
 
 @admin.register(FriendRequest)

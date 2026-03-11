@@ -1,11 +1,14 @@
 """
-Email service using Mailgun API for sending verification codes.
+Email service using Django SMTP for sending verification codes.
+OTP codes are stored in the database and visible in Django admin.
 """
 import random
 import time
-import requests
+from datetime import timedelta
 from django.conf import settings
 from django.core import signing
+from django.core.mail import send_mail
+from django.utils import timezone
 
 
 # OTP settings
@@ -39,36 +42,56 @@ def verify_otp_token(token: str, email: str, otp: str) -> tuple[bool, str]:
         data = signing.loads(token, salt='email-verification')
     except signing.BadSignature:
         return False, 'Invalid or expired verification code.'
-    
+
     # Check expiration
     if int(time.time()) > data.get('exp', 0):
         return False, 'Verification code expired.'
-    
+
     # Check email matches
     if data.get('email', '').lower() != email.lower():
         return False, 'Email does not match.'
-    
+
     # Check OTP matches
     if data.get('otp') != otp:
         return False, 'Incorrect verification code.'
-    
+
     return True, ''
+
+
+def save_otp_to_db(email: str, otp: str):
+    """Save OTP code to database for admin visibility."""
+    from .models import EmailVerificationCode
+
+    # Delete any existing unused codes for this email
+    EmailVerificationCode.objects.filter(
+        email=email.lower(), used=False).delete()
+
+    # Create new code
+    EmailVerificationCode.objects.create(
+        email=email.lower(),
+        code=otp,
+        expires_at=timezone.now() + timedelta(seconds=OTP_EXPIRY_SECONDS)
+    )
 
 
 def send_verification_email(email: str, otp: str) -> tuple[bool, str]:
     """
-    Send verification email via Mailgun.
+    Send verification email via Django SMTP.
+    Also saves the OTP to database for admin visibility.
     Returns (success, error_message).
     """
-    mailgun_domain = getattr(settings, 'MAILGUN_DOMAIN', '')
-    mailgun_api_key = getattr(settings, 'MAILGUN_API_KEY', '')
-    mailgun_from = getattr(settings, 'MAILGUN_FROM_EMAIL', f'Splendor <noreply@{mailgun_domain}>')
-    
-    if not mailgun_domain or not mailgun_api_key or getattr(settings, 'DEBUG', False):
+    # Always save to DB for admin visibility
+    save_otp_to_db(email, otp)
+
+    # Check if email sending is configured
+    email_host = getattr(settings, 'EMAIL_HOST', '')
+
+    if not email_host or getattr(settings, 'DEBUG', False):
         # Development mode - skip email, use static code
-        print(f"[DEV MODE] Verification code for {email}: {otp} (static: 123456)")
+        print(
+            f"[DEV MODE] Verification code for {email}: {otp} (static: 123456)")
         return True, ''
-    
+
     # Simple, minimalistic email content
     html_content = f"""
 <!DOCTYPE html>
@@ -113,34 +136,28 @@ def send_verification_email(email: str, otp: str) -> tuple[bool, str]:
 <body>
     <div class="container">
         <h1>Verify your email</h1>
-        <p>Your verification code is:</p>
+        <p>Your Spledor verification code is:</p>
         <div class="code">{otp}</div>
         <p class="note">This code expires in 5 minutes.</p>
     </div>
 </body>
 </html>
 """
-    
+
     text_content = f"Your Splendor verification code is: {otp}\n\nThis code expires in 5 minutes."
-    
+    from_email = getattr(settings, 'DEFAULT_FROM_EMAIL',
+                         settings.EMAIL_HOST_USER)
+
     try:
-        response = requests.post(
-            f"https://api.mailgun.net/v3/{mailgun_domain}/messages",
-            auth=("api", mailgun_api_key),
-            data={
-                "from": mailgun_from,
-                "to": [email],
-                "subject": f"Your verification code: {otp}",
-                "text": text_content,
-                "html": html_content,
-            },
-            timeout=10,
+        send_mail(
+            subject=f"Your Spledor verification code: {otp}",
+            message=text_content,
+            from_email=from_email,
+            recipient_list=[email],
+            html_message=html_content,
+            fail_silently=False,
         )
-        
-        if response.status_code == 200:
-            return True, ''
-        else:
-            return False, f'Failed to send email: {response.text}'
-            
-    except requests.RequestException as e:
+        return True, ''
+
+    except Exception as e:
         return False, f'Email service error: {str(e)}'

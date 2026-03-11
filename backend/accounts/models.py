@@ -1,5 +1,34 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
+
+
+class EmailVerificationCode(models.Model):
+    """Store OTP codes for email verification - visible in admin."""
+    email = models.EmailField(db_index=True)
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used = models.BooleanField(default=False)
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Email Verification Code'
+        verbose_name_plural = 'Email Verification Codes'
+
+    def __str__(self):
+        status = 'used' if self.used else ('expired' if self.is_expired else 'active')
+        return f"{self.email}: {self.code} ({status})"
+
+    @property
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def mark_used(self):
+        self.used = True
+        self.used_at = timezone.now()
+        self.save(update_fields=['used', 'used_at'])
 
 
 class FriendRequest(models.Model):
