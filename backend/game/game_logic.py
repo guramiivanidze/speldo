@@ -83,7 +83,15 @@ def initial_bank(player_count):
     return {c: gem_count for c in COLORS} | {'gold': 5}
 
 
-def initial_decks_and_nobles(player_count):
+def initial_decks_and_nobles(player_count, balancing_override=None):
+    """Set up shuffled decks, visible cards, and nobles.
+
+    Args:
+        player_count: number of players (2-4)
+        balancing_override: optional dict to override global balancing config,
+            e.g. {'enabled': True, 'level': 'soft'}.  Pass None to use the
+            global GAME_BALANCING_* settings.
+    """
     all_cards = get_all_cards()
     level1 = [c['id'] for c in all_cards if c['level'] == 1]
     level2 = [c['id'] for c in all_cards if c['level'] == 2]
@@ -104,7 +112,47 @@ def initial_decks_and_nobles(player_count):
                 visible[level].append(deck.pop(0))
 
     decks = {'1': level1, '2': level2, '3': level3}
+
+    # ── Balancing Layer (optional) ──────────────────────────────────────
+    try:
+        from .balancing import get_balanced_table_cards, get_balanced_nobles, get_config
+        config = get_config(balancing_override)
+        if config.is_active:
+            visible, decks = get_balanced_table_cards(
+                visible, decks, get_card, config
+            )
+            nobles = get_balanced_nobles(
+                nobles, all_nobles, get_noble, config
+            )
+    except Exception:
+        # Balancing must never break game start — fail open
+        import logging
+        logging.getLogger('game.balancing').exception(
+            '[BALANCING] Error during initial deal balancing; continuing unbalanced'
+        )
+
     return decks, visible, nobles
+
+
+def _draw_replacement(deck, visible_row, balancing_override=None):
+    """Draw a replacement card from *deck*, optionally using balanced selection.
+
+    Falls back to ``deck.pop(0)`` if balancing is off or errors.
+    The selected card is **removed** from *deck* in-place.
+    """
+    if not deck:
+        return None
+    try:
+        from .balancing import get_balanced_replacement_card, get_config
+        config = get_config(balancing_override)
+        if config.is_active:
+            return get_balanced_replacement_card(deck, visible_row, get_card, config)
+    except Exception:
+        import logging
+        logging.getLogger('game.balancing').exception(
+            '[BALANCING] Error during replacement draw; falling back to top-of-deck'
+        )
+    return deck.pop(0)
 
 
 def get_player_bonuses(purchased_card_ids):
@@ -368,7 +416,11 @@ def apply_reserve_card(game_data, player_data, card_id=None, level=None):
                 found_level = lvl
                 # Replace in-place to maintain card positions
                 if decks[lvl]:
-                    cards[idx] = decks[lvl].pop(0)
+                    replacement = _draw_replacement(decks[lvl], cards)
+                    if replacement is not None:
+                        cards[idx] = replacement
+                    else:
+                        cards.pop(idx)
                 else:
                     cards.pop(idx)
                 visible[lvl] = cards
@@ -440,7 +492,11 @@ def apply_buy_card(game_data, player_data, card_id):
                 idx = cards.index(card_id)
                 # Replace in-place to maintain card positions
                 if decks[lvl]:
-                    cards[idx] = decks[lvl].pop(0)
+                    replacement = _draw_replacement(decks[lvl], cards)
+                    if replacement is not None:
+                        cards[idx] = replacement
+                    else:
+                        cards.pop(idx)
                 else:
                     cards.pop(idx)
                 visible[lvl] = cards

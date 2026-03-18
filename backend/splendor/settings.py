@@ -229,8 +229,22 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        'game.balancing': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
     },
 }
+
+# ─── Game Balancing Layer ────────────────────────────────────────────────────
+# Toggle the balancing system globally. Can also be overridden per-game.
+GAME_BALANCING_ENABLED = os.environ.get(
+    'GAME_BALANCING_ENABLED', 'False'
+).lower() in ('true', '1', 'yes')
+
+# "off" — disabled, "soft" — gentle influence, "strict" — stronger corrections
+GAME_BALANCING_LEVEL = os.environ.get('GAME_BALANCING_LEVEL', 'soft')
 
 # SMTP Email Configuration (for sending verification codes from personal email)
 # Configure these environment variables:

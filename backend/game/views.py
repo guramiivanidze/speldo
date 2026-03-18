@@ -127,7 +127,19 @@ class GameStartView(APIView):
         players = reordered
 
         bank = initial_bank(player_count)
-        decks, visible, nobles = initial_decks_and_nobles(player_count)
+
+        # Build per-game balancing override from model fields
+        balancing_override = None
+        if game.balancing_enabled is not None or game.balancing_level:
+            balancing_override = {}
+            if game.balancing_enabled is not None:
+                balancing_override['enabled'] = game.balancing_enabled
+            if game.balancing_level:
+                balancing_override['level'] = game.balancing_level
+
+        decks, visible, nobles = initial_decks_and_nobles(
+            player_count, balancing_override=balancing_override
+        )
 
         game.tokens_in_bank = bank
         game.decks = decks

@@ -105,6 +105,12 @@ class Game(models.Model):
     
     # Turn timer setting (optional per game)
     timer_enabled = models.BooleanField(default=False)  # Whether turn timer is active
+
+    # Game balancing layer (optional per game, None = use global setting)
+    balancing_enabled = models.BooleanField(null=True, blank=True, default=None,
+        help_text="Override global balancing. None=use global setting, True=force on, False=force off.")
+    balancing_level = models.CharField(max_length=10, blank=True, default='',
+        help_text="Override balancing level: '' (use global), 'off', 'soft', 'strict'.")
     
     # Turn timer fields
     turn_started_at = models.DateTimeField(null=True, blank=True)  # When current player's turn started
