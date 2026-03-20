@@ -151,6 +151,30 @@ body {
 }
 .turn-pulse { animation: turn-pulse 0.9s ease-in-out infinite; }
 
+/* ─── Advisor hint highlights ────────────── */
+@keyframes hint-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.8), 0 0 12px rgba(168, 85, 247, 0.4); }
+  50%      { box-shadow: 0 0 0 3px rgba(168, 85, 247, 1), 0 0 20px rgba(168, 85, 247, 0.6); }
+}
+.hint-buy {
+  animation: hint-pulse 1.5s ease-in-out infinite;
+  position: relative;
+}
+@keyframes hint-reserve-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.8), 0 0 12px rgba(251, 191, 36, 0.4); }
+  50%      { box-shadow: 0 0 0 3px rgba(251, 191, 36, 1), 0 0 20px rgba(251, 191, 36, 0.6); }
+}
+.hint-reserve {
+  animation: hint-reserve-pulse 1.5s ease-in-out infinite;
+}
+@keyframes hint-token-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.8), 0 0 10px rgba(56, 189, 248, 0.4); }
+  50%      { box-shadow: 0 0 0 3px rgba(56, 189, 248, 1), 0 0 16px rgba(56, 189, 248, 0.6); }
+}
+.hint-token {
+  animation: hint-token-pulse 1.5s ease-in-out infinite;
+}
+
 /* ─── Deck stack visual ──────────────────── */
 .deck-stack {
   position: relative;

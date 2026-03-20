@@ -13,6 +13,7 @@ interface MobileTokenSelectorProps {
   onCancel: () => void;
   disabledColors: TokenColor[];
   viewOnly?: boolean;
+  hintColors?: string[];
 }
 
 export default function MobileTokenSelector({
@@ -25,6 +26,7 @@ export default function MobileTokenSelector({
   onCancel,
   disabledColors,
   viewOnly = false,
+  hintColors = [],
 }: MobileTokenSelectorProps) {
   // Count selections per color
   const selectionCounts: Partial<Record<TokenColor, number>> = {};
@@ -191,6 +193,7 @@ export default function MobileTokenSelector({
                     ? 'ring-4 ring-amber-400 ring-offset-2 ring-offset-slate-900' 
                     : ''}
                   ${color === 'white' ? 'text-slate-800' : ''}
+                  ${hintColors.includes(color) ? 'hint-token' : ''}
                 `}
                 style={{ background: TOKEN_GRADIENT[color] }}
                 onClick={() => !viewOnly && !disabled && onSelectToken(color)}

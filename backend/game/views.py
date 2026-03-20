@@ -800,3 +800,46 @@ class CasualLeaderboardView(APIView):
             'player_count': player_count,
             'max_positions': max_positions,
         })
+
+
+class GameHintView(APIView):
+    """Return a strategic hint for the requesting player."""
+
+    def get(self, request, code):
+        game = get_object_or_404(Game, code=code)
+
+        if game.status != Game.STATUS_PLAYING:
+            return Response({'error': 'Game is not in progress.'}, status=400)
+
+        players = list(game.players.select_related('user').order_by('order'))
+        gp = next((p for p in players if p.user == request.user), None)
+        if gp is None:
+            return Response({'error': 'Not in this game.'}, status=403)
+
+        # Only allow hints on your own turn
+        if gp.order != game.current_player_index:
+            return Response({'error': 'Not your turn.'}, status=400)
+
+        # Build the dicts the advisor expects
+        def _player_dict(p):
+            return {
+                'tokens': p.tokens or {},
+                'purchased_card_ids': p.purchased_card_ids or [],
+                'reserved_card_ids': p.reserved_card_ids or [],
+                'noble_ids': p.noble_ids or [],
+                'prestige_points': p.prestige_points,
+            }
+
+        game_data = {
+            'tokens_in_bank': game.tokens_in_bank or {},
+            'visible_cards': game.visible_cards or {},
+            'decks': game.decks or {},
+            'available_nobles': game.available_nobles or [],
+        }
+
+        player_data = _player_dict(gp)
+        opponents = [_player_dict(p) for p in players if p.user != request.user]
+
+        from .advisor import get_hint
+        hint = get_hint(game_data, player_data, opponents)
+        return Response(hint)

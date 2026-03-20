@@ -93,3 +93,22 @@ export interface WebSocketMessage {
   username?: string;
   timestamp?: string;
 }
+
+export interface HintAlternative {
+  action: 'buy_card' | 'reserve_card' | 'take_tokens';
+  card_id: number | null;
+  token_colors: string[];
+  level: number | null;
+  score: number;
+  reason: string;
+}
+
+export interface HintResponse {
+  action: 'buy_card' | 'reserve_card' | 'take_tokens';
+  card_id: number | null;
+  token_colors: string[];
+  level: number | null;
+  score: number;
+  reason: string;
+  alternatives: HintAlternative[];
+}

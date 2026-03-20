@@ -40,6 +40,8 @@ interface MobileBoardViewProps {
     onOpenTokenSelector: () => void;
     selectedTokens: TokenColor[];
     newCardId?: number | null;  // The card that just appeared for animation
+    hintCardId?: number | null;
+    hintAction?: 'buy' | 'reserve' | null;
 }
 
 const ROMAN: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
@@ -61,6 +63,8 @@ export default function MobileBoardView({
     onOpenTokenSelector,
     selectedTokens,
     newCardId = null,
+    hintCardId = null,
+    hintAction = null,
 }: MobileBoardViewProps) {
     const [zoomedCard, setZoomedCard] = useState<Card | null>(null);
     const [zoomedNoble, setZoomedNoble] = useState<Noble | null>(null);
@@ -227,6 +231,8 @@ export default function MobileBoardView({
                       transition-transform active:scale-95
                       ${affordable ? 'ring-2 ring-emerald-400' : ''}
                       ${isNewCard ? 'new-card-appear' : ''}
+                      ${hintCardId === cardId && hintAction === 'buy' ? 'hint-buy' : ''}
+                      ${hintCardId === cardId && hintAction === 'reserve' ? 'hint-reserve' : ''}
                     `}
                                         onClick={() => setZoomedCard(card)}
                                     >

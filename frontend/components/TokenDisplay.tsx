@@ -12,6 +12,7 @@ interface TokenProps {
   size?: 'xs' | 'sm' | 'md' | 'lg';
   inactive?: boolean;
   selectionCount?: number;
+  hintHighlight?: boolean;
 }
 
 const TOKEN_SIZES = {
@@ -24,6 +25,7 @@ const TOKEN_SIZES = {
 export default function Token({
   color, count, onClick, selected, disabled,
   size = 'md', inactive = false, selectionCount = 0,
+  hintHighlight = false,
 }: TokenProps) {
   const s = TOKEN_SIZES[size];
   const isClickable = !!onClick && !disabled && count > 0 && !inactive;
@@ -38,6 +40,7 @@ export default function Token({
         ${selected ? 'token-selected' : ''}
         ${isClickable ? 'cursor-pointer' : 'cursor-default'}
         ${(disabled || count === 0 || inactive) ? 'opacity-40' : ''}
+        ${hintHighlight ? 'hint-token' : ''}
       `}
       style={{
         width: s.outer,
@@ -90,6 +93,7 @@ interface TokenRowProps {
   size?: 'xs' | 'sm' | 'md' | 'lg';
   showLabel?: boolean;
   vertical?: boolean;
+  hintColors?: string[];
 }
 
 export function TokenRow({
@@ -101,6 +105,7 @@ export function TokenRow({
   size = 'md',
   showLabel = true,
   vertical = false,
+  hintColors = [],
 }: TokenRowProps) {
   const all: TokenColor[] = ['white', 'blue', 'green', 'red', 'black', 'gold'];
   const gapClass = size === 'xs' ? 'gap-1' : 'gap-2';
@@ -118,6 +123,7 @@ export function TokenRow({
               selectionCount={selectionCounts[color] || 0}
               disabled={disabledColors.includes(color)}
               size={size}
+              hintHighlight={hintColors.includes(color)}
             />
             {showLabel && (
               <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">

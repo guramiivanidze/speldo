@@ -252,6 +252,10 @@ export async function getGameState(code: string) {
   return apiFetch(`/api/games/${code}/state/`);
 }
 
+export async function getGameHint(code: string) {
+  return apiFetch(`/api/games/${code}/hint/`);
+}
+
 export async function getGameHistory(code: string) {
   return apiFetch(`/api/games/${code}/history/`);
 }

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { GameState, GemColor, TokenColor } from '@/types/game';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { GameState, GemColor, TokenColor, HintResponse } from '@/types/game';
 import CardDisplay from './CardDisplay';
 import NobleDisplay from './NobleDisplay';
 import { TokenRow } from './TokenDisplay';
@@ -15,6 +15,8 @@ import MobileGameBoard from './mobile/MobileGameBoard';
 import ActionNotification from './ActionNotification';
 import TurnTimer from './TurnTimer';
 import { ChatMessage } from '@/hooks/useGameSocket';
+import { getGameHint } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface GameBoardProps {
   gameState: GameState;
@@ -46,6 +48,8 @@ export default function GameBoard({
   onSendChat,
 }: GameBoardProps) {
   const isMobile = useIsMobile();
+  const { user } = useAuth();
+  const advisorAllowed = user?.advisor_enabled ?? false;
   const [selectedTokens, setSelectedTokens] = useState<TokenColor[]>([]);
 
   // Track the new card for animation (only for buy/reserve actions)
@@ -55,6 +59,12 @@ export default function GameBoard({
   // Track action notification visibility (temporary, 3 seconds)
   const [showNotification, setShowNotification] = useState(false);
   const lastNotifiedTurnRef = useRef<number>(0);
+
+  // ── Advisor state ──────────────────────────
+  const [advisorEnabled, setAdvisorEnabled] = useState(false);
+  const [hint, setHint] = useState<HintResponse | null>(null);
+  const [hintLoading, setHintLoading] = useState(false);
+  const hintTurnRef = useRef<number>(-1);
 
   // Show notification when opponent makes a move
   useEffect(() => {
@@ -119,6 +129,44 @@ export default function GameBoard({
     // Update turn ref for non-animation actions
     prevTurnNumberRef.current = currentTurn;
   }, [gameState.total_turns, gameState.last_action]);
+
+  // ── Fetch advisor hint when it's my turn ──
+  const isGamePlaying = gameState.status === 'playing';
+  const myPlayer = gameState.players.find((p) => p.id === myUserId);
+  const imCurrentTurn = isGamePlaying && gameState.players[gameState.current_player_index]?.id === myUserId;
+
+  useEffect(() => {
+    if (!advisorEnabled || !imCurrentTurn || !isGamePlaying) {
+      setHint(null);
+      return;
+    }
+    const turnKey = gameState.total_turns;
+    // Don't re-fetch for same turn
+    if (hintTurnRef.current === turnKey) return;
+    hintTurnRef.current = turnKey;
+
+    let cancelled = false;
+    setHintLoading(true);
+    getGameHint(gameState.code)
+      .then((data) => {
+        if (!cancelled) setHint(data as HintResponse);
+      })
+      .catch(() => {
+        if (!cancelled) setHint(null);
+      })
+      .finally(() => {
+        if (!cancelled) setHintLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [advisorEnabled, imCurrentTurn, isGamePlaying, gameState.total_turns, gameState.code]);
+
+  // Clear hint when advisor is turned off
+  useEffect(() => {
+    if (!advisorEnabled) {
+      setHint(null);
+      hintTurnRef.current = -1;
+    }
+  }, [advisorEnabled]);
 
   // Render mobile layout
   if (isMobile) {
@@ -293,8 +341,8 @@ export default function GameBoard({
       {/* Main Board Grid */}
       <div className="flex-1 grid grid-rows-[auto_1fr_auto] grid-cols-[auto_1fr_auto] gap-0.5 min-h-0">
         
-        {/* Top-left corner - Turn Timer */}
-        <div className="flex items-center justify-start pl-2">
+        {/* Top-left corner - Turn Timer + Advisor Toggle */}
+        <div className="flex items-center justify-start pl-2 gap-2">
           {gameState.timer_enabled && gameState.status === 'playing' && currentPlayer && (
             <TurnTimer
               currentPlayerIndex={gameState.current_player_index}
@@ -302,6 +350,19 @@ export default function GameBoard({
               isMyTurn={isMyTurn}
               currentPlayerName={currentPlayer.username}
             />
+          )}
+          {advisorAllowed && isGamePlaying && (
+            <button
+              onClick={() => setAdvisorEnabled((v) => !v)}
+              className={`px-2 py-1 rounded text-[11px] font-semibold transition-all border ${
+                advisorEnabled
+                  ? 'bg-purple-600/80 border-purple-400/60 text-white shadow-[0_0_8px_rgba(168,85,247,0.4)]'
+                  : 'bg-slate-700/60 border-slate-600/40 text-slate-400 hover:bg-slate-600/60 hover:text-slate-300'
+              }`}
+              title={advisorEnabled ? 'Disable advisor' : 'Enable advisor hints'}
+            >
+              {hintLoading ? '⏳' : '💡'} Advisor
+            </button>
           )}
         </div>
         
@@ -387,6 +448,9 @@ export default function GameBoard({
                     if (!card) return null;
                     const affordable = canAfford(cardId);
                     const isNewCard = newCardId === cardId;
+                    const cardHint = hint?.card_id === cardId
+                      ? (hint.action === 'buy_card' ? 'buy' as const : hint.action === 'reserve_card' ? 'reserve' as const : null)
+                      : null;
                     return (
                       <CardDisplay
                         key={cardId}
@@ -399,6 +463,7 @@ export default function GameBoard({
                         isAffordable={affordable}
                         compact
                         isNewCard={isNewCard}
+                        hintAction={cardHint}
                       />
                     );
                   })}
@@ -420,6 +485,7 @@ export default function GameBoard({
               size="md"
               showLabel={false}
               vertical
+              hintColors={hint?.action === 'take_tokens' ? hint.token_colors : []}
             />
             {selectedTokens.length > 0 && (
               <div className="flex flex-col items-center gap-4">
@@ -501,6 +567,38 @@ export default function GameBoard({
       {/* Action Notification Toast - fixed position, doesn't affect layout */}
       {showNotification && gameState.last_action && (
         <ActionNotification lastAction={gameState.last_action} myUserId={myUserId} />
+      )}
+
+      {/* Advisor Hint Panel */}
+      {advisorEnabled && hint && (
+        <div className="fixed bottom-4 left-4 z-50 max-w-xs bg-slate-800/95 backdrop-blur border border-purple-500/40 rounded-lg shadow-lg shadow-purple-900/30 p-3">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-sm">
+              {hint.action === 'buy_card' ? '🛒' : hint.action === 'reserve_card' ? '📌' : '💎'}
+            </span>
+            <span className="text-purple-300 text-xs font-bold uppercase tracking-wider">
+              {hint.action === 'buy_card' ? 'Buy Card' : hint.action === 'reserve_card' ? 'Reserve Card' : 'Take Tokens'}
+            </span>
+          </div>
+          <p className="text-slate-200 text-[11px] leading-relaxed">{hint.reason}</p>
+          {hint.alternatives && hint.alternatives.length > 0 && (
+            <details className="mt-2">
+              <summary className="text-slate-400 text-[10px] cursor-pointer hover:text-slate-300">
+                Other options
+              </summary>
+              <ul className="mt-1 space-y-1">
+                {hint.alternatives.slice(0, 3).map((alt, i) => (
+                  <li key={i} className="text-slate-400 text-[10px] flex items-start gap-1.5">
+                    <span className="shrink-0">
+                      {alt.action === 'buy_card' ? '🛒' : alt.action === 'reserve_card' ? '📌' : '💎'}
+                    </span>
+                    <span>{alt.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
       )}
     </div>
   );
