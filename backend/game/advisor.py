@@ -33,6 +33,7 @@ W_GOLD_VALUE       = 2.0    # Getting a gold token on reserve
 W_TOKEN_PROGRESS   = 4.0    # Tokens that bring the best card in reach
 W_ENDGAME          = 20.0   # Bonus for moves that reach 15 points
 W_OPPONENT_THREAT  = 8.0    # Block opponent from winning
+W_NOBLE_RACE       = 10.0   # Multiple opponents competing for same noble
 
 # Lookahead discount factors — future moves are worth less than the present
 
@@ -102,7 +103,9 @@ def _evaluate_all_moves(game_data, player_data, opponents, depth):
         player_data.get('prestige_points', 0),
         tuple(sorted(game_data['available_nobles'])),
         tuple((lvl, tuple(game_data['visible_cards'].get(lvl, []))) for lvl in ('1','2','3')),
-        tuple((o['prestige_points'], tuple(sorted(o['purchased_card_ids']))) for o in opponents),
+        tuple(sorted(game_data['tokens_in_bank'].items())),
+        tuple((o['prestige_points'], tuple(sorted(o['purchased_card_ids'])),
+               tuple(sorted(o['tokens'].items()))) for o in opponents),
     )
     if state_key in _EVAL_CACHE:
         return _EVAL_CACHE[state_key]
@@ -110,6 +113,10 @@ def _evaluate_all_moves(game_data, player_data, opponents, depth):
     bonuses = get_player_bonuses(player_data['purchased_card_ids'])
     noble_progress = _noble_proximity(bonuses, game_data['available_nobles'])
     opp_max_prestige = max((o['prestige_points'] for o in opponents), default=0)
+    # Count how many opponents are dangerous (within striking distance of 15)
+    opp_threat_count = sum(1 for o in opponents if o['prestige_points'] >= 11)
+    # Noble competition: nobles that at least one opponent is also targeting
+    contested_nobles = _find_contested_nobles(bonuses, opponents, game_data['available_nobles'])
 
     candidates = []
 
@@ -117,7 +124,8 @@ def _evaluate_all_moves(game_data, player_data, opponents, depth):
     for lvl in ('1', '2', '3'):
         for cid in game_data['visible_cards'].get(lvl, []):
             imm_score, reason = _score_buy(
-                cid, game_data, player_data, bonuses, noble_progress, opp_max_prestige,
+                cid, game_data, player_data, bonuses, noble_progress,
+                opp_max_prestige, opp_threat_count, contested_nobles,
             )
             if imm_score is None:
                 continue
@@ -137,16 +145,21 @@ def _evaluate_all_moves(game_data, player_data, opponents, depth):
                     # If opponent could win by buying this card
                     if opp_new_prestige >= 15:
                         block_bonus += 25
-                        block_reason += f' (blocks opponent win!)'
+                        block_reason += ' (blocks opponent win!)'
                     # If opponent could trigger a noble
                     elif opp_noble_pts > 0:
                         block_bonus += 8
-                        block_reason += f' (blocks opponent noble)'
-                    # If opponent can afford this card next turn
+                        block_reason += ' (blocks opponent noble)'
+                    # If opponent can afford this card now or very cheaply
                     opp_spend = effective_cost(cid, opp['tokens'], opp['purchased_card_ids'])
-                    if opp_spend is not None and sum(opp_spend.values()) <= 2:
-                        block_bonus += 4
-                        block_reason += ' (blocks easy buy)'
+                    if opp_spend is not None:
+                        opp_cost = sum(opp_spend.values())
+                        if opp_cost == 0:
+                            block_bonus += 8
+                            block_reason += ' (free for opponent!)'
+                        elif opp_cost <= 2:
+                            block_bonus += 4
+                            block_reason += ' (blocks easy buy)'
             future = 0.0
             future_note = ''
             if depth < LOOKAHEAD_DEPTH:
@@ -160,7 +173,8 @@ def _evaluate_all_moves(game_data, player_data, opponents, depth):
     # ── 2. Buy reserved cards ────────────────────────────────────────
     for cid in player_data['reserved_card_ids']:
         imm_score, reason = _score_buy(
-            cid, game_data, player_data, bonuses, noble_progress, opp_max_prestige,
+            cid, game_data, player_data, bonuses, noble_progress,
+            opp_max_prestige, opp_threat_count, contested_nobles,
         )
         if imm_score is None:
             continue
@@ -201,7 +215,8 @@ def _evaluate_all_moves(game_data, player_data, opponents, depth):
         for lvl in ('1', '2', '3'):
             for cid in game_data['visible_cards'].get(lvl, []):
                 imm_score, reason = _score_reserve(
-                    cid, game_data, player_data, bonuses, noble_progress, opp_max_prestige,
+                    cid, game_data, player_data, bonuses, noble_progress,
+                    opp_max_prestige, opp_threat_count, contested_nobles, opponents,
                 )
                 future = 0.0
                 future_note = ''
@@ -218,7 +233,8 @@ def _evaluate_all_moves(game_data, player_data, opponents, depth):
     token_moves = _generate_token_moves(game_data, player_data)
     for colors in token_moves:
         imm_score, reason = _score_take_tokens(
-            colors, game_data, player_data, bonuses, noble_progress, opp_max_prestige,
+            colors, game_data, player_data, bonuses, noble_progress,
+            opp_max_prestige, opp_threat_count,
         )
         future = 0.0
         future_note = ''
@@ -353,7 +369,19 @@ def _lookahead_take(colors, game_data, player_data, opponents, depth):
 
 
 def _best_future_score(game_data, player_data, opponents, depth):
-    """Recursively evaluate and return (best_score, short_note)."""
+    """Recursively evaluate and return (best_score, short_note).
+
+    Simulates all opponent turns between rounds so the state seen at the next
+    depth reflects real token depletion, card removal, and noble claims.
+    """
+    # Simulate the full round of opponent moves before it's our turn again
+    if opponents:
+        game_data, opponents = _sim_opponent_turns(game_data, opponents)
+
+    # If any opponent won during simulation, penalise paths that lead here
+    if any(o['prestige_points'] >= 15 for o in opponents):
+        return -50.0, 'opponent wins!'
+
     future_cands = _evaluate_all_moves(game_data, player_data, opponents, depth)
     if not future_cands:
         return 0.0, ''
@@ -412,7 +440,7 @@ def _sim_auto_discard(player_data, game_data, count):
 # ── Scoring helpers ──────────────────────────────────────────────────
 
 def _score_buy(card_id, game_data, player_data, bonuses, noble_progress,
-               opp_max_prestige):
+               opp_max_prestige, opp_threat_count=0, contested_nobles=None):
     """Score buying a specific card. Returns (score, reason) or (None, '') if can't afford."""
     spend = effective_cost(card_id, player_data['tokens'], player_data['purchased_card_ids'])
     if spend is None:
@@ -472,17 +500,23 @@ def _score_buy(card_id, game_data, player_data, bonuses, noble_progress,
     elif total_spent <= 2:
         reasons.append('very cheap')
 
-    # Opponent threat: block if opponent is close to winning
+    # Opponent threat: scale with how many are close to winning
     if opp_max_prestige >= 12:
-        score += W_OPPONENT_THREAT
-        reasons.append('opponent close to winning')
+        score += W_OPPONENT_THREAT * (1 + opp_threat_count * 0.5)
+        reasons.append(f'opponent close to winning ({opp_threat_count} threats)')
+
+    # Noble race: extra urgency if opponents also need this card's bonus color
+    if contested_nobles and bonus_color in contested_nobles:
+        score += W_NOBLE_RACE
+        reasons.append(f'{bonus_color} contested noble — hurry')
 
     reason = f"Buy L{card['level']} {bonus_color} card: " + ', '.join(reasons)
     return score, reason
 
 
 def _score_reserve(card_id, game_data, player_data, bonuses, noble_progress,
-                   opp_max_prestige):
+                   opp_max_prestige, opp_threat_count=0, contested_nobles=None,
+                   opponents=None):
     """Score reserving a specific card."""
     card = get_card(card_id)
     if not card:
@@ -509,11 +543,26 @@ def _score_reserve(card_id, game_data, player_data, bonuses, noble_progress,
         score += noble_score * (W_NOBLE_PROGRESS * 0.6)
         reasons.append(f'{bonus_color} aids noble path')
 
-    # Block opponent from getting a key card
+    # Block opponent from getting a key card — scale with threat count
     card_value_for_opps = pts * 2 + noble_score * 3
     if card_value_for_opps > 8 and opp_max_prestige >= 10:
-        score += W_OPPONENT_THREAT * 0.5
+        block_val = W_OPPONENT_THREAT * 0.5 * (1 + opp_threat_count * 0.4)
+        score += block_val
         reasons.append('deny opponent')
+
+    # Noble race: reserving a card in a contested color is more urgent
+    if contested_nobles and bonus_color in contested_nobles:
+        score += W_NOBLE_RACE * 0.7
+        reasons.append(f'{bonus_color} noble contested — reserve to secure')
+
+    # Extra urgency: if an opponent can immediately afford this card, reserve it now
+    if opponents:
+        for opp in opponents:
+            opp_spend = effective_cost(card_id, opp['tokens'], opp['purchased_card_ids'])
+            if opp_spend is not None and sum(opp_spend.values()) <= 1:
+                score += W_OPPONENT_THREAT
+                reasons.append('opponent can buy this next turn!')
+                break
 
     # Penalize reserving if already have 2 reserved
     if len(player_data['reserved_card_ids']) >= 2:
@@ -537,7 +586,7 @@ def _score_reserve(card_id, game_data, player_data, bonuses, noble_progress,
 
 
 def _score_take_tokens(colors, game_data, player_data, bonuses, noble_progress,
-                       opp_max_prestige):
+                       opp_max_prestige, opp_threat_count=0):
     """Score a token-taking option."""
     score = 0.0
     reasons = []
@@ -603,9 +652,140 @@ def _score_take_tokens(colors, game_data, player_data, bonuses, noble_progress,
         score *= 0.7
         reasons.append('token count high')
 
+    # Under threat: taking tokens is less valuable than buying/reserving —
+    # penalise passive token-gathering when opponents are close to winning
+    if opp_threat_count >= 2:
+        score *= 0.8
+        reasons.append('opponents threatening — act faster')
+
     color_str = ', '.join(colors) if colors else 'none'
     reason = f"Take tokens [{color_str}]: " + ', '.join(reasons) if reasons else f"Take tokens [{color_str}]"
     return score, reason
+
+
+# ── Opponent simulation ──────────────────────────────────────────────
+
+def _sim_opponent_turns(game_data, opponents):
+    """Simulate one full round of opponent moves (greedy heuristic).
+
+    Each opponent tries to buy the best affordable card; failing that they take
+    tokens toward their best reachable target.  Returns fresh deepcopies so the
+    caller's state is untouched.
+    """
+    game_data = deepcopy(game_data)
+    opponents = deepcopy(opponents)
+
+    for opp in opponents:
+        opp_bonuses = get_player_bonuses(opp['purchased_card_ids'])
+
+        # Try to buy best affordable card (visible + reserved)
+        best_buy = None
+        best_buy_score = -1
+        all_cards = []
+        for lvl in ('1', '2', '3'):
+            all_cards.extend(game_data['visible_cards'].get(lvl, []))
+        all_cards.extend(opp.get('reserved_card_ids', []))
+
+        for cid in all_cards:
+            spend = effective_cost(cid, opp['tokens'], opp['purchased_card_ids'])
+            if spend is None:
+                continue
+            card = get_card(cid)
+            if not card:
+                continue
+            new_bonuses = dict(opp_bonuses)
+            new_bonuses[card['bonus']] = new_bonuses.get(card['bonus'], 0) + 1
+            noble_pts = _check_noble_gain(new_bonuses, game_data['available_nobles'])
+            s = card.get('points', 0) * 10 + noble_pts * 8 - sum(spend.values())
+            if s > best_buy_score:
+                best_buy_score = s
+                best_buy = (cid, spend, card)
+
+        if best_buy:
+            cid, spend, card = best_buy
+            for c, amt in spend.items():
+                opp['tokens'][c] = opp['tokens'].get(c, 0) - amt
+                game_data['tokens_in_bank'][c] = game_data['tokens_in_bank'].get(c, 0) + amt
+            opp['purchased_card_ids'] = list(opp['purchased_card_ids']) + [cid]
+            opp['prestige_points'] = opp.get('prestige_points', 0) + card.get('points', 0)
+            if cid in opp.get('reserved_card_ids', []):
+                opp['reserved_card_ids'] = [c for c in opp['reserved_card_ids'] if c != cid]
+            lvl = str(card['level'])
+            vc = game_data['visible_cards'].get(lvl, [])
+            game_data['visible_cards'][lvl] = [c for c in vc if c != cid]
+            _sim_noble_check(opp, game_data)
+        else:
+            _sim_opponent_take_tokens(opp, game_data)
+
+    return game_data, opponents
+
+
+def _sim_opponent_take_tokens(opp, game_data):
+    """Opponent takes up to 3 tokens toward their most-needed colors."""
+    bank = game_data['tokens_in_bank']
+    opp_bonuses = get_player_bonuses(opp['purchased_card_ids'])
+
+    # Tally how much of each color is still needed across all visible cards
+    color_need = {c: 0 for c in COLORS}
+    for lvl in ('1', '2', '3'):
+        for cid in game_data['visible_cards'].get(lvl, []):
+            card = get_card(cid)
+            if not card:
+                continue
+            card_val = card.get('points', 0) + 1
+            for color in COLORS:
+                deficit = max(0, card['cost'].get(color, 0)
+                              - opp_bonuses.get(color, 0)
+                              - opp['tokens'].get(color, 0))
+                color_need[color] += deficit * card_val
+
+    available = sorted(
+        [c for c in COLORS if bank.get(c, 0) > 0],
+        key=lambda c: -color_need[c],
+    )
+    total_held = sum(opp['tokens'].values())
+    for c in available[:3]:
+        if total_held >= 10:
+            break
+        if bank.get(c, 0) > 0:
+            bank[c] -= 1
+            opp['tokens'][c] = opp['tokens'].get(c, 0) + 1
+            total_held += 1
+
+
+def _find_contested_nobles(my_bonuses, opponents, available_nobles):
+    """Return the set of bonus colors where at least one opponent is also
+    making progress toward a noble that we are also targeting."""
+    contested = set()
+    # Colors we still need for any noble
+    my_needed = set()
+    for nid in available_nobles:
+        noble = get_noble(nid)
+        if not noble:
+            continue
+        for color, req in noble['requirements'].items():
+            if my_bonuses.get(color, 0) < req:
+                my_needed.add(color)
+
+    for opp in opponents:
+        opp_bonuses = get_player_bonuses(opp['purchased_card_ids'])
+        for nid in available_nobles:
+            noble = get_noble(nid)
+            if not noble:
+                continue
+            total_req = sum(noble['requirements'].values())
+            if total_req == 0:
+                continue
+            opp_met = sum(
+                min(opp_bonuses.get(c, 0), v)
+                for c, v in noble['requirements'].items()
+            )
+            # Opponent is meaningfully competing for this noble (>30% there)
+            if opp_met / total_req >= 0.3:
+                for color, req in noble['requirements'].items():
+                    if color in my_needed and opp_bonuses.get(color, 0) < req:
+                        contested.add(color)
+    return contested
 
 
 # ── Utility functions ────────────────────────────────────────────────

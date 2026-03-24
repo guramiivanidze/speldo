@@ -122,7 +122,8 @@ def initial_decks_and_nobles(player_count, balancing_override=None):
                 visible, decks, get_card, config
             )
             nobles = get_balanced_nobles(
-                nobles, all_nobles, get_noble, config
+                nobles, all_nobles, get_noble, config,
+                visible=visible, decks=decks, get_card_fn=get_card,
             )
     except Exception:
         # Balancing must never break game start — fail open
@@ -435,6 +436,17 @@ def apply_reserve_card(game_data, player_data, card_id=None, level=None):
         card_id = decks[lvl].pop(0)
         decks[lvl] = decks[lvl]
 
+    # Mid-game board refresh: fix any color pile-up after replacement
+    try:
+        from .balancing import maybe_refresh_board
+        refreshed = maybe_refresh_board(
+            {'visible_cards': visible, 'decks': decks}, get_card
+        )
+        visible = refreshed['visible_cards']
+        decks = refreshed['decks']
+    except Exception:
+        pass
+
     reserved.append(card_id)
 
     # Give gold if available (player must discard if this puts them over 10)
@@ -501,6 +513,17 @@ def apply_buy_card(game_data, player_data, card_id):
                     cards.pop(idx)
                 visible[lvl] = cards
                 break
+
+    # Mid-game board refresh: fix any color pile-up after replacement
+    try:
+        from .balancing import maybe_refresh_board
+        refreshed = maybe_refresh_board(
+            {'visible_cards': visible, 'decks': decks}, get_card
+        )
+        visible = refreshed['visible_cards']
+        decks = refreshed['decks']
+    except Exception:
+        pass
 
     purchased.append(card_id)
 

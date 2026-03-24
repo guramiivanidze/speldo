@@ -240,7 +240,7 @@ LOGGING = {
 # ─── Game Balancing Layer ────────────────────────────────────────────────────
 # Toggle the balancing system globally. Can also be overridden per-game.
 GAME_BALANCING_ENABLED = os.environ.get(
-    'GAME_BALANCING_ENABLED', 'False'
+    'GAME_BALANCING_ENABLED', 'True'
 ).lower() in ('true', '1', 'yes')
 
 # "off" — disabled, "soft" — gentle influence, "strict" — stronger corrections

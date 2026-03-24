@@ -38,16 +38,20 @@ class BalancingConfig:
     enabled: bool = True
     level: str = 'soft'  # 'off', 'soft', 'strict'
 
-    # Card distribution limits
+    # Card distribution limits (per-row)
     max_same_color: int = 2         # Max cards of same bonus color per level row
     min_different_colors: int = 3   # Min unique bonus colors per level row
 
+    # Cross-level global distribution (all 12 visible cards together)
+    global_max_same_color: int = 5  # Max cards of same bonus color across ALL rows combined
+
     # Noble balancing
     max_shared_dominant_color: int = 1  # Max nobles sharing same dominant requirement color
+    noble_color_coverage: int = 4       # Min distinct colors required across all nobles
 
     # Weighted replacement
-    replacement_lookahead: int = 3      # How many cards to look ahead when replacing
-    dominant_color_penalty: float = 0.5  # Probability multiplier for overrepresented colors
+    replacement_lookahead: int = 6      # How many cards to look ahead when replacing
+    dominant_color_penalty: float = 0.4  # Probability multiplier for overrepresented colors
 
     # Board refresh
     refresh_threshold: int = 3  # Trigger refresh if any color has >= this many in a row
@@ -63,7 +67,8 @@ class BalancingConfig:
         kwargs = {'enabled': enabled, 'level': level}
 
         overridable = (
-            'max_same_color', 'min_different_colors', 'max_shared_dominant_color',
+            'max_same_color', 'min_different_colors', 'global_max_same_color',
+            'max_shared_dominant_color', 'noble_color_coverage',
             'replacement_lookahead', 'dominant_color_penalty', 'refresh_threshold',
         )
         for attr in overridable:
@@ -176,6 +181,47 @@ def _get_dominant_color(noble):
     return sorted(dominant)[0]  # deterministic tiebreak
 
 
+# ─── Cross-level and Noble-alignment helpers ─────────────────────────────────
+
+
+def _global_color_counts(visible, get_card_fn):
+    """Count bonus colors across ALL visible rows combined."""
+    all_ids = []
+    for row in visible.values():
+        all_ids.extend(row)
+    return Counter(_get_card_colors(all_ids, get_card_fn))
+
+
+def _card_pool_color_counts(visible, decks, get_card_fn):
+    """Count bonus colors across the full card pool (visible + decks)."""
+    all_ids = []
+    for row in visible.values():
+        all_ids.extend(row)
+    for deck in decks.values():
+        all_ids.extend(deck)
+    return Counter(_get_card_colors(all_ids, get_card_fn))
+
+
+def _nobles_color_coverage(noble_ids, get_noble_fn):
+    """Return the set of distinct colors required (> 0) across all nobles."""
+    colors = set()
+    for nid in noble_ids:
+        noble = get_noble_fn(nid)
+        if noble:
+            for color, req in noble.get('requirements', {}).items():
+                if req > 0:
+                    colors.add(color)
+    return colors
+
+
+def _noble_achievable(noble, pool_counts, min_cards_per_required_color=3):
+    """Return True if the card pool has enough cards of each required color."""
+    for color, req in noble.get('requirements', {}).items():
+        if req > 0 and pool_counts.get(color, 0) < min_cards_per_required_color:
+            return False
+    return True
+
+
 # ─── Card Distribution Balancing ─────────────────────────────────────────────
 
 
@@ -271,22 +317,75 @@ def get_balanced_table_cards(visible, decks, get_card_fn, config=None):
                 f'[BALANCING] Level {level} rebalanced: {before_colors} -> {after_colors}'
             )
 
+    # ── Cross-level global check ──────────────────────────────────────
+    # After per-row balancing, ensure no color dominates the full 12-card board.
+    global_counts = _global_color_counts(balanced_visible, get_card_fn)
+    overrepresented = [
+        color for color, count in global_counts.items()
+        if count > config.global_max_same_color
+    ]
+    if overrepresented:
+        logger.info(
+            f'[BALANCING] Global color imbalance: {dict(global_counts)}, '
+            f'over-limit: {overrepresented}'
+        )
+        for color in overrepresented:
+            # Swap one excess card from each level that has it, preferring level 1
+            for level in ('1', '2', '3'):
+                row = balanced_visible.get(level, [])
+                deck = updated_decks.get(level, [])
+                if not deck:
+                    continue
+                # Find a card of the overrepresented color in this row
+                swap_idx = next(
+                    (i for i, cid in enumerate(row)
+                     if (get_card_fn(cid) or {}).get('bonus') == color),
+                    None,
+                )
+                if swap_idx is None:
+                    continue
+                # Look for a replacement from a different color in the deck
+                search_depth = min(len(deck), config.replacement_lookahead * 2)
+                repl_idx = next(
+                    (di for di in range(search_depth)
+                     if (get_card_fn(deck[di]) or {}).get('bonus') != color
+                     and (get_card_fn(deck[di]) or {}).get('bonus') not in overrepresented),
+                    None,
+                )
+                if repl_idx is not None:
+                    row[swap_idx], deck[repl_idx] = deck[repl_idx], row[swap_idx]
+                    balanced_visible[level] = row
+                    updated_decks[level] = deck
+                    _metrics.cards_rebalanced += 1
+                    # Re-check — stop as soon as this color is within limit
+                    global_counts = _global_color_counts(balanced_visible, get_card_fn)
+                    if global_counts.get(color, 0) <= config.global_max_same_color:
+                        break
+
     return balanced_visible, updated_decks
 
 
 # ─── Noble Balancing ─────────────────────────────────────────────────────────
 
 
-def get_balanced_nobles(noble_ids, all_noble_ids, get_noble_fn, config=None):
+def get_balanced_nobles(noble_ids, all_noble_ids, get_noble_fn, config=None,
+                        visible=None, decks=None, get_card_fn=None):
     """
-    Balance noble selection to avoid too many nobles sharing the same dominant
-    requirement color.
+    Balance noble selection:
+      1. No more than max_shared_dominant_color nobles share the same dominant color.
+      2. The set of nobles collectively requires at least noble_color_coverage
+         distinct colors, giving players diverse strategic paths.
+      3. Each noble is achievable — its required colors have enough cards in the
+         full card pool (visible + decks).
 
     Args:
         noble_ids:     originally selected noble IDs
         all_noble_ids: all available noble IDs to choose replacements from
         get_noble_fn:  callable(noble_id) -> noble dict
         config:        optional BalancingConfig override
+        visible:       optional visible card dict (for achievability check)
+        decks:         optional deck dict (for achievability check)
+        get_card_fn:   optional card lookup (for achievability check)
 
     Returns:
         list of balanced noble IDs
@@ -299,61 +398,101 @@ def get_balanced_nobles(noble_ids, all_noble_ids, get_noble_fn, config=None):
 
     _metrics.total_checks += 1
     nobles = list(noble_ids)
-
-    dominant_colors = []
-    for nid in nobles:
-        noble = get_noble_fn(nid)
-        if noble:
-            dominant_colors.append(_get_dominant_color(noble))
-
-    color_counts = Counter(c for c in dominant_colors if c is not None)
-    max_allowed = config.max_shared_dominant_color
-    conflicts = {color: count for color, count in color_counts.items() if count > max_allowed}
-
-    if not conflicts:
-        return nobles
-
-    logger.info(
-        f'[BALANCING] Noble conflict detected: dominant colors = {dominant_colors}, '
-        f'conflicts = {conflicts}'
-    )
-
     replacement_pool = [nid for nid in all_noble_ids if nid not in nobles]
     random.shuffle(replacement_pool)
 
-    for conflict_color, conflict_count in conflicts.items():
-        to_replace = conflict_count - max_allowed
+    # Pre-compute pool color counts for achievability check
+    pool_counts = None
+    if visible is not None and decks is not None and get_card_fn is not None:
+        pool_counts = _card_pool_color_counts(visible, decks, get_card_fn)
 
+    def _try_replace(idx, reject_fn, label):
+        """Swap nobles[idx] with the first replacement that passes reject_fn."""
+        for ri, rid in enumerate(replacement_pool):
+            rn = get_noble_fn(rid)
+            if not rn:
+                continue
+            if reject_fn(rn):
+                continue
+            logger.info(f'[BALANCING] Noble swap ({label}): {nobles[idx]} → {rid}')
+            nobles[idx] = rid
+            replacement_pool.pop(ri)
+            _metrics.nobles_rebalanced += 1
+            return True
+        logger.warning(f'[BALANCING] No suitable replacement for noble {nobles[idx]} ({label})')
+        return False
+
+    # ── Pass 1: fix dominant-color conflicts ─────────────────────────
+    for _ in range(2):  # two passes in case early swaps create new conflicts
+        dominant_colors = [
+            _get_dominant_color(get_noble_fn(nid))
+            for nid in nobles if get_noble_fn(nid)
+        ]
+        color_counts = Counter(c for c in dominant_colors if c is not None)
+        conflicts = {c: n for c, n in color_counts.items()
+                     if n > config.max_shared_dominant_color}
+        if not conflicts:
+            break
+        logger.info(
+            f'[BALANCING] Noble dominant-color conflict: {dominant_colors}, '
+            f'conflicts={conflicts}'
+        )
+        for conflict_color, conflict_count in conflicts.items():
+            to_replace = conflict_count - config.max_shared_dominant_color
+            for i in range(len(nobles)):
+                if to_replace <= 0:
+                    break
+                noble = get_noble_fn(nobles[i])
+                if not noble or _get_dominant_color(noble) != conflict_color:
+                    continue
+                if _try_replace(i, lambda rn, c=conflict_color: _get_dominant_color(rn) == c,
+                                f'dominant={conflict_color}'):
+                    to_replace -= 1
+
+    # ── Pass 2: enforce color coverage across all nobles ─────────────
+    coverage = _nobles_color_coverage(nobles, get_noble_fn)
+    if len(coverage) < config.noble_color_coverage:
+        logger.info(
+            f'[BALANCING] Noble color coverage too low: {coverage} '
+            f'(need {config.noble_color_coverage} distinct colors)'
+        )
+        # Find nobles whose colors are already well-covered and try to swap one
+        # for a noble that contributes a missing color.
+        all_colors = {'white', 'blue', 'green', 'red', 'black'}
+        missing_colors = all_colors - coverage
         for i in range(len(nobles)):
-            if to_replace <= 0:
+            if not missing_colors:
                 break
-
             noble = get_noble_fn(nobles[i])
             if not noble:
                 continue
-            if _get_dominant_color(noble) != conflict_color:
+            noble_colors = {c for c, v in noble.get('requirements', {}).items() if v > 0}
+            # Only swap nobles that don't introduce any missing color themselves
+            if noble_colors & missing_colors:
                 continue
+            if _try_replace(
+                i,
+                lambda rn, mc=missing_colors: not ({c for c, v in rn.get('requirements', {}).items() if v > 0} & mc),
+                f'coverage missing {missing_colors}',
+            ):
+                coverage = _nobles_color_coverage(nobles, get_noble_fn)
+                missing_colors = all_colors - coverage
 
-            replaced = False
-            for ri, replacement_id in enumerate(replacement_pool):
-                replacement_noble = get_noble_fn(replacement_id)
-                if replacement_noble and _get_dominant_color(replacement_noble) != conflict_color:
-                    logger.info(
-                        f'[BALANCING] Replacing noble {nobles[i]} '
-                        f'(dominant={conflict_color}) with noble {replacement_id} '
-                        f'(dominant={_get_dominant_color(replacement_noble)})'
-                    )
-                    nobles[i] = replacement_id
-                    replacement_pool.pop(ri)
-                    _metrics.nobles_rebalanced += 1
-                    replaced = True
-                    to_replace -= 1
-                    break
-
-            if not replaced:
-                logger.warning(
-                    f'[BALANCING] Could not find replacement for noble {nobles[i]} '
-                    f'with dominant color {conflict_color}'
+    # ── Pass 3: remove unachievable nobles ───────────────────────────
+    if pool_counts is not None:
+        for i in range(len(nobles)):
+            noble = get_noble_fn(nobles[i])
+            if not noble:
+                continue
+            if not _noble_achievable(noble, pool_counts):
+                logger.info(
+                    f'[BALANCING] Noble {nobles[i]} unachievable given card pool '
+                    f'(requirements={noble.get("requirements")}, pool={dict(pool_counts)})'
+                )
+                _try_replace(
+                    i,
+                    lambda rn, pc=pool_counts: not _noble_achievable(rn, pc),
+                    'unachievable',
                 )
 
     return nobles
