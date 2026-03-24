@@ -1,31 +1,31 @@
 # Core Django
-Django==5.1.15
-djangorestframework==3.15.2
-django-cors-headers==4.6.0
+Django==6.0.3
+djangorestframework==3.16.1
+django-cors-headers==4.9.0
 
 # WebSocket support
-channels==4.2.0
+channels==4.3.2
 channels_redis==4.2.1
 daphne==4.1.2
 
 # Database
-dj-database-url==2.3.0
-psycopg2-binary==2.9.10
+dj-database-url==3.0.1
+psycopg2-binary==2.9.11
 
 # Static files & Images
-whitenoise==6.8.2
-Pillow==11.1.0
+whitenoise==6.12.0
+Pillow==12.1.1
 
 # Cloud storage
-cloudinary==1.40.0
+cloudinary==1.44.1
 django-cloudinary-storage==0.3.0
 
 # Admin utilities
-django-import-export==4.0.0
+django-import-export==4.4.0
 
 # Email
-requests==2.31.0
+requests==2.32.5
 
 # Development
-python-dotenv==1.0.1
+python-dotenv==1.2.2
 sib-api-v3-sdk==7.6.0

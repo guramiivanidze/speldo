@@ -35,8 +35,13 @@ W_ENDGAME          = 20.0   # Bonus for moves that reach 15 points
 W_OPPONENT_THREAT  = 8.0    # Block opponent from winning
 
 # Lookahead discount factors — future moves are worth less than the present
-LOOKAHEAD_DEPTH    = 2
-DISCOUNT           = [1.0, 0.5, 0.25]   # depth 0, 1, 2
+
+# Increase lookahead depth for deeper planning
+LOOKAHEAD_DEPTH    = 5
+DISCOUNT           = [1.0, 0.7, 0.5, 0.3, 0.15, 0.1]   # depth 0, 1, 2, 3, 4, 5
+
+# Memoization cache for state evaluation
+_EVAL_CACHE = {}
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -88,6 +93,20 @@ def get_hint(game_data, player_data, opponents):
 def _evaluate_all_moves(game_data, player_data, opponents, depth):
     """Score every legal move.  When *depth* < LOOKAHEAD_DEPTH, each move is
     also scored by simulating forward and evaluating the resulting position."""
+    # Memoization key: hashable snapshot of state
+    state_key = (
+        depth,
+        tuple(sorted(player_data['tokens'].items())),
+        tuple(sorted(player_data['purchased_card_ids'])),
+        tuple(sorted(player_data['reserved_card_ids'])),
+        player_data.get('prestige_points', 0),
+        tuple(sorted(game_data['available_nobles'])),
+        tuple((lvl, tuple(game_data['visible_cards'].get(lvl, []))) for lvl in ('1','2','3')),
+        tuple((o['prestige_points'], tuple(sorted(o['purchased_card_ids']))) for o in opponents),
+    )
+    if state_key in _EVAL_CACHE:
+        return _EVAL_CACHE[state_key]
+
     bonuses = get_player_bonuses(player_data['purchased_card_ids'])
     noble_progress = _noble_proximity(bonuses, game_data['available_nobles'])
     opp_max_prestige = max((o['prestige_points'] for o in opponents), default=0)
@@ -102,14 +121,40 @@ def _evaluate_all_moves(game_data, player_data, opponents, depth):
             )
             if imm_score is None:
                 continue
+            # Simulate if this card is a threat for any opponent (could win or trigger noble)
+            block_bonus = 0.0
+            block_reason = ''
+            card = get_card(cid)
+            if card:
+                for opp in opponents:
+                    opp_bonuses = get_player_bonuses(opp['purchased_card_ids'])
+                    opp_pts = card.get('points', 0)
+                    opp_new_prestige = opp['prestige_points'] + opp_pts
+                    opp_new_bonuses = dict(opp_bonuses)
+                    opp_new_bonuses[card['bonus']] = opp_new_bonuses.get(card['bonus'], 0) + 1
+                    opp_noble_pts = _check_noble_gain(opp_new_bonuses, game_data['available_nobles'])
+                    opp_new_prestige += opp_noble_pts
+                    # If opponent could win by buying this card
+                    if opp_new_prestige >= 15:
+                        block_bonus += 25
+                        block_reason += f' (blocks opponent win!)'
+                    # If opponent could trigger a noble
+                    elif opp_noble_pts > 0:
+                        block_bonus += 8
+                        block_reason += f' (blocks opponent noble)'
+                    # If opponent can afford this card next turn
+                    opp_spend = effective_cost(cid, opp['tokens'], opp['purchased_card_ids'])
+                    if opp_spend is not None and sum(opp_spend.values()) <= 2:
+                        block_bonus += 4
+                        block_reason += ' (blocks easy buy)'
             future = 0.0
             future_note = ''
             if depth < LOOKAHEAD_DEPTH:
                 future, future_note = _lookahead_buy(
                     cid, game_data, player_data, opponents, depth,
                 )
-            total = imm_score * DISCOUNT[depth] + future
-            full_reason = reason + (f' → next: {future_note}' if future_note else '')
+            total = (imm_score + block_bonus) * DISCOUNT[depth] + future
+            full_reason = reason + block_reason + (f' → next: {future_note}' if future_note else '')
             candidates.append(_cand('buy_card', cid, [], None, total, full_reason))
 
     # ── 2. Buy reserved cards ────────────────────────────────────────
@@ -119,14 +164,36 @@ def _evaluate_all_moves(game_data, player_data, opponents, depth):
         )
         if imm_score is None:
             continue
+        # Prioritize buying reserved cards if they win or trigger a noble
+        card = get_card(cid)
+        reserved_bonus = 0.0
+        reserved_reason = ''
+        if card:
+            pts = card.get('points', 0)
+            new_prestige = player_data['prestige_points'] + pts
+            new_bonuses = dict(bonuses)
+            new_bonuses[card['bonus']] = new_bonuses.get(card['bonus'], 0) + 1
+            noble_pts = _check_noble_gain(new_bonuses, game_data['available_nobles'])
+            new_prestige += noble_pts
+            if new_prestige >= 15:
+                reserved_bonus += 30  # Strongly prefer winning
+                reserved_reason += ' (reserved card wins!)'
+            elif noble_pts > 0:
+                reserved_bonus += 12  # Prefer if triggers noble
+                reserved_reason += f' (reserved triggers noble +{noble_pts})'
+            # Slight bonus for reserved cards that are now affordable
+            spend = effective_cost(cid, player_data['tokens'], player_data['purchased_card_ids'])
+            if spend is not None and sum(spend.values()) <= 2:
+                reserved_bonus += 3
+                reserved_reason += ' (reserved now cheap)'
         future = 0.0
         future_note = ''
         if depth < LOOKAHEAD_DEPTH:
             future, future_note = _lookahead_buy(
                 cid, game_data, player_data, opponents, depth,
             )
-        total = imm_score * DISCOUNT[depth] + future
-        full_reason = reason + ' (from reserved)' + (f' → next: {future_note}' if future_note else '')
+        total = (imm_score + reserved_bonus) * DISCOUNT[depth] + future
+        full_reason = reason + ' (from reserved)' + reserved_reason + (f' → next: {future_note}' if future_note else '')
         candidates.append(_cand('buy_card', cid, [], None, total, full_reason))
 
     # ── 3. Reserve visible cards ─────────────────────────────────────
@@ -146,9 +213,10 @@ def _evaluate_all_moves(game_data, player_data, opponents, depth):
                 full_reason = reason + (f' → next: {future_note}' if future_note else '')
                 candidates.append(_cand('reserve_card', cid, [], None, total, full_reason))
 
-    # ── 4. Take tokens ───────────────────────────────────────────────
-    token_options = _generate_token_options(game_data['tokens_in_bank'])
-    for colors in token_options:
+    # ── 4. Take tokens ──────────────────────────────────────────────
+    # Generate all legal token-taking moves (reuse existing logic if present)
+    token_moves = _generate_token_moves(game_data, player_data)
+    for colors in token_moves:
         imm_score, reason = _score_take_tokens(
             colors, game_data, player_data, bonuses, noble_progress, opp_max_prestige,
         )
@@ -162,7 +230,35 @@ def _evaluate_all_moves(game_data, player_data, opponents, depth):
         full_reason = reason + (f' → next: {future_note}' if future_note else '')
         candidates.append(_cand('take_tokens', None, colors, None, total, full_reason))
 
+    # Early pruning: keep only top 8 candidates at each node to limit branching
+    if len(candidates) > 8:
+        candidates.sort(key=lambda c: c['score'], reverse=True)
+        candidates = candidates[:8]
+
+    _EVAL_CACHE[state_key] = candidates
     return candidates
+
+# Generate all legal token-taking moves (3 different, or 2 of one color if enough in bank)
+def _generate_token_moves(game_data, player_data):
+    bank = game_data['tokens_in_bank']
+    held = player_data['tokens']
+    colors = [c for c in COLORS if bank.get(c, 0) > 0]
+    moves = set()
+    # Take 3 different colors
+    for i in range(len(colors)):
+        for j in range(i+1, len(colors)):
+            for k in range(j+1, len(colors)):
+                moves.add(tuple(sorted([colors[i], colors[j], colors[k]])))
+    # Take 2 of one color if at least 4 in bank
+    for c in colors:
+        if bank.get(c, 0) >= 4:
+            moves.add((c, c))
+    # Remove moves that would exceed 10 tokens
+    legal_moves = []
+    for move in moves:
+        if sum(held.values()) + len(move) <= 10:
+            legal_moves.append(list(move))
+    return legal_moves
 
 
 def _cand(action, card_id, token_colors, level, score, reason):
@@ -329,26 +425,31 @@ def _score_buy(card_id, game_data, player_data, bonuses, noble_progress,
     score = 0.0
     reasons = []
 
+
     # Direct points
     pts = card.get('points', 0)
-    if pts > 0:
-        score += pts * W_POINTS
-        reasons.append(f'+{pts} prestige')
-
-    # Check if this wins the game
     new_prestige = player_data['prestige_points'] + pts
     # Check noble completion after buying
     new_bonuses = dict(bonuses)
     new_bonuses[card['bonus']] = new_bonuses.get(card['bonus'], 0) + 1
     noble_pts = _check_noble_gain(new_bonuses, game_data['available_nobles'])
     new_prestige += noble_pts
+
+    # If this move wins the game, make it overwhelmingly best
+    if new_prestige >= 15:
+        score = 10000.0
+        reasons.append(f'+{pts} prestige')
+        if noble_pts > 0:
+            reasons.append(f'triggers noble (+{noble_pts}pts)')
+        reasons.append('WINS THE GAME!')
+        return score, f"Buy L{card['level']} {card['bonus']} card: " + ', '.join(reasons)
+
+    if pts > 0:
+        score += pts * W_POINTS
+        reasons.append(f'+{pts} prestige')
     if noble_pts > 0:
         score += W_NOBLE_COMPLETE * (noble_pts / 3)
         reasons.append(f'triggers noble (+{noble_pts}pts)')
-
-    if new_prestige >= 15:
-        score += W_ENDGAME
-        reasons.append('WINS THE GAME!')
 
     # Noble progress: how much does this bonus help toward nobles?
     bonus_color = card['bonus']
