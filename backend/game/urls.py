@@ -3,9 +3,9 @@ from .views import (
     GameListCreateView, GameJoinView,
     GameStartView, GameStateView, MyGamesView, FriendsWaitingGamesView,
     GameHistoryView, UserGameHistoryView, CasualStatsView, CasualLeaderboardView,
-    GameFriendsListView, SendGameInvitationView, 
+    GameFriendsListView, SendGameInvitationView,
     RespondGameInvitationView, PendingGameInvitationsView,
-    GameHintView,
+    GameHintView, PointsLeaderboardView,
 )
 
 urlpatterns = [
@@ -15,6 +15,7 @@ urlpatterns = [
     path('games/history/', UserGameHistoryView.as_view(), name='user-game-history'),
     path('games/casual-stats/', CasualStatsView.as_view(), name='casual-stats'),
     path('games/casual-leaderboard/', CasualLeaderboardView.as_view(), name='casual-leaderboard'),
+    path('games/points-leaderboard/', PointsLeaderboardView.as_view(), name='points-leaderboard'),
     path('games/invitations/', PendingGameInvitationsView.as_view(), name='pending-game-invitations'),
     path('games/<str:code>/join/', GameJoinView.as_view(), name='game-join'),
     path('games/<str:code>/start/', GameStartView.as_view(), name='game-start'),

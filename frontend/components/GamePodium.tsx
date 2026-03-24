@@ -166,6 +166,10 @@ export default function GamePodium({ players, winnerId, currentUserId }: GamePod
     }
   };
 
+  // Points earned: player_count − placement (0 for last place)
+  const playerCount = players.length;
+  const leaderboardPoints = (rank: number) => Math.max(0, playerCount - rank);
+
   // Podium layout: 2nd - 1st - 3rd for top 3, or 2nd - 1st for 2 players
   const podiumOrder = rankedPlayers.slice(0, 3);
   const restPlayers = rankedPlayers.slice(3);
@@ -319,6 +323,66 @@ export default function GamePodium({ players, winnerId, currentUserId }: GamePod
             </div>
           </div>
         )}
+
+        {/* ── Leaderboard points earned ── */}
+        <div className="mt-5 rounded-xl overflow-hidden border border-violet-500/30"
+             style={{ background: 'linear-gradient(135deg, rgba(109,40,217,0.15) 0%, rgba(76,29,149,0.08) 100%)' }}>
+          {/* Header */}
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-violet-500/20"
+               style={{ background: 'rgba(109,40,217,0.2)' }}>
+            <span className="text-base">⭐</span>
+            <span className="text-xs font-bold text-violet-300 uppercase tracking-widest">Leaderboard Points Earned</span>
+          </div>
+
+          {/* Player rows */}
+          <div className="divide-y divide-violet-500/10">
+            {rankedPlayers.map((player, idx) => {
+              const rank = idx + 1;
+              const pts = leaderboardPoints(rank);
+              const isMe = player.id === currentUserId;
+              const isFirst = rank === 1;
+
+              return (
+                <div
+                  key={player.id}
+                  className={`flex items-center gap-3 px-4 py-3 transition-colors
+                    ${isMe ? 'bg-indigo-500/10' : ''}
+                    ${isFirst ? 'bg-violet-500/10' : ''}
+                  `}
+                >
+                  {/* Rank */}
+                  <span className="w-6 text-center text-sm font-bold text-slate-500">
+                    {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`}
+                  </span>
+
+                  {/* Username */}
+                  <span className={`flex-1 text-sm font-semibold truncate ${isMe ? 'text-indigo-300' : 'text-slate-200'}`}>
+                    {player.username}
+                    {isMe && <span className="ml-1.5 text-[10px] font-bold text-indigo-400 opacity-80">(you)</span>}
+                  </span>
+
+                  {/* Points pill */}
+                  <div
+                    className={`flex items-center gap-1 px-3 py-1 rounded-full font-black text-sm
+                      ${pts > 0
+                        ? 'text-white shadow-lg shadow-violet-500/30'
+                        : 'text-slate-500 bg-slate-800/60'
+                      }`}
+                    style={pts > 0 ? {
+                      background: isFirst
+                        ? 'linear-gradient(135deg, #7c3aed, #4c1d95)'
+                        : 'linear-gradient(135deg, #6d28d9, #3b0764)',
+                      boxShadow: isFirst ? '0 0 14px rgba(139,92,246,0.55)' : undefined,
+                    } : {}}
+                  >
+                    <span>⭐</span>
+                    <span>+{pts}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );

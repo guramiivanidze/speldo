@@ -802,6 +802,105 @@ class CasualLeaderboardView(APIView):
         })
 
 
+class PointsLeaderboardView(APIView):
+    """Leaderboard sorted by placement points.
+
+    Points awarded per game:
+      2-player  →  1st: 1 pt,  2nd: 0 pt
+      3-player  →  1st: 2 pts, 2nd: 1 pt,  3rd: 0 pt
+      4-player  →  1st: 3 pts, 2nd: 2 pts, 3rd: 1 pt, 4th: 0 pt
+
+    Formula: points = player_count − placement (0 for last place).
+
+    Sorted by total points desc, then win_rate desc.
+    """
+    permission_classes = []  # Public endpoint
+
+    def get(self, request):
+        from django.contrib.auth import get_user_model
+        from django.db.models import Count
+        from collections import defaultdict
+
+        User = get_user_model()
+
+        # Optional player_count filter
+        player_count_param = request.query_params.get('player_count')
+        player_count_filter = None
+        if player_count_param:
+            try:
+                v = int(player_count_param)
+                if v in (2, 3, 4):
+                    player_count_filter = v
+            except ValueError:
+                pass
+
+        casual_games = Game.objects.filter(
+            status=Game.STATUS_FINISHED,
+            ranked_match__isnull=True,
+        ).prefetch_related('players__user')
+
+        if player_count_filter:
+            casual_games = casual_games.annotate(
+                num_players=Count('players')
+            ).filter(num_players=player_count_filter)
+
+        # user_id → {points, games, wins}
+        user_stats = defaultdict(lambda: {'points': 0, 'games': 0, 'wins': 0})
+
+        for game in casual_games:
+            players = list(game.players.all())
+            if not players:
+                continue
+            n = len(players)
+            if player_count_filter and n != player_count_filter:
+                continue
+
+            # Sort by prestige desc, card count asc (same tiebreak as game logic)
+            players.sort(key=lambda p: (-p.prestige_points, len(p.purchased_card_ids)))
+
+            for placement, gp in enumerate(players, start=1):
+                pts = n - placement          # formula: player_count − placement
+                uid = gp.user_id
+                user_stats[uid]['points'] += pts
+                user_stats[uid]['games'] += 1
+                if placement == 1:
+                    user_stats[uid]['wins'] += 1
+
+        user_ids = list(user_stats.keys())
+        users_by_id = {u.id: u for u in User.objects.filter(id__in=user_ids)}
+
+        entries = []
+        for uid, stats in user_stats.items():
+            user = users_by_id.get(uid)
+            if not user:
+                continue
+            games = stats['games']
+            wins = stats['wins']
+            win_rate = round(100 * wins / games, 1) if games else 0.0
+            entries.append({
+                'user_id': uid,
+                'username': user.username,
+                'points': stats['points'],
+                'games': games,
+                'wins': wins,
+                'win_rate': win_rate,
+            })
+
+        # Sort: most points first, then best win_rate
+        entries.sort(key=lambda e: (-e['points'], -e['win_rate']))
+
+        entries = entries[:50]
+        for rank, entry in enumerate(entries, start=1):
+            entry['rank'] = rank
+            del entry['user_id']
+
+        return Response({
+            'entries': entries,
+            'total': len(entries),
+            'player_count': player_count_filter,
+        })
+
+
 class GameHintView(APIView):
     """Return a strategic hint for the requesting player."""
 

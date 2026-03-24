@@ -487,6 +487,11 @@ export async function getCasualLeaderboard(playerCount?: number) {
   return apiFetch(`/api/games/casual-leaderboard/${params}`);
 }
 
+export async function getPointsLeaderboard(playerCount?: number) {
+  const params = playerCount ? `?player_count=${playerCount}` : '';
+  return apiFetch(`/api/games/points-leaderboard/${params}`);
+}
+
 export async function joinMatchmaking() {
   return apiFetch('/api/competitive/matchmaking/join/', { method: 'POST' });
 }
