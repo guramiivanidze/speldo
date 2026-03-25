@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"reserve_card\\\\|reserveCard\" /c/Users/guiv01/Documents/GitHub/speldo/frontend/app/game/[code]/page.tsx)",
+      "Bash(find /c/Users/guiv01/Documents/GitHub/speldo -type f -name *test* -o -name *spec*)",
+      "Bash(python -m pytest game/tests.py::ReserveCardTestCase -v)",
+      "Bash(python manage.py test game.tests.ReserveCardTestCase -v 2)",
+      "Bash(.venv/Scripts/python manage.py test game.tests.ReserveCardTestCase -v 2)",
+      "Bash(/c/Users/guiv01/Documents/GitHub/speldo/.venv/Scripts/python manage.py test game.tests.ReserveCardTestCase -v 2)",
+      "Bash(git stash:*)",
+      "Bash(/c/Users/guiv01/Documents/GitHub/speldo/.venv/Scripts/python manage.py test game.tests.ReserveCardTestCase.test_reserve_refills_visible -v 2)",
+      "Bash(/c/Users/guiv01/Documents/GitHub/speldo/.venv/Scripts/python manage.py test game.tests -v 2)"
+    ]
+  }
+}

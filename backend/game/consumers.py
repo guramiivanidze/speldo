@@ -1135,8 +1135,6 @@ class GameConsumer(AsyncWebsocketConsumer):
                     if error:
                         return error, True
 
-                    self._save_state(game, current_gp, new_gd, new_pd)
-                    
                     # Advance turn only when player is at or below 10 tokens
                     if not still_needs_discard:
                         # Retrieve the original action from pending_action_data
@@ -1152,15 +1150,25 @@ class GameConsumer(AsyncWebsocketConsumer):
                                 'player_tokens_after': pending.get('player_tokens_after'),
                             }
                         elif action_type == 'reserve_card':
+                            # Apply the deferred visible_cards/decks swap now
+                            deferred_visible = pending.get('deferred_visible_cards')
+                            deferred_decks = pending.get('deferred_decks')
+                            if deferred_visible:
+                                new_gd['visible_cards'] = deferred_visible
+                            if deferred_decks:
+                                new_gd['decks'] = deferred_decks
+
                             action_info = {
                                 'card_id': pending.get('card_id'),
                                 'from_deck': pending.get('from_deck', False),
                                 'level': pending.get('level'),
                                 'gold_received': pending.get('gold_received'),
+                                'new_card_id': pending.get('new_card_id'),
                                 'bank_gold_before': pending.get('bank_gold_before'),
                                 'bank_gold_after': pending.get('bank_gold_after'),
                             }
-                        
+
+                        self._save_state(game, current_gp, new_gd, new_pd)
                         current_gp.pending_action_data = None
                         self._post_action(game, current_gp, players, new_gd, new_pd,
                                           action_type=action_type, action_data=action_info)
@@ -1291,57 +1299,75 @@ class GameConsumer(AsyncWebsocketConsumer):
                         new_pd['reserved_card_ids'], needs_discard
                     )
 
-                    self._save_state(game, current_gp, new_gd, new_pd)
-                    
                     # Determine if it came from deck or visible
                     from_deck = card_id is None
-                    
-                    # Detect the new card that was drawn to replace the reserved card (only for visible cards)
-                    new_card_id = None
-                    if not from_deck:
-                        for lvl in ['1', '2', '3']:
-                            old_cards = game_data['visible_cards'].get(lvl, [])
-                            new_cards = new_gd['visible_cards'].get(lvl, [])
-                            for cid in new_cards:
-                                if cid not in old_cards:
-                                    new_card_id = cid
-                                    break
-                            if new_card_id:
-                                break
-                    
+
                     # Determine if gold was received
                     gold_before = player_data['tokens'].get('gold', 0)
                     gold_after = new_pd['tokens'].get('gold', 0)
                     gold_received = gold_after > gold_before
-                    
-                    action_info = {
-                        'card_id': reserved_id,
-                        'from_deck': from_deck,
-                        'level': level if from_deck else None,
-                        'gold_received': gold_received,
-                        'new_card_id': new_card_id,  # The new card drawn to replace the reserved card
-                        'bank_gold_before': game_data['tokens_in_bank'].get('gold', 0),
-                        'bank_gold_after': new_gd['tokens_in_bank'].get('gold', 0),
-                    }
-                    
+
                     # Only advance turn if player doesn't need to discard
                     if not needs_discard:
+                        self._save_state(game, current_gp, new_gd, new_pd)
+
+                        # Detect the new card that was drawn to replace the reserved card
+                        new_card_id = None
+                        if not from_deck:
+                            for lvl in ['1', '2', '3']:
+                                old_cards = game_data['visible_cards'].get(lvl, [])
+                                new_cards = new_gd['visible_cards'].get(lvl, [])
+                                for cid in new_cards:
+                                    if cid not in old_cards:
+                                        new_card_id = cid
+                                        break
+                                if new_card_id:
+                                    break
+
+                        action_info = {
+                            'card_id': reserved_id,
+                            'from_deck': from_deck,
+                            'level': level if from_deck else None,
+                            'gold_received': gold_received,
+                            'new_card_id': new_card_id,
+                            'bank_gold_before': game_data['tokens_in_bank'].get('gold', 0),
+                            'bank_gold_after': new_gd['tokens_in_bank'].get('gold', 0),
+                        }
                         current_gp.pending_action_data = None
                         self._post_action(game, current_gp, players, new_gd, new_pd,
                                           action_type='reserve_card', action_data=action_info)
                     else:
+                        # Save state WITHOUT visible_cards/decks changes (deferred)
+                        self._save_state(game, current_gp, new_gd, new_pd)
+
                         # Determine the card's level
                         reserved_card = get_card(reserved_id)
                         card_level = reserved_card['level'] if reserved_card else None
-                        
-                        # Save pending action data for cancel support
+
+                        # Detect the replacement card from the deferred state
+                        deferred_visible = new_gd.get('_deferred_visible_cards', {})
+                        new_card_id = None
+                        if not from_deck:
+                            for lvl in ['1', '2', '3']:
+                                old_cards = game_data['visible_cards'].get(lvl, [])
+                                new_cards = deferred_visible.get(lvl, [])
+                                for cid in new_cards:
+                                    if cid not in old_cards:
+                                        new_card_id = cid
+                                        break
+                                if new_card_id:
+                                    break
+
+                        # Save pending action data with deferred card swap info
                         current_gp.pending_action_data = {
                             'type': 'reserve_card',
                             'card_id': reserved_id,
                             'gold_received': gold_received,
                             'level': card_level,
                             'from_deck': from_deck,
-                            'new_card_id': new_card_id,  # The new card drawn to replace the reserved card
+                            'new_card_id': new_card_id,
+                            'deferred_visible_cards': deferred_visible,
+                            'deferred_decks': new_gd.get('_deferred_decks', {}),
                             'bank_gold_before': game_data['tokens_in_bank'].get('gold', 0),
                             'bank_gold_after': new_gd['tokens_in_bank'].get('gold', 0),
                         }

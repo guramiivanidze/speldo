@@ -440,6 +440,44 @@ class ReserveCardTestCase(TestCase):
         self.assertEqual(new_player["tokens"]["gold"], 1)
         self.assertEqual(sum(new_player["tokens"].values()), 11)
 
+    def test_reserve_with_10_tokens_visible_cards_unchanged(self):
+        """When reserving with 10 tokens (needs_discard), visible cards should NOT change yet.
+
+        The card swap should be deferred until the player confirms the discard.
+        This is because the player can cancel the modal, which cancels the entire move.
+        """
+        game_data = create_game_data(4)
+        player_data = create_empty_player()
+        player_data["tokens"] = {"white": 2, "blue": 2, "green": 2, "red": 2, "black": 2, "gold": 0}  # 10 tokens
+        original_visible = {k: list(v) for k, v in game_data["visible_cards"].items()}
+
+        new_game, new_player, card_id, error, needs_discard = game_logic.apply_reserve_card(
+            game_data, player_data, card_id=1
+        )
+
+        self.assertIsNone(error)
+        self.assertTrue(needs_discard)
+        # Visible cards should remain unchanged - the reserved card should still be on the board
+        self.assertEqual(new_game["visible_cards"], original_visible)
+        # Decks should also be unchanged (no replacement drawn yet)
+        self.assertEqual(new_game["decks"], game_data["decks"])
+
+    def test_reserve_without_discard_visible_cards_change(self):
+        """When reserving without needing discard, visible cards should change normally."""
+        game_data = create_game_data(4)
+        player_data = create_empty_player()
+        # 0 tokens - no discard needed
+
+        new_game, new_player, card_id, error, needs_discard = game_logic.apply_reserve_card(
+            game_data, player_data, card_id=1
+        )
+
+        self.assertIsNone(error)
+        self.assertFalse(needs_discard)
+        # Card 1 should be removed and replaced by a card from deck
+        self.assertNotIn(1, new_game["visible_cards"]["1"])
+        self.assertEqual(len(new_game["visible_cards"]["1"]), 4)  # Still 4 visible
+
     def test_reserve_no_gold_in_bank(self):
         """Reserving when no gold in bank - card is reserved but no gold given."""
         game_data = create_game_data(4)
