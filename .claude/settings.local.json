@@ -9,7 +9,12 @@
       "Bash(/c/Users/guiv01/Documents/GitHub/speldo/.venv/Scripts/python manage.py test game.tests.ReserveCardTestCase -v 2)",
       "Bash(git stash:*)",
       "Bash(/c/Users/guiv01/Documents/GitHub/speldo/.venv/Scripts/python manage.py test game.tests.ReserveCardTestCase.test_reserve_refills_visible -v 2)",
-      "Bash(/c/Users/guiv01/Documents/GitHub/speldo/.venv/Scripts/python manage.py test game.tests -v 2)"
+      "Bash(/c/Users/guiv01/Documents/GitHub/speldo/.venv/Scripts/python manage.py test game.tests -v 2)",
+      "Bash(grep -r \"PLACEMENT_POINTS\\\\|placement_points\\\\|pos_\\\\|leaderboard\\\\|/api.*leaderboard\\\\|/api.*points\" --include=*.py --include=*.ts --include=*.tsx --include=*.js backend/competitive/urls.py backend/game/urls.py frontend/lib/api.ts)",
+      "Bash(grep -rn \"PLACEMENT_POINTS\\\\|placement.*points\\\\|pos_[1-4]\" backend/ --include=*.py)",
+      "Bash(grep -rn \"placement\\\\|prestige.*point\\\\|pos_[1-4]\\\\|leaderboard.*point\" frontend/components/ --include=*.tsx)",
+      "Bash(grep -rn \"placement\\\\|position.*score\" backend/competitive/views.py frontend/app/profile/[username]/page.tsx)",
+      "Bash(find c:/Users/guiv01/Documents/GitHub/speldo -type f \\\\\\(-name *.py -o -name *.tsx -o -name *.ts -o -name *.js \\\\\\) ! -path */node_modules/* ! -path */.venv/* ! -path */staticfiles/* ! -path */migrations/*)"
     ]
   }
 }

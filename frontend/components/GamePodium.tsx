@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { getPlacementPoints } from '@/lib/scoring';
 
 interface Player {
   id: number;
@@ -166,9 +167,9 @@ export default function GamePodium({ players, winnerId, currentUserId }: GamePod
     }
   };
 
-  // Points earned: player_count − placement (0 for last place)
+  // Points earned per placement
   const playerCount = players.length;
-  const leaderboardPoints = (rank: number) => Math.max(0, playerCount - rank);
+  const leaderboardPoints = (rank: number) => getPlacementPoints(playerCount, rank);
 
   // Podium layout: 2nd - 1st - 3rd for top 3, or 2nd - 1st for 2 players
   const podiumOrder = rankedPlayers.slice(0, 3);

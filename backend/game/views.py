@@ -12,6 +12,7 @@ from .game_logic import (
     generate_code, initial_bank,
     initial_decks_and_nobles,
     get_card, get_noble,
+    PLACEMENT_POINTS,
 )
 from .consumers import serialize_game_state
 from accounts.models import Friendship
@@ -806,11 +807,9 @@ class PointsLeaderboardView(APIView):
     """Leaderboard sorted by placement points.
 
     Points awarded per game:
-      2-player  →  1st: 1 pt,  2nd: 0 pt
-      3-player  →  1st: 2 pts, 2nd: 1 pt,  3rd: 0 pt
-      4-player  →  1st: 3 pts, 2nd: 2 pts, 3rd: 1 pt, 4th: 0 pt
-
-    Formula: points = player_count − placement (0 for last place).
+      2-player  →  1st: 2 pt,  2nd: 0 pt
+      3-player  →  1st: 3 pts, 2nd: 2 pt,  3rd: 0 pt
+      4-player  →  1st: 4 pts, 2nd: 3 pts, 3rd: 1 pt, 4th: 0 pt
 
     Sorted by total points desc, then win_rate desc.
     """
@@ -858,8 +857,9 @@ class PointsLeaderboardView(APIView):
             # Sort by prestige desc, card count asc (same tiebreak as game logic)
             players.sort(key=lambda p: (-p.prestige_points, len(p.purchased_card_ids)))
 
+            points_table = PLACEMENT_POINTS.get(n, [0] * n)
             for placement, gp in enumerate(players, start=1):
-                pts = n - placement          # formula: player_count − placement
+                pts = points_table[placement - 1]
                 uid = gp.user_id
                 user_stats[uid]['points'] += pts
                 user_stats[uid]['games'] += 1

@@ -7,6 +7,15 @@ import string
 
 COLORS = ['white', 'blue', 'green', 'red', 'black']
 
+# Placement points awarded per game.
+# Key = player count, value = points by placement (index 0 = 1st place).
+# Change these values once and they propagate to all leaderboards.
+PLACEMENT_POINTS = {
+    2: [2, 0],
+    3: [3, 2, 0],
+    4: [4, 3, 1, 0],
+}
+
 # Cached card/noble data from database
 _card_cache = None
 _noble_cache = None

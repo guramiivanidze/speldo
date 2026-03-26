@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getLeaderboard, getLeaderboardByDivision, getCurrentSeason, getCasualLeaderboard, getPointsLeaderboard } from '@/lib/api';
 import { LeaderboardEntry, Season, Division, DIVISION_CONFIG } from '@/types/competitive';
 import DivisionBadge from '@/components/DivisionBadge';
+import { placementPointsHint } from '@/lib/scoring';
 
 type LeaderboardMode = 'ranked' | 'casual' | 'points';
 type Tab = 'global' | Division;
@@ -234,7 +235,7 @@ export default function LeaderboardPage() {
             <>
               {/* Points table hint */}
               <div className="px-6 py-3 bg-violet-900/20 border-b border-violet-500/20 text-xs text-violet-300">
-                Points: 2-player 1st=1 · 3-player 1st=2, 2nd=1 · 4-player 1st=3, 2nd=2, 3rd=1
+                Points: {placementPointsHint()}
               </div>
 
               {/* Header */}
