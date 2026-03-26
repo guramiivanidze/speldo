@@ -11,9 +11,9 @@ COLORS = ['white', 'blue', 'green', 'red', 'black']
 # Key = player count, value = points by placement (index 0 = 1st place).
 # Change these values once and they propagate to all leaderboards.
 PLACEMENT_POINTS = {
-    2: [2, 0],
-    3: [3, 2, 0],
-    4: [4, 3, 1, 0],
+    2: [3, -1],
+    3: [4, 1, -1],
+    4: [5, 2, 0, -1],
 }
 
 # Cached card/noble data from database
@@ -211,7 +211,8 @@ def check_nobles(game_data, player_data):
     eligible = []
     for nid in game_data['available_nobles']:
         noble = get_noble(nid)
-        qualifies = all(bonuses.get(c, 0) >= v for c, v in noble['requirements'].items())
+        qualifies = all(bonuses.get(c, 0) >= v for c,
+                        v in noble['requirements'].items())
         if qualifies:
             eligible.append(nid)
     return eligible
@@ -230,7 +231,7 @@ def apply_take_tokens(game_data, player_data, colors_to_take):
     """
     bank = dict(game_data['tokens_in_bank'])
     ptokens = dict(player_data['tokens'])
-    
+
     # Count colors available in bank (non-gold tokens with count > 0)
     available_colors = [c for c in COLORS if bank.get(c, 0) > 0]
     num_available = len(available_colors)
@@ -244,7 +245,7 @@ def apply_take_tokens(game_data, player_data, colors_to_take):
             return None, None, "Need at least 4 tokens of that color to take 2.", False
         bank[color] -= 2
         ptokens[color] = ptokens.get(color, 0) + 2
-    
+
     # Case 2: Taking 3 different colors
     elif len(colors_to_take) == 3 and len(set(colors_to_take)) == 3:
         for c in colors_to_take:
@@ -255,7 +256,7 @@ def apply_take_tokens(game_data, player_data, colors_to_take):
         for c in colors_to_take:
             bank[c] -= 1
             ptokens[c] = ptokens.get(c, 0) + 1
-    
+
     # Case 3: Taking 2 different colors (allowed if only 2 colors available in bank)
     elif len(colors_to_take) == 2 and len(set(colors_to_take)) == 2:
         # This is only allowed if there are exactly 2 colors available in the bank
@@ -269,7 +270,7 @@ def apply_take_tokens(game_data, player_data, colors_to_take):
         for c in colors_to_take:
             bank[c] -= 1
             ptokens[c] = ptokens.get(c, 0) + 1
-    
+
     # Case 4: Taking 1 color (allowed if only 1 color available in bank)
     elif len(colors_to_take) == 1:
         color = colors_to_take[0]
@@ -281,7 +282,7 @@ def apply_take_tokens(game_data, player_data, colors_to_take):
             return None, None, f"No {color} tokens in bank.", False
         bank[color] -= 1
         ptokens[color] = ptokens.get(color, 0) + 1
-    
+
     else:
         return None, None, "Invalid token selection.", False
 
@@ -326,9 +327,9 @@ def apply_cancel_pending_discard(game_data, player_data, pending_action_data):
     """
     if not pending_action_data:
         return None, None, "No pending action to cancel."
-    
+
     action_type = pending_action_data.get('type')
-    
+
     if action_type == 'reserve' or action_type == 'reserve_card':
         # Undo a reserve action:
         # 1. Remove card from reserved_card_ids
@@ -357,26 +358,26 @@ def apply_cancel_pending_discard(game_data, player_data, pending_action_data):
         player_data['reserved_card_ids'] = reserved
         player_data['pending_action_data'] = None
         return game_data, player_data, None
-    
+
     elif action_type == 'take_tokens':
         # Undo take_tokens action:
         # Return the tokens back to bank
         colors_taken = pending_action_data.get('colors', [])
-        
+
         bank = dict(game_data['tokens_in_bank'])
         ptokens = dict(player_data['tokens'])
-        
+
         for color in colors_taken:
             ptokens[color] = max(0, ptokens.get(color, 0) - 1)
             bank[color] = bank.get(color, 0) + 1
-        
+
         game_data = dict(game_data)
         game_data['tokens_in_bank'] = bank
         player_data = dict(player_data)
         player_data['tokens'] = ptokens
         player_data['pending_action_data'] = None
         return game_data, player_data, None
-    
+
     return None, None, f"Unknown pending action type: {action_type}"
 
 
@@ -524,7 +525,8 @@ def apply_buy_card(game_data, player_data, card_id):
     # Compute new prestige (cards + nobles)
     card = get_card(card_id)
     card_prestige = sum(get_card(cid)['points'] for cid in purchased)
-    noble_prestige = sum(get_noble(nid)['points'] for nid in player_data['noble_ids'])
+    noble_prestige = sum(get_noble(nid)['points']
+                         for nid in player_data['noble_ids'])
     prestige = card_prestige + noble_prestige
 
     game_data = dict(game_data)
@@ -579,5 +581,6 @@ def determine_winner(players, trigger_order):
     candidates = [p for p in players if p['prestige_points'] == best_points]
     # Tiebreak: fewest purchased cards
     best_cards = min(len(p['purchased_card_ids']) for p in candidates)
-    winners = [p for p in candidates if len(p['purchased_card_ids']) == best_cards]
+    winners = [p for p in candidates if len(
+        p['purchased_card_ids']) == best_cards]
     return winners[0]
