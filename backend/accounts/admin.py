@@ -5,8 +5,8 @@ from .models import FriendRequest, Friendship, EmailVerificationCode, UserProfil
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'email_verified', 'advisor_enabled', 'created_at', 'updated_at')
-    list_filter = ('email_verified', 'advisor_enabled', 'created_at')
+    list_display = ('user', 'email_verified', 'created_at', 'updated_at')
+    list_filter = ('email_verified', 'created_at')
     search_fields = ('user__username', 'user__email')
     raw_id_fields = ('user',)
     ordering = ('-created_at',)

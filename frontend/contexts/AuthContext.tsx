@@ -8,7 +8,6 @@ interface User {
   username: string;
   email?: string;
   email_verified?: boolean;
-  advisor_enabled?: boolean;
 }
 
 interface AuthContextType {

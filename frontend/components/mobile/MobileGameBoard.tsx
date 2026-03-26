@@ -1,11 +1,9 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { GameState, GemColor, TokenColor, HintResponse } from '@/types/game';
+import { GameState, GemColor, TokenColor } from '@/types/game';
 import { GEM_COLORS } from '@/lib/colors';
 import { ChatMessage } from '@/hooks/useGameSocket';
-import { getGameHint } from '@/lib/api';
-import { useAuth } from '@/contexts/AuthContext';
 
 import MobileTurnBanner from './MobileTurnBanner';
 import MobileNavTabs from './MobileNavTabs';
@@ -53,14 +51,6 @@ export default function MobileGameBoard({
   const [selectedTokens, setSelectedTokens] = useState<TokenColor[]>([]);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const lastSeenChatCountRef = useRef(0);
-
-  // ── Advisor state ──────────────────────────
-  const { user } = useAuth();
-  const advisorAllowed = user?.advisor_enabled ?? false;
-  const [advisorEnabled, setAdvisorEnabled] = useState(false);
-  const [hint, setHint] = useState<HintResponse | null>(null);
-  const [hintLoading, setHintLoading] = useState(false);
-  const hintTurnRef = useRef<number>(-1);
 
   const currentPlayer = gameState.players[gameState.current_player_index];
   const isMyTurn = currentPlayer?.id === myUserId;
@@ -221,42 +211,6 @@ export default function MobileGameBoard({
     }
   }, [activeTab, chatMessages.length, chatMessages]);
 
-  // ── Fetch advisor hint when it's my turn ──
-  const isGamePlaying = gameState.status === 'playing';
-  const imCurrentTurn = isGamePlaying && currentPlayer?.id === myUserId;
-
-  useEffect(() => {
-    if (!advisorEnabled || !imCurrentTurn || !isGamePlaying) {
-      setHint(null);
-      return;
-    }
-    const turnKey = gameState.total_turns;
-    if (hintTurnRef.current === turnKey) return;
-    hintTurnRef.current = turnKey;
-
-    let cancelled = false;
-    setHintLoading(true);
-    getGameHint(gameState.code)
-      .then((data) => { if (!cancelled) setHint(data as HintResponse); })
-      .catch(() => { if (!cancelled) setHint(null); })
-      .finally(() => { if (!cancelled) setHintLoading(false); });
-    return () => { cancelled = true; };
-  }, [advisorEnabled, imCurrentTurn, isGamePlaying, gameState.total_turns, gameState.code]);
-
-  useEffect(() => {
-    if (!advisorEnabled) {
-      setHint(null);
-      hintTurnRef.current = -1;
-    }
-  }, [advisorEnabled]);
-
-  // Compute hint data for board view
-  const hintCardId = hint?.card_id ?? null;
-  const hintAction = hint?.card_id
-    ? (hint.action === 'buy_card' ? 'buy' as const : hint.action === 'reserve_card' ? 'reserve' as const : null)
-    : null;
-  const hintTokenColors = hint?.action === 'take_tokens' ? hint.token_colors : [];
-
   // Token selection logic
   const hasTwoSameColor = selectedTokens.length === 2 && selectedTokens[0] === selectedTokens[1];
   const selectedSameColor = hasTwoSameColor ? selectedTokens[0] : null;
@@ -297,7 +251,7 @@ export default function MobileGameBoard({
 
   return (
     <div className="h-full w-full flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 pt-4">
-      {/* Turn Banner with Timer + Advisor */}
+      {/* Turn Banner with Timer */}
       <div className="flex items-center justify-between px-2">
         <div className="flex-1">
           <MobileTurnBanner
@@ -307,18 +261,6 @@ export default function MobileGameBoard({
           />
         </div>
         <div className="flex items-center gap-1.5">
-          {advisorAllowed && isGamePlaying && (
-            <button
-              onClick={() => setAdvisorEnabled((v) => !v)}
-              className={`px-2 py-1 rounded text-[10px] font-semibold transition-all border ${
-                advisorEnabled
-                  ? 'bg-purple-600/80 border-purple-400/60 text-white shadow-[0_0_6px_rgba(168,85,247,0.4)]'
-                  : 'bg-slate-700/60 border-slate-600/40 text-slate-400'
-              }`}
-            >
-              {hintLoading ? '⏳' : '💡'}
-            </button>
-          )}
           {gameState.timer_enabled && gameState.status === 'playing' && currentPlayer && (
             <TurnTimer
               currentPlayerIndex={gameState.current_player_index}
@@ -349,8 +291,6 @@ export default function MobileGameBoard({
             onOpenTokenSelector={() => setShowTokenSelector(true)}
             selectedTokens={selectedTokens}
             newCardId={newCardId}
-            hintCardId={hintCardId}
-            hintAction={hintAction}
           />
         )}
         
@@ -409,7 +349,7 @@ export default function MobileGameBoard({
           onCancel={handleCancelTokens}
           disabledColors={disabledTokenColors}
           viewOnly={!isMyTurn || gameState.status !== 'playing'}
-          hintColors={hintTokenColors}
+          hintColors={[]}
         />
       )}
 
@@ -429,21 +369,6 @@ export default function MobileGameBoard({
           eligibleNobles={eligibleNobles}
           onChoose={onChooseNoble}
         />
-      )}
-
-      {/* Advisor Hint Panel */}
-      {advisorEnabled && hint && (
-        <div className="fixed bottom-16 left-2 right-2 z-40 bg-slate-800/95 backdrop-blur border border-purple-500/40 rounded-lg shadow-lg p-2.5">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-sm">
-              {hint.action === 'buy_card' ? '🛒' : hint.action === 'reserve_card' ? '📌' : '💎'}
-            </span>
-            <span className="text-purple-300 text-[10px] font-bold uppercase tracking-wider">
-              {hint.action === 'buy_card' ? 'Buy Card' : hint.action === 'reserve_card' ? 'Reserve Card' : 'Take Tokens'}
-            </span>
-          </div>
-          <p className="text-slate-200 text-[10px] leading-relaxed">{hint.reason}</p>
-        </div>
       )}
 
       {/* Action Notification Toast - fixed position, doesn't affect layout */}

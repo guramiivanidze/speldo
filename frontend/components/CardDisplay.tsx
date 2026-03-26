@@ -18,7 +18,6 @@ interface CardDisplayProps {
   compact?: boolean;
   isNewCard?: boolean;  // Animate as newly appeared card
   isAffordable?: boolean;  // Show affordability border (regardless of turn)
-  hintAction?: 'buy' | 'reserve' | null;  // Advisor hint highlight
 }
 
 const ROMAN: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
@@ -48,7 +47,6 @@ export default function CardDisplay({
   compact = false,
   isNewCard = false,
   isAffordable = false,
-  hintAction = null,
 }: CardDisplayProps) {
   // Guard against missing card data
   const bonus = card.bonus || 'white';
@@ -67,8 +65,6 @@ export default function CardDisplay({
         h-full w-full
         ${isAffordable || canBuy ? 'afford-glow' : ''}
         ${isNewCard ? 'new-card-appear' : ''}
-        ${hintAction === 'buy' ? 'hint-buy' : ''}
-        ${hintAction === 'reserve' ? 'hint-reserve' : ''}
         cursor-default shadow-lg
         hover:z-50 transition-transform hover:scale-[1.02]
       `}

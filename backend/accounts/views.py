@@ -286,7 +286,6 @@ class LoginView(APIView):
             'token': token,
             'remember_me': bool(remember_me),
             'email_verified': profile.email_verified,
-            'advisor_enabled': profile.advisor_enabled,
         })
 
 
@@ -307,7 +306,6 @@ class MeView(APIView):
             'username': request.user.username,
             'email': request.user.email,
             'email_verified': profile.email_verified,
-            'advisor_enabled': profile.advisor_enabled,
         })
 
 
