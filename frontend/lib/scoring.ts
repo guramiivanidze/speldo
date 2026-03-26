@@ -5,9 +5,9 @@
  * Change these values once and they propagate everywhere.
  */
 export const PLACEMENT_POINTS: Record<number, number[]> = {
-  2: [2, 0],
-  3: [3, 2, 0],
-  4: [4, 3, 1, 0],
+  2: [3, -1],
+  3: [4, 1, -1],
+  4: [5, 2, 0, -1],
 };
 
 /** Return the placement points for a given player count and rank (1-based). */
@@ -23,8 +23,7 @@ export function placementPointsHint(): string {
     .sort(([a], [b]) => Number(a) - Number(b))
     .map(([count, pts]) => {
       const parts = pts
-        .map((p, i) => (p > 0 ? `${ordinal(i + 1)}=${p}` : null))
-        .filter(Boolean);
+        .map((p, i) => `${ordinal(i + 1)}=${p}`);
       return `${count}-player ${parts.join(', ')}`;
     })
     .join(' · ');
