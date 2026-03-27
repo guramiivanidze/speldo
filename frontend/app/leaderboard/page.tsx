@@ -2,13 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getLeaderboard, getLeaderboardByDivision, getCurrentSeason, getCasualLeaderboard, getPointsLeaderboard } from '@/lib/api';
-import { LeaderboardEntry, Season, Division, DIVISION_CONFIG } from '@/types/competitive';
-import DivisionBadge from '@/components/DivisionBadge';
+import { getCasualLeaderboard, getPointsLeaderboard } from '@/lib/api';
 import { placementPointsHint } from '@/lib/scoring';
 
-type LeaderboardMode = 'ranked' | 'casual' | 'points';
-type Tab = 'global' | Division;
+type LeaderboardMode = 'casual' | 'points';
 type PlayerCountTab = 2 | 3 | 4;
 type PointsFilterTab = 2 | 3 | 4 | 'all';
 
@@ -31,7 +28,6 @@ interface PointsEntry {
   win_rate: number;
 }
 
-const DIVISION_TABS: Division[] = ['Grandmaster', 'Master', 'Diamond', 'Platinum', 'Gold', 'Silver', 'Bronze'];
 const PLAYER_COUNT_TABS: PlayerCountTab[] = [2, 3, 4];
 const POINTS_FILTER_TABS: { value: PointsFilterTab; label: string }[] = [
   { value: 'all', label: 'All Games' },
@@ -43,49 +39,24 @@ const POINTS_FILTER_TABS: { value: PointsFilterTab; label: string }[] = [
 export default function LeaderboardPage() {
   const router = useRouter();
 
-  const [mode, setMode] = useState<LeaderboardMode | null>(null);
-  const [activeTab, setActiveTab] = useState<Tab>('global');
+  const [mode, setMode] = useState<LeaderboardMode>('points');
   const [playerCountTab, setPlayerCountTab] = useState<PlayerCountTab>(2);
   const [pointsFilterTab, setPointsFilterTab] = useState<PointsFilterTab>('all');
-  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [casualEntries, setCasualEntries] = useState<CasualEntry[]>([]);
   const [pointsEntries, setPointsEntries] = useState<PointsEntry[]>([]);
-  const [season, setSeason] = useState<Season | null>(null);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const perPage = 50;
 
   useEffect(() => {
-    async function checkSeason() {
-      const seasonData = await getCurrentSeason().catch(() => null);
-      setSeason(seasonData);
-      setMode('points');
-    }
-    checkSeason();
-  }, []);
-
-  useEffect(() => {
-    if (!mode) return;
-
     async function loadData() {
       setLoading(true);
       try {
         if (mode === 'casual') {
           const data = await getCasualLeaderboard(playerCountTab).catch(() => ({ entries: [], total: 0 }));
           setCasualEntries(data.entries || []);
-          setTotal(data.total || 0);
-        } else if (mode === 'points') {
+        } else {
           const filter = pointsFilterTab === 'all' ? undefined : pointsFilterTab;
           const data = await getPointsLeaderboard(filter).catch(() => ({ entries: [], total: 0 }));
           setPointsEntries(data.entries || []);
-          setTotal(data.total || 0);
-        } else {
-          const leaderboardData = await (activeTab === 'global'
-            ? getLeaderboard(page, perPage).catch(() => ({ entries: [], total: 0 }))
-            : getLeaderboardByDivision(activeTab).catch(() => ({ entries: [], total: 0 })));
-          setEntries(leaderboardData.entries || []);
-          setTotal(leaderboardData.total || leaderboardData.entries?.length || 0);
         }
       } catch (e) {
         console.error('Failed to load leaderboard:', e);
@@ -95,9 +66,7 @@ export default function LeaderboardPage() {
     }
 
     loadData();
-  }, [mode, activeTab, page, playerCountTab, pointsFilterTab]);
-
-  const totalPages = Math.ceil(total / perPage);
+  }, [mode, playerCountTab, pointsFilterTab]);
 
   const rankIcon = (rank: number) =>
     rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : null;
@@ -113,9 +82,6 @@ export default function LeaderboardPage() {
           ← Back
         </button>
         <h1 className="text-3xl font-bold text-slate-100">Leaderboard</h1>
-        {season && mode === 'ranked' && (
-          <p className="text-sm text-slate-400 mt-1">{season.name}</p>
-        )}
       </div>
 
       {/* Mode switcher */}
@@ -184,36 +150,6 @@ export default function LeaderboardPage() {
                 `}
               >
                 {count}-Player
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Division tabs (ranked) */}
-      {mode === 'ranked' && (
-        <div className="glass rounded-xl p-1 mb-6 border border-white/10 overflow-x-auto">
-          <div className="flex gap-1 min-w-max">
-            <button
-              onClick={() => { setActiveTab('global'); setPage(1); }}
-              className={`
-                px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap
-                ${activeTab === 'global' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'}
-              `}
-            >
-              🌍 Global
-            </button>
-            {DIVISION_TABS.map((div) => (
-              <button
-                key={div}
-                onClick={() => { setActiveTab(div); setPage(1); }}
-                className={`
-                  px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap
-                  ${activeTab === div ? 'text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'}
-                `}
-                style={activeTab === div ? { backgroundColor: DIVISION_CONFIG[div].color + '80' } : {}}
-              >
-                {DIVISION_CONFIG[div].icon} {div}
               </button>
             ))}
           </div>
@@ -349,89 +285,7 @@ export default function LeaderboardPage() {
             </>
           )
 
-        ) : (
-          /* ── Ranked leaderboard ── */
-          entries.length === 0 ? (
-            <div className="text-center py-16 text-slate-400">No players found in this division yet.</div>
-          ) : (
-            <>
-              <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-800/50 border-b border-white/5 text-xs font-medium text-slate-400 uppercase tracking-wider">
-                <div className="col-span-1">Rank</div>
-                <div className="col-span-4">Player</div>
-                <div className="col-span-2 text-center">Division</div>
-                <div className="col-span-2 text-center">Rating</div>
-                <div className="col-span-1 text-center">W</div>
-                <div className="col-span-1 text-center">L</div>
-                <div className="col-span-1 text-center">%</div>
-              </div>
-
-              <div className="divide-y divide-white/5">
-                {entries.map((entry) => {
-                  const icon = rankIcon(entry.rank);
-                  const config = DIVISION_CONFIG[entry.division];
-                  const winRate = entry.games_played > 0
-                    ? Math.round((entry.wins / entry.games_played) * 100)
-                    : 0;
-                  return (
-                    <div
-                      key={entry.player_id}
-                      className={`
-                        grid grid-cols-12 gap-4 px-6 py-4 items-center transition-colors hover:bg-slate-800/30
-                        ${entry.rank <= 3 ? 'bg-gradient-to-r from-yellow-900/10 to-transparent' : ''}
-                      `}
-                    >
-                      <div className="col-span-1">
-                        {icon
-                          ? <span className="text-2xl">{icon}</span>
-                          : <span className="text-lg font-bold text-slate-400">#{entry.rank}</span>
-                        }
-                      </div>
-                      <div className="col-span-4">
-                        <button
-                          onClick={() => router.push(`/profile/${entry.username}`)}
-                          className="font-medium text-slate-100 hover:text-indigo-400 transition-colors"
-                        >
-                          {entry.username}
-                        </button>
-                      </div>
-                      <div className="col-span-2 flex justify-center">
-                        <DivisionBadge division={entry.division} size="sm" />
-                      </div>
-                      <div className="col-span-2 text-center">
-                        <span className="text-lg font-bold" style={{ color: config.color }}>
-                          {entry.rating}
-                        </span>
-                      </div>
-                      <div className="col-span-1 text-center text-green-400 font-medium">{entry.wins}</div>
-                      <div className="col-span-1 text-center text-red-400 font-medium">{entry.losses}</div>
-                      <div className="col-span-1 text-center text-slate-300">{winRate}%</div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {activeTab === 'global' && totalPages > 1 && (
-                <div className="flex justify-center items-center gap-4 px-6 py-4 border-t border-white/5">
-                  <button
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="px-3 py-1 rounded bg-slate-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-600 transition-colors"
-                  >
-                    Previous
-                  </button>
-                  <span className="text-sm text-slate-400">Page {page} of {totalPages}</span>
-                  <button
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="px-3 py-1 rounded bg-slate-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-600 transition-colors"
-                  >
-                    Next
-                  </button>
-                </div>
-              )}
-            </>
-          )
-        )}
+        ) : null}
       </div>
     </div>
   );

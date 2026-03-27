@@ -43,7 +43,6 @@ INSTALLED_APPS = [
     'channels',
     'game',
     'accounts',
-    'competitive',
 ]
 
 MIDDLEWARE = [

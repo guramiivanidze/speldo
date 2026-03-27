@@ -1,1 +1,0 @@
-# Competitive system package

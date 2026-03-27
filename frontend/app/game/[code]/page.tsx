@@ -6,16 +6,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useGameHeader } from '@/contexts/GameHeaderContext';
 import { useGameSocket } from '@/hooks/useGameSocket';
 import { useGameSounds } from '@/hooks/useGameSounds';
-import { startGame, getMatchByGame } from '@/lib/api';
+import { startGame } from '@/lib/api';
 import GameBoard from '@/components/GameBoard';
 import PauseSurveyModal from '@/components/PauseSurveyModal';
-import RatingChangeDisplay from '@/components/RatingChangeDisplay';
 import GameHistory from '@/components/GameHistory';
 import GamePodium from '@/components/GamePodium';
 import FriendsInviteList from '@/components/FriendsInviteList';
 import GameChat, { ChatButton } from '@/components/GameChat';
 import useIsMobile from '@/hooks/useIsMobile';
-import type { Match, Division } from '@/types/competitive';
 
 const GEM_COLORS_HEX = ['#f1f5f9', '#3b82f6', '#10b981', '#ef4444', '#475569', '#fde047'];
 
@@ -52,10 +50,6 @@ export default function GamePage({ params }: PageProps) {
   // Chat state
   const [chatOpen, setChatOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  
-  // Ranked match state
-  const [rankedMatch, setRankedMatch] = useState<Match | null>(null);
-  const [showRatingChange, setShowRatingChange] = useState(false);
   
   // Game sounds
   const { playTakeCoin, playReservation, playBuyCard, playEndGame } = useGameSounds();
@@ -238,20 +232,6 @@ export default function GamePage({ params }: PageProps) {
       clearPauseEvent();
     }
   }, [pauseEvent, clearPauseEvent, refreshState, router]);
-
-  // Check for ranked match result when game finishes
-  useEffect(() => {
-    if (gameState?.status === 'finished' && gameState.game_id && !rankedMatch) {
-      getMatchByGame(gameState.game_id)
-        .then((match) => {
-          setRankedMatch(match);
-          setShowRatingChange(true);
-        })
-        .catch(() => {
-          // Not a ranked game, ignore
-        });
-    }
-  }, [gameState?.status, gameState?.game_id, rankedMatch]);
 
   async function handleStart() {
     setStartError('');
@@ -514,27 +494,6 @@ export default function GamePage({ params }: PageProps) {
       {/* ── Finished game ─────────────────────────────── */}
       {gameState?.status === 'finished' && (
         <div className="flex flex-col gap-6">
-
-          {/* Ranked Rating Change Display */}
-          {showRatingChange && rankedMatch && user && (() => {
-            const isPlayer1 = rankedMatch.player1_username === user.username;
-            const oldRating = (isPlayer1 ? rankedMatch.player1_rating_before : rankedMatch.player2_rating_before) ?? 1000;
-            const newRating = (isPlayer1 ? rankedMatch.player1_rating_after : rankedMatch.player2_rating_after) ?? 1000;
-            const oldDivision = (isPlayer1 ? rankedMatch.player1_division_before : rankedMatch.player2_division_before) as Division;
-            const newDivision = (isPlayer1 ? rankedMatch.player1_division_after : rankedMatch.player2_division_after) as Division;
-            const won = rankedMatch.winner_username === user.username;
-            
-            return (
-              <RatingChangeDisplay
-                oldRating={oldRating}
-                newRating={newRating}
-                oldDivision={oldDivision}
-                newDivision={newDivision}
-                won={won}
-                onComplete={() => setShowRatingChange(false)}
-              />
-            );
-          })()}
 
           {/* Trophy banner */}
           <div className="glass rounded-2xl p-6 border border-amber-500/20 text-center">

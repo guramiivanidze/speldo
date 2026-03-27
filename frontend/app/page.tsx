@@ -4,11 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { register, login, logout, createGame, joinGame, getMyGames, getMyProfile, getCurrentSeason, sendVerificationCode, getAuthConfig, getFriendsWithStats, sendFriendRequest, getPendingFriendRequests, respondToFriendRequest, getFriendsWaitingGames, type FriendWithStats, type FriendRequest, type FriendWaitingGame } from '@/lib/api';
-import { useMatchmaking } from '@/hooks/useMatchmaking';
-import type { PlayerProfile, Season } from '@/types/competitive';
-import DivisionBadge from '@/components/DivisionBadge';
-import MatchFoundModal from '@/components/MatchFoundModal';
+import { register, login, logout, createGame, joinGame, getMyGames, sendVerificationCode, getAuthConfig, getFriendsWithStats, sendFriendRequest, getPendingFriendRequests, respondToFriendRequest, getFriendsWaitingGames, type FriendWithStats, type FriendRequest, type FriendWaitingGame } from '@/lib/api';
 import HowToPlayModal from '@/components/HowToPlayModal';
 import EmailVerificationModal from '@/components/EmailVerificationModal';
 import ForgotPasswordModal from '@/components/ForgotPasswordModal';
@@ -82,36 +78,16 @@ export default function Home() {
   // Forgot password modal state
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   
-  // Competitive state
-  const [rankedProfile, setRankedProfile] = useState<PlayerProfile | null>(null);
-  const [currentSeason, setCurrentSeason] = useState<Season | null>(null);
-  const [rankedPlayerCount, setRankedPlayerCount] = useState(2);
-  
-  // Matchmaking
-  const { 
-    status: matchmakingStatus, 
-    matchFound, 
-    error: matchmakingError, 
-    connected: matchmakingConnected,
-    joinQueue, 
-    leaveQueue,
-    clearMatchFound
-  } = useMatchmaking();
-
   async function fetchAllUserData() {
     try {
       // Batch all user data requests in parallel
-      const [games, profile, season, friendsData, requestsData, friendsGamesData] = await Promise.all([
+      const [games, friendsData, requestsData, friendsGamesData] = await Promise.all([
         getMyGames().catch(() => []),
-        getMyProfile().catch(() => null),
-        getCurrentSeason().catch(() => null),
         getFriendsWithStats().catch(() => ({ friends: [] })),
         getPendingFriendRequests(true).catch(() => ({ requests: [] })),
         getFriendsWaitingGames().catch(() => ({ games: [] }))
       ]);
       setMyGames(games);
-      setRankedProfile(profile);
-      setCurrentSeason(season);
       setFriends(friendsData.friends || []);
       setPendingRequests(requestsData.requests || []);
       setFriendsWaitingGames(friendsGamesData.games || []);
@@ -1175,183 +1151,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Ranked Play Section */}
-      <div className="glass rounded-2xl p-6 border border-amber-500/20 mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="font-bold text-amber-300 flex items-center gap-2">
-              <span className="text-lg">⚔️</span> Ranked Play
-            </h3>
-            <p className="text-slate-500 text-xs mt-1">
-              {currentSeason ? `Season: ${currentSeason.name}` : 'Compete for rating and climb the leaderboard'}
-            </p>
-          </div>
-          {rankedProfile && (
-            <div className="flex items-center gap-3">
-              <DivisionBadge division={rankedProfile.division} size="md" />
-              <div className="text-right">
-                <div className="text-lg font-bold text-slate-100">{rankedProfile.rating}</div>
-                <div className="text-[10px] text-slate-500">Rating</div>
-              </div>
-            </div>
-          )}
-        </div>
-        
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          {rankedProfile ? (
-            <>
-              <div className="bg-slate-800/50 rounded-lg p-3 text-center">
-                <div className="text-lg font-bold text-emerald-400">{rankedProfile.ranked_wins}</div>
-                <div className="text-[10px] text-slate-500">Wins</div>
-              </div>
-              <div className="bg-slate-800/50 rounded-lg p-3 text-center">
-                <div className="text-lg font-bold text-red-400">{rankedProfile.ranked_losses}</div>
-                <div className="text-[10px] text-slate-500">Losses</div>
-              </div>
-              <div className="bg-slate-800/50 rounded-lg p-3 text-center">
-                <div className="text-lg font-bold text-slate-300">{rankedProfile.win_rate.toFixed(0)}%</div>
-                <div className="text-[10px] text-slate-500">Win Rate</div>
-              </div>
-              <div className="bg-slate-800/50 rounded-lg p-3 text-center">
-                <div className="text-lg font-bold text-amber-400">{rankedProfile.peak_rating}</div>
-                <div className="text-[10px] text-slate-500">Peak</div>
-              </div>
-            </>
-          ) : (
-            <div className="col-span-4 text-center py-4 text-slate-500 text-sm">
-              Play ranked games to start tracking your stats!
-            </div>
-          )}
-        </div>
-        
-        {/* Find Match Button */}
-        <div className="mb-4">
-          {/* Player Count Selector */}
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xs text-slate-400">Players:</span>
-            {[2, 3, 4].map((n) => (
-              <button
-                key={n}
-                disabled={matchmakingStatus?.in_queue}
-                className={`
-                  w-9 h-9 rounded-xl text-sm font-bold transition-all active:scale-95
-                  ${rankedPlayerCount === n
-                    ? 'bg-amber-600 text-white shadow-lg shadow-amber-500/25'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700'}
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                `}
-                onClick={() => setRankedPlayerCount(n)}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-          {matchmakingStatus?.in_queue ? (
-            <div className="bg-slate-800/80 rounded-xl p-4 border border-amber-500/30">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-amber-400 animate-pulse" />
-                  <span className="text-amber-300 font-semibold text-sm">
-                    Searching for {(matchmakingStatus.player_count || rankedPlayerCount) - 1} opponent{(matchmakingStatus.player_count || rankedPlayerCount) > 2 ? 's' : ''}...
-                  </span>
-                </div>
-                <span className="text-slate-500 text-xs">
-                  {matchmakingStatus.wait_time_seconds ? `${Math.floor(matchmakingStatus.wait_time_seconds / 60)}:${String(matchmakingStatus.wait_time_seconds % 60).padStart(2, '0')}` : '0:00'}
-                </span>
-              </div>
-              
-              {/* Lobby Players Display */}
-              <div className="mb-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs text-slate-400">
-                    Players in lobby ({matchmakingStatus.lobby_players?.length || 1}/{matchmakingStatus.player_count || rankedPlayerCount})
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {matchmakingStatus.lobby_players?.map((player, idx) => (
-                    <div 
-                      key={idx}
-                      className="flex items-center gap-2 bg-slate-700/50 rounded-lg px-3 py-1.5 border border-slate-600/50"
-                    >
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-xs font-bold text-white">
-                        {player.username.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="text-xs text-slate-200 font-medium">{player.username}</span>
-                      <span className="text-[10px] text-slate-500">{player.rating}</span>
-                    </div>
-                  ))}
-                  {/* Empty slots */}
-                  {Array.from({ length: (matchmakingStatus.player_count || rankedPlayerCount) - (matchmakingStatus.lobby_players?.length || 1) }).map((_, idx) => (
-                    <div 
-                      key={`empty-${idx}`}
-                      className="flex items-center gap-2 bg-slate-800/30 rounded-lg px-3 py-1.5 border border-dashed border-slate-700"
-                    >
-                      <div className="w-6 h-6 rounded-full bg-slate-700/50 flex items-center justify-center">
-                        <span className="text-slate-500 text-xs">?</span>
-                      </div>
-                      <span className="text-xs text-slate-500 italic">Waiting...</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              <div className="text-[10px] text-slate-500 mb-3">
-                {(matchmakingStatus.player_count || rankedPlayerCount)}-player match &bull; Search range: ±{matchmakingStatus.search_range || 50} rating
-              </div>
-              <button
-                onClick={leaveQueue}
-                className="w-full py-2.5 rounded-xl font-bold text-sm bg-red-600/20 hover:bg-red-600/40 border border-red-500/40 text-red-400 transition-all"
-              >
-                Cancel Search
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => joinQueue(rankedPlayerCount)}
-              disabled={!currentSeason}
-              className="
-                w-full py-4 rounded-xl font-black text-base
-                bg-gradient-to-r from-amber-600 via-orange-500 to-red-500
-                hover:from-amber-500 hover:via-orange-400 hover:to-red-400
-                text-white shadow-lg shadow-orange-500/25
-                transition-all active:scale-[.98]
-                disabled:opacity-50 disabled:cursor-not-allowed
-              "
-            >
-              {currentSeason ? `⚔️ Find ${rankedPlayerCount}-Player Ranked Match` : 'No Active Season'}
-            </button>
-          )}
-          {matchmakingError && (
-            <div className="mt-2 px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 text-xs">
-              {matchmakingError}
-            </div>
-          )}
-        </div>
-        
-        <div className="flex gap-3">
-          <Link
-            href="/profile"
-            className="flex-1 py-2.5 rounded-xl font-bold text-sm text-center bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all"
-          >
-            View Profile
-          </Link>
-          <Link
-            href="/leaderboard"
-            className="flex-1 py-2.5 rounded-xl font-bold text-sm text-center bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all"
-          >
-            Leaderboard
-          </Link>
-        </div>
-      </div>
-      
-      {/* Match Found Modal */}
-      {matchFound && (
-        <MatchFoundModal
-          matchData={matchFound}
-          onClose={clearMatchFound}
-        />
-      )}
-      
       {/* How to Play Modal */}
       <HowToPlayModal
         isOpen={howToPlayOpen}

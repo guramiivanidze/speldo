@@ -207,15 +207,6 @@ body {
   animation: glow-pulse 2s ease-in-out infinite;
 }
 
-/* Division rank colors */
-.division-bronze { color: #cd7f32; }
-.division-silver { color: #c0c0c0; }
-.division-gold { color: #ffd700; }
-.division-platinum { color: #e5e4e2; }
-.division-diamond { color: #b9f2ff; }
-.division-master { color: #9b59b6; }
-.division-grandmaster { color: #e74c3c; }
-
 /* ─── Token limit warning (10 coins) ─────── */
 @keyframes token-limit-flash {
   0%, 100% { 

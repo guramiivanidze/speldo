@@ -468,11 +468,9 @@ class FriendsWithStatsView(APIView):
         for fs in friendships:
             friend = fs.friend
             
-            # Count casual wins (games where friend won and no ranked_match)
             casual_wins = Game.objects.filter(
                 status=Game.STATUS_FINISHED,
                 winner=friend,
-                ranked_match__isnull=True
             ).count()
             
             friends_data.append({

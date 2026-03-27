@@ -480,12 +480,9 @@ class CasualStatsView(APIView):
     def get(self, request):
         user = request.user
         
-        # Count finished casual games (exclude ranked games)
-        # A game is ranked if it has a related ranked_match
         finished_games = Game.objects.filter(
             status=Game.STATUS_FINISHED,
             players__user=user,
-            ranked_match__isnull=True  # Exclude games with a ranked match
         ).distinct()
         
         total_games = finished_games.count()
@@ -725,10 +722,8 @@ class CasualLeaderboardView(APIView):
             except ValueError:
                 player_count = None
         
-        # Get all finished casual games (games without ranked_match)
         casual_games = Game.objects.filter(
             status=Game.STATUS_FINISHED,
-            ranked_match__isnull=True
         ).prefetch_related('players__user')
         
         # If player_count is specified, filter by annotated count
@@ -835,7 +830,6 @@ class PointsLeaderboardView(APIView):
 
         casual_games = Game.objects.filter(
             status=Game.STATUS_FINISHED,
-            ranked_match__isnull=True,
         ).prefetch_related('players__user')
 
         if player_count_filter:

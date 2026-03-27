@@ -4,14 +4,12 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  getMyProfile, getMatchHistory, getUserGameHistory, getCasualStats,
+  getUserGameHistory, getCasualStats,
   sendFriendRequest, getPendingFriendRequests, respondToFriendRequest,
   getFriendsList, removeFriend,
   sendEmailChangeCode, changeEmail, changePassword,
   FriendRequest, Friend, CasualStats
 } from '@/lib/api';
-import { PlayerProfile, Match, DIVISION_CONFIG, DIVISION_THRESHOLDS, Division } from '@/types/competitive';
-import DivisionBadge from '@/components/DivisionBadge';
 
 interface GameHistoryItem {
   id: string;
@@ -36,19 +34,17 @@ function ProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  const [profile, setProfile] = useState<PlayerProfile | null>(null);
-  const [matches, setMatches] = useState<Match[]>([]);  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Tab state - read initial value from URL params
-  const getInitialTab = (): 'stats' | 'games' | 'friends' | 'settings' => {
+  const getInitialTab = (): 'games' | 'friends' | 'settings' => {
     const tabParam = searchParams.get('tab');
-    if (tabParam === 'games' || tabParam === 'history') return 'games';
     if (tabParam === 'friends') return 'friends';
     if (tabParam === 'settings') return 'settings';
-    return 'stats';
+    return 'games';
   };
-  const [activeTab, setActiveTab] = useState<'stats' | 'games' | 'friends' | 'settings'>(getInitialTab);
+  const [activeTab, setActiveTab] = useState<'games' | 'friends' | 'settings'>(getInitialTab);
 
   // Game history state
   const [gameHistory, setGameHistory] = useState<GameHistoryItem[]>([]);
@@ -84,9 +80,9 @@ function ProfileContent() {
   // Sync tab with URL params on navigation
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam === 'games' || tabParam === 'history') setActiveTab('games');
-    else if (tabParam === 'friends') setActiveTab('friends');
+    if (tabParam === 'friends') setActiveTab('friends');
     else if (tabParam === 'settings') setActiveTab('settings');
+    else setActiveTab('games');
   }, [searchParams]);
 
   useEffect(() => {
@@ -97,13 +93,7 @@ function ProfileContent() {
 
     async function loadData() {
       try {
-        const [profileData, matchesData, casualStatsData] = await Promise.all([
-          getMyProfile().catch(() => null),
-          getMatchHistory(1, 10).catch(() => ({ matches: [] })),
-          getCasualStats().catch(() => null),
-        ]);
-        setProfile(profileData);
-        setMatches(matchesData.matches || []);
+        const casualStatsData = await getCasualStats().catch(() => null);
         setCasualStats(casualStatsData);
       } catch (e) {
         setError('Failed to load profile');
@@ -256,11 +246,11 @@ function ProfileContent() {
     );
   }
 
-  if (error || !profile) {
+  if (error) {
     return (
       <div className="text-center py-12">
-        <div className="text-red-400">{error || 'Profile not found'}</div>
-        <button 
+        <div className="text-red-400">{error}</div>
+        <button
           onClick={() => router.push('/')}
           className="mt-4 text-indigo-400 hover:text-indigo-300"
         >
@@ -269,34 +259,6 @@ function ProfileContent() {
       </div>
     );
   }
-
-  const config = DIVISION_CONFIG[profile.division];
-
-  // Generate rating history data points for simple graph
-  const generateGraphPoints = () => {
-    // Simulate rating history from matches
-    const points = [];
-    let currentRating = profile.rating;
-    
-    // Work backwards through matches to estimate past ratings
-    for (let i = matches.length - 1; i >= 0; i--) {
-      const match = matches[i];
-      // Support both multiplayer (players array) and legacy (player1/player2)
-      const myData = match.players?.find(p => p.username === profile.username) 
-        || (match.player1?.username === profile.username ? { rating_change: match.rating_change_p1 } : { rating_change: match.rating_change_p2 });
-      const change = myData?.rating_change || 0;
-      points.unshift(currentRating);
-      currentRating -= change;
-    }
-    points.unshift(currentRating);
-    
-    return points;
-  };
-
-  const ratingHistory = generateGraphPoints();
-  const minRating = Math.min(...ratingHistory) - 50;
-  const maxRating = Math.max(...ratingHistory) + 50;
-  const ratingRange = maxRating - minRating;
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -313,43 +275,14 @@ function ProfileContent() {
 
       {/* Main Profile Card - Compact */}
       <div className="glass rounded-xl p-4 border border-white/10 mb-4">
-        {/* Avatar & Username Row */}
-        <div className="flex items-center gap-3 mb-3">
-          <div 
-            className="w-12 h-12 rounded-full flex items-center justify-center text-xl flex-shrink-0"
-            style={{ 
-              backgroundColor: config.bgColor,
-              border: `2px solid ${config.color}`,
-            }}
+        <div className="flex items-center gap-3">
+          <div
+            className="w-12 h-12 rounded-full flex items-center justify-center text-xl flex-shrink-0 bg-indigo-900/50 border-2 border-indigo-500"
           >
-            {config.icon}
+            👤
           </div>
           <div>
-            <h2 className="text-lg font-bold text-slate-100">{profile.username}</h2>
-            <div className="flex items-center gap-2">
-              <DivisionBadge division={profile.division} size="sm" />
-              <span className="text-sm font-semibold" style={{ color: config.color }}>{profile.rating}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Row */}
-        <div className="grid grid-cols-4 gap-2">
-          <div className="bg-slate-800/50 rounded-lg p-2 text-center">
-            <div className="text-lg font-bold text-green-400">{profile.ranked_wins}</div>
-            <div className="text-[10px] text-slate-400">Wins</div>
-          </div>
-          <div className="bg-slate-800/50 rounded-lg p-2 text-center">
-            <div className="text-lg font-bold text-red-400">{profile.ranked_losses}</div>
-            <div className="text-[10px] text-slate-400">Losses</div>
-          </div>
-          <div className="bg-slate-800/50 rounded-lg p-2 text-center">
-            <div className="text-lg font-bold text-slate-100">{profile.win_rate}%</div>
-            <div className="text-[10px] text-slate-400">Win%</div>
-          </div>
-          <div className="bg-slate-800/50 rounded-lg p-2 text-center">
-            <div className="text-lg font-bold text-yellow-400">{profile.peak_rating}</div>
-            <div className="text-[10px] text-slate-400">Peak</div>
+            <h2 className="text-lg font-bold text-slate-100">{user?.username}</h2>
           </div>
         </div>
       </div>
@@ -383,7 +316,7 @@ function ProfileContent() {
 
       {/* Tab Navigation */}
       <div className="flex gap-2 mb-4 overflow-x-auto">
-        {(['stats', 'games', 'friends', 'settings'] as const).map((tab) => (
+        {(['games', 'friends', 'settings'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -393,7 +326,6 @@ function ProfileContent() {
                 : 'bg-slate-800/50 text-slate-400 hover:text-slate-200'
             }`}
           >
-            {tab === 'stats' && '📊 Ranked Stats'}
             {tab === 'games' && '🎮 Game History'}
             {tab === 'friends' && (
               <>
@@ -409,125 +341,6 @@ function ProfileContent() {
           </button>
         ))}
       </div>
-
-      {/* Stats Tab */}
-      {activeTab === 'stats' && (
-        <>
-          {/* Rating Graph */}
-          {ratingHistory.length > 1 && (
-            <div className="glass rounded-2xl p-6 border border-white/10 mb-8">
-              <h3 className="text-lg font-semibold text-slate-100 mb-4">Rating History</h3>
-              <div className="relative h-40">
-                {/* Y-axis labels */}
-                <div className="absolute left-0 top-0 bottom-0 w-12 flex flex-col justify-between text-xs text-slate-500">
-                  <span>{maxRating}</span>
-                  <span>{Math.round((maxRating + minRating) / 2)}</span>
-                  <span>{minRating}</span>
-                </div>
-                
-                {/* Graph area */}
-                <div className="ml-14 h-full relative">
-                  <svg className="w-full h-full" preserveAspectRatio="none">
-                    {/* Grid lines */}
-                    <line x1="0" y1="50%" x2="100%" y2="50%" stroke="#334155" strokeDasharray="4" />
-                    
-                    {/* Rating line */}
-                    <polyline
-                      fill="none"
-                      stroke={config.color}
-                      strokeWidth="2"
-                      points={ratingHistory.map((rating, i) => {
-                        const x = (i / (ratingHistory.length - 1)) * 100;
-                        const y = 100 - ((rating - minRating) / ratingRange) * 100;
-                        return `${x}%,${y}%`;
-                      }).join(' ')}
-                    />
-                    
-                    {/* Points */}
-                    {ratingHistory.map((rating, i) => {
-                      const x = (i / (ratingHistory.length - 1)) * 100;
-                      const y = 100 - ((rating - minRating) / ratingRange) * 100;
-                      return (
-                        <circle
-                          key={i}
-                          cx={`${x}%`}
-                          cy={`${y}%`}
-                          r="4"
-                          fill={config.color}
-                        />
-                      );
-                    })}
-                  </svg>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Match History */}
-          <div className="glass rounded-2xl p-6 border border-white/10">
-            <h3 className="text-lg font-semibold text-slate-100 mb-4">Recent Ranked Matches</h3>
-            
-            {matches.length === 0 ? (
-              <div className="text-center py-8 text-slate-400">
-                No ranked matches yet. Start playing to see your history!
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {matches.map((match) => {
-                  const myData = match.players?.find(p => p.username === profile.username);
-                  const opponents = match.players?.filter(p => p.username !== profile.username) || [];
-                  const isPlayer1 = match.player1?.username === profile.username;
-                  const legacyOpponent = isPlayer1 ? match.player2 : match.player1;
-                  const ratingChange = myData?.rating_change 
-                    || (isPlayer1 ? match.rating_change_p1 : match.rating_change_p2) 
-                    || 0;
-                  const won = myData ? myData.placement === 1 : ratingChange > 0;
-                  const displayOpponents = opponents.length > 0 ? opponents : (legacyOpponent ? [legacyOpponent] : []);
-                  
-                  return (
-                    <div 
-                      key={match.id}
-                      className={`flex items-center justify-between p-4 rounded-xl ${
-                        won ? 'bg-green-900/20 border border-green-500/20' : 'bg-red-900/20 border border-red-500/20'
-                      }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`text-2xl ${won ? 'text-green-400' : 'text-red-400'}`}>
-                          {won ? '🏆' : '💔'}
-                        </div>
-                        <div>
-                          <div className="font-medium text-slate-100">
-                            vs {displayOpponents.map(o => o.username).join(', ') || 'Unknown'}
-                          </div>
-                          {displayOpponents[0] && (
-                            <div className="flex items-center gap-2 text-xs text-slate-400">
-                              <DivisionBadge 
-                                division={'division' in displayOpponents[0] 
-                                  ? displayOpponents[0].division 
-                                  : (displayOpponents[0] as { division_before?: Division }).division_before ?? 'Bronze'} 
-                                size="sm" 
-                                showLabel={false} 
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className={`text-lg font-bold ${ratingChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {ratingChange >= 0 ? '+' : ''}{ratingChange}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {new Date(match.finished_at || match.created_at).toLocaleDateString()}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </>
-      )}
 
       {/* Game History Tab */}
       {activeTab === 'games' && (

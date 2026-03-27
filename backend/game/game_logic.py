@@ -144,24 +144,13 @@ def initial_decks_and_nobles(player_count, balancing_override=None):
     return decks, visible, nobles
 
 
-def _draw_replacement(deck, visible_row, balancing_override=None):
-    """Draw a replacement card from *deck*, optionally using balanced selection.
+def _draw_replacement(deck):
+    """Draw a replacement card from the top of *deck*.
 
-    Falls back to ``deck.pop(0)`` if balancing is off or errors.
     The selected card is **removed** from *deck* in-place.
     """
     if not deck:
         return None
-    try:
-        from .balancing import get_balanced_replacement_card, get_config
-        config = get_config(balancing_override)
-        if config.is_active:
-            return get_balanced_replacement_card(deck, visible_row, get_card, config)
-    except Exception:
-        import logging
-        logging.getLogger('game.balancing').exception(
-            '[BALANCING] Error during replacement draw; falling back to top-of-deck'
-        )
     return deck.pop(0)
 
 
@@ -404,7 +393,7 @@ def apply_reserve_card(game_data, player_data, card_id=None, level=None):
                 found_level = lvl
                 # Replace in-place to maintain card positions
                 if decks[lvl]:
-                    replacement = _draw_replacement(decks[lvl], cards)
+                    replacement = _draw_replacement(decks[lvl])
                     if replacement is not None:
                         cards[idx] = replacement
                     else:
@@ -422,17 +411,6 @@ def apply_reserve_card(game_data, player_data, card_id=None, level=None):
             return None, None, None, f"Level {level} deck is empty.", False
         card_id = decks[lvl].pop(0)
         decks[lvl] = decks[lvl]
-
-    # Mid-game board refresh: fix any color pile-up after replacement
-    try:
-        from .balancing import maybe_refresh_board
-        refreshed = maybe_refresh_board(
-            {'visible_cards': visible, 'decks': decks}, get_card
-        )
-        visible = refreshed['visible_cards']
-        decks = refreshed['decks']
-    except Exception:
-        pass
 
     reserved.append(card_id)
 
@@ -499,7 +477,7 @@ def apply_buy_card(game_data, player_data, card_id):
                 idx = cards.index(card_id)
                 # Replace in-place to maintain card positions
                 if decks[lvl]:
-                    replacement = _draw_replacement(decks[lvl], cards)
+                    replacement = _draw_replacement(decks[lvl])
                     if replacement is not None:
                         cards[idx] = replacement
                     else:
@@ -508,17 +486,6 @@ def apply_buy_card(game_data, player_data, card_id):
                     cards.pop(idx)
                 visible[lvl] = cards
                 break
-
-    # Mid-game board refresh: fix any color pile-up after replacement
-    try:
-        from .balancing import maybe_refresh_board
-        refreshed = maybe_refresh_board(
-            {'visible_cards': visible, 'decks': decks}, get_card
-        )
-        visible = refreshed['visible_cards']
-        decks = refreshed['decks']
-    except Exception:
-        pass
 
     purchased.append(card_id)
 
