@@ -2,7 +2,6 @@
 Score legal moves using a multi-factor composite function.
 Higher score = better move.
 """
-import copy
 from .move_generator import COLORS, get_bonuses, can_afford
 from .noble_tracker import (
     all_noble_distances, noble_progress_from_card,
@@ -15,6 +14,7 @@ from .engine_evaluator import (
 )
 from .opponent_modeler import (
     cards_opponent_can_buy_in_n_turns, find_biggest_threat,
+    identify_opponent_targets,
 )
 
 DEFAULT_WEIGHTS = {
@@ -29,6 +29,46 @@ DEFAULT_WEIGHTS = {
     'reservation_value': 3,
     'gem_efficiency': 4,
 }
+
+
+# ──────────────────────────────────────────────────────────
+# Snapshot copy helper (avoids deepcopy of read-only cards data)
+# ──────────────────────────────────────────────────────────
+
+def _copy_snapshot(snapshot):
+    """
+    Selective copy: share read-only reference data (cards, nobles_data),
+    copy only mutable game state. ~10-20x faster than deepcopy.
+    """
+    return {
+        # Read-only: share references
+        'cards': snapshot['cards'],
+        'nobles_data': snapshot['nobles_data'],
+        # Mutable board state
+        'bank': dict(snapshot['bank']),
+        'visible_cards': {k: list(v) for k, v in snapshot['visible_cards'].items()},
+        'deck_sizes': dict(snapshot['deck_sizes']),
+        'available_nobles': list(snapshot['available_nobles']),
+        # Mutable player state
+        'my_tokens': dict(snapshot['my_tokens']),
+        'my_purchased': list(snapshot['my_purchased']),
+        'my_reserved': list(snapshot['my_reserved']),
+        'my_nobles': list(snapshot.get('my_nobles', [])),
+        'my_points': snapshot['my_points'],
+        'my_bonuses': dict(snapshot['my_bonuses']),
+        'my_index': snapshot['my_index'],
+        # All players (shallow copy of each player dict)
+        'players': [
+            {
+                'tokens': dict(p['tokens']),
+                'purchased_card_ids': list(p['purchased_card_ids']),
+                'reserved_card_ids': list(p['reserved_card_ids']),
+                'noble_ids': list(p.get('noble_ids', [])),
+                'prestige_points': p['prestige_points'],
+            }
+            for p in snapshot['players']
+        ],
+    }
 
 
 # ──────────────────────────────────────────────────────────
@@ -57,12 +97,10 @@ def score_position(snapshot, weights=None):
     score += len(snapshot.get('my_nobles', [])) * 3.0
     score += sum(snapshot['my_bonuses'].values()) * 0.6
 
-    # Proximity to best reachable VP
     targets = identify_target_cards(snapshot, n=3)
     for cid, cval in targets:
         score += cval * 0.5
 
-    # Noble proximity
     noble_dists = all_noble_distances(
         snapshot['nobles_data'], snapshot['available_nobles'], snapshot['my_bonuses']
     )
@@ -73,7 +111,7 @@ def score_position(snapshot, weights=None):
 
 
 # ──────────────────────────────────────────────────────────
-# Endgame multiplier
+# Endgame multiplier — escalates earlier for better race awareness
 # ──────────────────────────────────────────────────────────
 
 def _endgame_mult(snapshot, weights):
@@ -84,11 +122,13 @@ def _endgame_mult(snapshot, weights):
         default=0,
     )
     critical = max(my_pts, max_opp)
-    if critical >= 13:
-        return weights['endgame_urgency'] / 10.0   # ≈1.5×
-    if critical >= 11:
+    if critical >= 12:
+        return 2.2
+    if critical >= 10:
+        return 1.7
+    if critical >= 8:
         return 1.35
-    if critical >= 9:
+    if critical >= 6:
         return 1.15
     return 1.0
 
@@ -115,13 +155,17 @@ def _score_buy(move, snapshot, weights):
     # 1. Direct VP
     score += card['points'] * weights['points_gained'] * em
 
-    # 2. Nobles triggered immediately
+    # 2. Win-race emergency: if an opponent can win next turn, scoring ANY VP is critical
+    best_opp, threat = find_biggest_threat(snapshot)
+    if threat and threat['can_win_next_turn'] and card['points'] > 0:
+        score += card['points'] * 8.0
+
+    # 3. Nobles triggered immediately
     triggered = nobles_triggered_by_purchase(card, nobles_data, available_nobles, my_bonuses)
     for nid in triggered:
         score += nobles_data[nid]['points'] * weights['noble_acquired'] * em
 
-    # 3. Noble proximity — heavily reward buying toward achievable nobles.
-    #    Weight inversely to distance: at dist=1 (one card away after this) it's very valuable.
+    # 4. Noble proximity — reward buying toward achievable nobles
     noble_dists = all_noble_distances(nobles_data, available_nobles, my_bonuses)
     for nid, dist in noble_dists.items():
         noble = nobles_data.get(nid)
@@ -129,26 +173,24 @@ def _score_buy(move, snapshot, weights):
             continue
         progress = noble_progress_from_card(noble, card, my_bonuses)
         if progress:
-            # dist is CURRENT distance; after buying this card dist becomes dist-1
             new_dist = dist - 1
-            # Each step closer to a 3-VP noble is worth more as we approach it
             proximity_score = 3.0 / max(0.5, new_dist + 1) * weights['noble_proximity_gain'] / 8.0
             score += proximity_score
 
-    # 4. Engine alignment — how much does this bonus help future purchases?
+    # 5. Engine alignment
     target_cards = identify_target_cards(snapshot)
     target_ids = [cid for cid, _ in target_cards if cid != card_id]
     engine_val = buying_card_helps_engine(card, target_ids, cards, my_bonuses)
     score += engine_val * weights['bonus_alignment_with_target']
 
-    # 5. Concrete turns saved on visible tier-2/3 cards
+    # 6. Concrete turns saved on visible tier-2/3 cards
     saved = estimate_turns_saved(card, snapshot)
     score += saved * weights['turns_accelerated']
 
-    # 6. Tier premium
+    # 7. Tier premium
     score += {1: 0.0, 2: 0.8, 3: 2.0}.get(card.get('level', 1), 0.0)
 
-    # 7. Free reserved slot
+    # 8. Free reserved slot
     if move.get('from_reserved'):
         score += 2.0
 
@@ -175,17 +217,15 @@ def _score_take_gems(move, snapshot, weights):
     overflow = max(0, total_after - 10)
     score = 0.0
 
-    # Hard discard penalty — must return a gem, net gain is only 2 gems
+    # Discard penalty — returning gems is a significant tempo loss
     if overflow > 0:
         score -= overflow * 8.0
 
-    # ── Core metric: turns saved on best target cards ──
-    # This is better than raw deficit reduction because it accounts for
-    # per-color bottlenecks and 2-same takes.
-    target_cards = identify_target_cards(snapshot, n=4)
+    # ── Core metric: turns saved on top target cards ──
+    target_cards = identify_target_cards(snapshot, n=5)
     turns_saved_total = 0.0
 
-    for card_id, card_val in target_cards[:3]:
+    for card_id, card_val in target_cards[:4]:
         card = cards.get(card_id)
         if not card:
             continue
@@ -193,21 +233,32 @@ def _score_take_gems(move, snapshot, weights):
         new_ttb = turns_to_buy(card, my_bonuses, new_tokens)
         delta = old_ttb - new_ttb
         if delta > 0:
-            # Weight by card importance (points + card_val)
             turns_saved_total += delta * max(1.0, card['points'] + 1)
 
     score += turns_saved_total * weights['gem_efficiency'] * em
 
-    # ── 2-same bonus: faster when one color is the sole bottleneck ──
+    # ── "Unlocks next-turn buy" mega-bonus ──
+    # If taking these gems makes a target card immediately affordable (new_ttb=0),
+    # we can buy it next turn. This is the most important gem-taking pattern in Splendor.
+    for card_id, card_val in target_cards[:5]:
+        card = cards.get(card_id)
+        if not card:
+            continue
+        was_not_affordable = turns_to_buy(card, my_bonuses, my_tokens) > 0
+        now_affordable = turns_to_buy(card, my_bonuses, new_tokens) == 0
+        if was_not_affordable and now_affordable:
+            score += card['points'] * 5.0 + card_val * 2.5 + 4.0
+
+    # ── 2-same bonus / 3-different flexibility ──
     unique = set(colors)
     if len(colors) == 2 and len(unique) == 1:
         score += 1.5
     elif len(unique) == 3:
-        score += 1.0   # Flexibility bonus for 3-different
+        score += 1.0
 
     # ── Penalise taking gems not needed by any top target ──
     needed_colors = set()
-    for card_id, _ in target_cards[:4]:
+    for card_id, _ in target_cards[:5]:
         card = cards.get(card_id)
         if not card:
             continue
@@ -218,11 +269,37 @@ def _score_take_gems(move, snapshot, weights):
     useless = sum(1 for c in unique if c not in needed_colors)
     score -= useless * 2.0
 
-    # ── Scarcity denial: taking a gem others need ──
+    # ── Scarcity denial: stronger reward for nearly-depleted colors ──
     for c in unique:
         remaining = bank.get(c, 0) - colors.count(c)
-        if remaining <= 2:
-            score += 1.0
+        if remaining <= 0:
+            score += 2.5
+        elif remaining <= 1:
+            score += 1.8
+        elif remaining <= 2:
+            score += 0.8
+
+    # ── Opponent gem denial ──
+    # Reward taking gems that the most dangerous opponent needs for their targets
+    best_opp, threat = find_biggest_threat(snapshot)
+    if threat and threat['points'] >= 8 and best_opp:
+        opp_bonuses = get_bonuses(best_opp['purchased_card_ids'], cards)
+        opp_reachable = cards_opponent_can_buy_in_n_turns(best_opp, snapshot, 2)
+        denial_bonus = 0.0
+        for cid, _ in opp_reachable[:3]:
+            opp_card = cards.get(cid)
+            if not opp_card:
+                continue
+            for c in unique:
+                shortfall = max(
+                    0,
+                    opp_card['cost'].get(c, 0)
+                    - opp_bonuses.get(c, 0)
+                    - best_opp['tokens'].get(c, 0),
+                )
+                if shortfall > 0:
+                    denial_bonus += 0.7 * min(1.0, threat['points'] / 12.0)
+        score += min(2.5, denial_bonus)
 
     return score
 
@@ -244,13 +321,12 @@ def _score_reserve(move, snapshot, weights):
 
     score = 0.0
 
-    # Gold token
+    # Gold token value
     if bank.get('gold', 0) > 0:
         score += weights['gold_token_value']
-        # Extra if we'll have 10 tokens after (gold is wasteable) — small penalty
         total_after = sum(my_tokens.values()) + 1
         if total_after > 10:
-            score -= 4.0  # forced discard on reserve is bad
+            score -= 4.0
 
     card_id = move.get('card_id')
     is_deck = move.get('is_deck', False)
@@ -259,8 +335,7 @@ def _score_reserve(move, snapshot, weights):
     if is_deck or card_id is None:
         spec = {1: 0.3, 2: 1.0, 3: 2.5}.get(level, 0.3)
         score += spec * weights['reservation_value'] / 5.0
-        score -= 2.0   # uncertainty penalty
-        # 3rd reserve slot is very costly
+        score -= 2.0
         if len(snapshot['my_reserved']) == 2:
             score -= 3.0
         return score
@@ -279,11 +354,12 @@ def _score_reserve(move, snapshot, weights):
             own_val *= 1.4
         score += own_val
 
-    # Blocking value
+    # Blocking value — extend window to 3 turns for high-VP cards
+    block_turns = 3 if card.get('points', 0) >= 3 else 2
     for i, opp in enumerate(players):
         if i == my_index:
             continue
-        reachable = cards_opponent_can_buy_in_n_turns(opp, snapshot, 2)
+        reachable = cards_opponent_can_buy_in_n_turns(opp, snapshot, block_turns)
         reachable_ids = [cid for cid, _ in reachable]
         if card_id in reachable_ids:
             threat_scale = 1.0 + opp['prestige_points'] / 10.0
@@ -308,7 +384,12 @@ def _score_reserve(move, snapshot, weights):
 # ──────────────────────────────────────────────────────────
 
 def simulate_move(move, snapshot):
-    s = copy.deepcopy(snapshot)
+    """
+    Apply a move to a snapshot and return the resulting state.
+    Uses selective copying to avoid expensive deepcopy of read-only card data.
+    Also simulates noble collection triggered by card purchases.
+    """
+    s = _copy_snapshot(snapshot)
     t = move['type']
 
     if t == 'take_gems':
@@ -320,6 +401,9 @@ def simulate_move(move, snapshot):
         card_id = move['card_id']
         card = s['cards'].get(card_id)
         if card:
+            old_bonuses = dict(s['my_bonuses'])  # Before purchase, for noble check
+
+            # Pay cost using current bonuses
             bonuses = get_bonuses(s['my_purchased'], s['cards'])
             gold_used = 0
             for color in COLORS:
@@ -340,12 +424,24 @@ def simulate_move(move, snapshot):
             s['my_purchased'].append(card_id)
             s['my_points'] += card['points']
 
+            # Remove from board
             if card_id in s['my_reserved']:
                 s['my_reserved'].remove(card_id)
             for lvl in ['1', '2', '3']:
                 vc = s['visible_cards'].get(lvl, [])
                 if card_id in vc:
                     vc.remove(card_id)
+
+            # Noble collection — check using bonuses BEFORE this card was purchased
+            # (nobles_triggered_by_purchase internally adds the card's bonus color)
+            triggered = nobles_triggered_by_purchase(
+                card, s['nobles_data'], s['available_nobles'], old_bonuses
+            )
+            for nid in triggered:
+                noble = s['nobles_data'].get(nid, {})
+                s['my_points'] += noble.get('points', 0)
+                s['available_nobles'] = [n for n in s['available_nobles'] if n != nid]
+                s['my_nobles'].append(nid)
 
     elif t == 'reserve_card':
         card_id = move.get('card_id')
@@ -383,7 +479,6 @@ def recommend_discard(colors_taken, my_tokens, my_bonuses, snapshot):
     if n_to_return <= 0:
         return {}
 
-    # Score each color by how much it's needed across top target cards
     target_cards = identify_target_cards(snapshot, n=4)
     color_need = {c: 0.0 for c in COLORS + ['gold']}
 
@@ -395,7 +490,6 @@ def recommend_discard(colors_taken, my_tokens, my_bonuses, snapshot):
         for color, shortage in shortfalls.items():
             color_need[color] += shortage * max(1, card['points'] + 1)
 
-    # Build a list of returnable tokens, sorted least-needed first
     # Gold is very valuable — never recommend returning gold unless forced
     color_need['gold'] = color_need.get('gold', 0) + 999
 
@@ -403,13 +497,10 @@ def recommend_discard(colors_taken, my_tokens, my_bonuses, snapshot):
     for color, count in new_tokens.items():
         if count <= 0:
             continue
-        # Can only return gems we took or already had — never go below 0
-        max_returnable = count
         need_score = color_need.get(color, 0)
-        for _ in range(max_returnable):
+        for _ in range(count):
             returnable.append((need_score, color))
 
-    # Sort by need ascending (return least-needed first)
     returnable.sort(key=lambda x: x[0])
 
     discard = {}
