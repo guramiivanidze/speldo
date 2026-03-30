@@ -629,6 +629,82 @@ def maybe_refresh_board(game_data, get_card_fn, config=None):
     return game_data
 
 
+# ─── Deck Pre-arrangement ────────────────────────────────────────────────────
+
+
+def arrange_balanced_deck(deck_ids, get_card_fn, config=None):
+    """
+    Rearrange a shuffled deck so same-color cards are spread out.
+
+    Uses a greedy round-robin interleave: at each step, pick from the
+    color with the most cards remaining, but never repeat the same color
+    back-to-back unless no other color is available.
+
+    This ensures the replacement cards drawn throughout the game stay
+    diverse — no situation where the same color floods the board turn
+    after turn.
+
+    Args:
+        deck_ids:    list of card IDs in their shuffled order
+        get_card_fn: callable(card_id) -> card dict
+        config:      optional BalancingConfig override
+
+    Returns:
+        new list with the same cards in a balanced order
+    """
+    if config is None:
+        config = get_config()
+
+    if not config.is_active or len(deck_ids) <= 4:
+        return deck_ids
+
+    from collections import defaultdict
+
+    # Bucket cards by color, preserving shuffle order within each bucket
+    by_color = defaultdict(list)
+    unknown = []
+    for cid in deck_ids:
+        card = get_card_fn(cid)
+        if card:
+            by_color[card['bonus']].append(cid)
+        else:
+            unknown.append(cid)
+
+    if not by_color:
+        return deck_ids
+
+    queues = dict(by_color)  # color -> list of card IDs
+    result = []
+    last_color = None
+
+    while any(queues.values()):
+        # Prefer any color other than the last one placed
+        candidates = [
+            (c, ids) for c, ids in queues.items()
+            if ids and c != last_color
+        ]
+        if not candidates:
+            # Only one color remains — must repeat
+            candidates = [(c, ids) for c, ids in queues.items() if ids]
+        if not candidates:
+            break
+
+        # Among valid candidates, pick the color with the most cards left
+        # (greedy: avoids exhausting a color early, keeping variety for longer)
+        candidates.sort(key=lambda x: -len(x[1]))
+        chosen_color, chosen_ids = candidates[0]
+
+        result.append(chosen_ids.pop(0))
+        last_color = chosen_color
+
+        if not queues[chosen_color]:
+            del queues[chosen_color]
+
+    # Append any cards with unknown colors at the end
+    result.extend(unknown)
+    return result
+
+
 # ─── Simulation ──────────────────────────────────────────────────────────────
 
 

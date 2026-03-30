@@ -109,6 +109,21 @@ def initial_decks_and_nobles(player_count, balancing_override=None):
     random.shuffle(level2)
     random.shuffle(level3)
 
+    # Pre-arrange decks so same-colour cards are spread out throughout the draw order.
+    # This keeps replacement draws diverse across the whole game, not just at the start.
+    try:
+        from .balancing import arrange_balanced_deck, get_config
+        _bal_cfg = get_config(balancing_override)
+        if _bal_cfg.is_active:
+            level1 = arrange_balanced_deck(level1, get_card, _bal_cfg)
+            level2 = arrange_balanced_deck(level2, get_card, _bal_cfg)
+            level3 = arrange_balanced_deck(level3, get_card, _bal_cfg)
+    except Exception:
+        import logging
+        logging.getLogger('game.balancing').exception(
+            '[BALANCING] Error during deck pre-arrangement; continuing unbalanced'
+        )
+
     noble_count = player_count + 1
     all_nobles = list(_load_nobles().keys())
     random.shuffle(all_nobles)
@@ -144,14 +159,20 @@ def initial_decks_and_nobles(player_count, balancing_override=None):
     return decks, visible, nobles
 
 
-def _draw_replacement(deck):
-    """Draw a replacement card from the top of *deck*.
+def _draw_replacement(deck, visible_row=None):
+    """Draw a replacement card from *deck*, preferring one that balances
+    the colour distribution of *visible_row*.
 
     The selected card is **removed** from *deck* in-place.
+    Falls back silently to deck.pop(0) if balancing is unavailable.
     """
     if not deck:
         return None
-    return deck.pop(0)
+    try:
+        from .balancing import get_balanced_replacement_card, get_config
+        return get_balanced_replacement_card(deck, visible_row or [], get_card, get_config())
+    except Exception:
+        return deck.pop(0)
 
 
 def get_player_bonuses(purchased_card_ids):
@@ -393,7 +414,10 @@ def apply_reserve_card(game_data, player_data, card_id=None, level=None):
                 found_level = lvl
                 # Replace in-place to maintain card positions
                 if decks[lvl]:
-                    replacement = _draw_replacement(decks[lvl])
+                    # Pass remaining visible row (excluding the reserved card)
+                    # so balanced replacement avoids colours already dominant there
+                    row_without = [c for c in cards if c != card_id]
+                    replacement = _draw_replacement(decks[lvl], row_without)
                     if replacement is not None:
                         cards[idx] = replacement
                     else:
@@ -477,7 +501,8 @@ def apply_buy_card(game_data, player_data, card_id):
                 idx = cards.index(card_id)
                 # Replace in-place to maintain card positions
                 if decks[lvl]:
-                    replacement = _draw_replacement(decks[lvl])
+                    row_without = [c for c in cards if c != card_id]
+                    replacement = _draw_replacement(decks[lvl], row_without)
                     if replacement is not None:
                         cards[idx] = replacement
                     else:
