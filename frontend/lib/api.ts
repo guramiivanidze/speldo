@@ -466,3 +466,37 @@ export async function getPointsLeaderboard(playerCount?: number) {
   return apiFetch(`/api/games/points-leaderboard/${params}`);
 }
 
+// ─── Advisor API ───────────────────────────────────────────
+
+export type AdvisorGemColor = 'white' | 'blue' | 'green' | 'red' | 'black';
+
+export interface AdvisedMove {
+  action: 'take_gems' | 'buy_card' | 'reserve_card';
+  gems?: Partial<Record<AdvisorGemColor, number>>;
+  card_id?: number;
+  reserve_card_id?: number | string;
+  discard_gems?: Partial<Record<AdvisorGemColor, number>>; // gems to return when over 10
+  reasoning: string;
+  confidence: number;
+  alternative_move?: Omit<AdvisedMove, 'reasoning' | 'confidence' | 'alternative_move' | 'strategy'>;
+  strategy: {
+    currentGoal: string;
+    turnsToWin: number;
+    biggestThreat: string;
+    nextTurnPlan: string;
+  };
+}
+
+export interface AdvisorHintResponse {
+  enabled: boolean;
+  is_your_turn?: boolean;
+  current_player_index?: number;
+  game_status?: string;
+  error?: string;
+  advice?: AdvisedMove;
+}
+
+export async function getAdvisorHint(gameCode: string): Promise<AdvisorHintResponse> {
+  return apiFetch(`/api/advisor/hint?gameCode=${encodeURIComponent(gameCode)}`);
+}
+

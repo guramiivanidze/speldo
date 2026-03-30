@@ -16,8 +16,9 @@ interface CardDisplayProps {
   canReserve?: boolean;
   showActions?: boolean;
   compact?: boolean;
-  isNewCard?: boolean;  // Animate as newly appeared card
-  isAffordable?: boolean;  // Show affordability border (regardless of turn)
+  isNewCard?: boolean;
+  isAffordable?: boolean;
+  advisorAction?: 'buy' | 'reserve'; // Advisor hint overlay
 }
 
 const ROMAN: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
@@ -47,6 +48,7 @@ export default function CardDisplay({
   compact = false,
   isNewCard = false,
   isAffordable = false,
+  advisorAction,
 }: CardDisplayProps) {
   // Guard against missing card data
   const bonus = card.bonus || 'white';
@@ -63,7 +65,7 @@ export default function CardDisplay({
       className={`
         dev-card group relative rounded-xl overflow-hidden
         h-full w-full
-        ${isAffordable || canBuy ? 'afford-glow' : ''}
+        ${advisorAction === 'buy' ? 'hint-buy' : advisorAction === 'reserve' ? 'hint-reserve' : isAffordable || canBuy ? 'afford-glow' : ''}
         ${isNewCard ? 'new-card-appear' : ''}
         cursor-default shadow-lg
         hover:z-50 transition-transform hover:scale-[1.02]
@@ -173,6 +175,20 @@ export default function CardDisplay({
           </div>
         </div>
       </div>
+
+      {/* ── Advisor hint badge ──────────────────── */}
+      {advisorAction && (
+        <div className={`
+          absolute top-1 right-1 z-30
+          px-1.5 py-0.5 rounded-md text-[9px] font-black tracking-wide
+          shadow-lg pointer-events-none
+          ${advisorAction === 'buy'
+            ? 'bg-emerald-500 text-white'
+            : 'bg-amber-500 text-white'}
+        `}>
+          {advisorAction === 'buy' ? '★ BUY' : '★ HOLD'}
+        </div>
+      )}
 
       {/* ── Hover action overlay ─────────────────── */}
       {showActions && (

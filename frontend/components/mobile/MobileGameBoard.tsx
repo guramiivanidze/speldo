@@ -16,6 +16,8 @@ import NobleChoiceModal from '../NobleChoiceModal';
 import ActionNotification from '../ActionNotification';
 import GameChat from '../GameChat';
 import TurnTimer from '../TurnTimer';
+import { useAdvisor } from '@/hooks/useAdvisor';
+import { AdvisorHint } from '../AdvisorHint';
 
 type MobileTab = 'board' | 'me' | 'opponents' | 'chat';
 
@@ -69,6 +71,26 @@ export default function MobileGameBoard({
 
   // Get eligible nobles for modal
   const eligibleNobles = pendingNobleChoice.map(id => nobles_data[String(id)]).filter(Boolean);
+
+  // AI advisor
+  const advisor = useAdvisor({
+    gameCode: gameState.code,
+    isMyTurn,
+    enabled: gameState.status === 'playing',
+  });
+  const advice = advisor.active ? advisor.advice : null;
+  const hintCardId: number | null =
+    advice?.action === 'buy_card' ? (advice.card_id ?? null) :
+    advice?.action === 'reserve_card' && typeof advice.reserve_card_id === 'number' ? advice.reserve_card_id :
+    null;
+  const hintCardAction: 'buy' | 'reserve' | null =
+    advice?.action === 'buy_card' ? 'buy' :
+    advice?.action === 'reserve_card' ? 'reserve' :
+    null;
+  const hintGemColors: string[] =
+    advice?.action === 'take_gems' && advice.gems
+      ? Object.entries(advice.gems).flatMap(([c, n]) => Array(n as number).fill(c))
+      : [];
 
   // Compute which cards I can afford
   const canAfford = useCallback((cardId: number): boolean => {
@@ -291,6 +313,9 @@ export default function MobileGameBoard({
             onOpenTokenSelector={() => setShowTokenSelector(true)}
             selectedTokens={selectedTokens}
             newCardId={newCardId}
+            hintCardId={hintCardId}
+            hintCardAction={hintCardAction}
+            hintGemColors={hintGemColors}
           />
         )}
         
@@ -349,7 +374,7 @@ export default function MobileGameBoard({
           onCancel={handleCancelTokens}
           disabledColors={disabledTokenColors}
           viewOnly={!isMyTurn || gameState.status !== 'playing'}
-          hintColors={[]}
+          hintColors={hintGemColors}
         />
       )}
 
@@ -374,6 +399,13 @@ export default function MobileGameBoard({
       {/* Action Notification Toast - fixed position, doesn't affect layout */}
       {showNotification && gameState.last_action && (
         <ActionNotification lastAction={gameState.last_action} myUserId={myUserId} />
+      )}
+
+      {/* AI Advisor panel — floats above the bottom nav */}
+      {advisor.active && advice && (
+        <div className="fixed bottom-20 right-3 z-40 w-60">
+          <AdvisorHint advice={advice} isYourTurn={advisor.isYourTurn} cardsData={cards_data} floating={false} />
+        </div>
       )}
     </div>
   );

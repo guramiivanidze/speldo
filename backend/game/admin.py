@@ -1,11 +1,11 @@
 from django.contrib import admin
-from django.utils.html import format_html
+from django.utils.html import format_html, mark_safe
 from django.shortcuts import render, redirect
 from django.urls import path
 from django.contrib import messages
 from import_export import resources, fields
 from import_export.admin import ImportExportModelAdmin
-from .models import Game, GamePlayer, DevelopmentCard, Noble, GameInvitation
+from .models import Game, GamePlayer, DevelopmentCard, Noble, GameInvitation, AdvisorConfig
 from .game_logic import clear_card_cache
 
 
@@ -206,17 +206,101 @@ class NobleAdmin(ImportExportModelAdmin):
         clear_card_cache()  # Clear cache so new images are picked up
 
 
+class AdvisorConfigInline(admin.TabularInline):
+    """Inline on Game — one row with enable checkbox + player selector."""
+    model = AdvisorConfig
+    extra = 1
+    max_num = 1
+    can_delete = True
+    verbose_name = 'AI Advisor'
+    verbose_name_plural = 'AI Advisor'
+    fields = ('enabled', 'advised_player_index')
+
+
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
-    list_display = ['code', 'status', 'max_players', 'created_at']
+    list_display = ['code', 'status', 'max_players', 'created_at', 'advisor_badge']
     list_filter = ['status']
     readonly_fields = ['id', 'created_at']
+    inlines = [AdvisorConfigInline]
+
+    @admin.display(description='Advisor')
+    def advisor_badge(self, obj):
+        try:
+            cfg = obj.advisor_config
+        except AdvisorConfig.DoesNotExist:
+            return mark_safe('<span style="color:#999">—</span>')
+        if cfg.enabled:
+            players = list(obj.players.select_related('user').order_by('order'))
+            name = players[cfg.advised_player_index].user.username if players else f'#{cfg.advised_player_index}'
+            return format_html(
+                '<span style="color:#22c55e;font-weight:bold">✓ {}</span>', name
+            )
+        return mark_safe('<span style="color:#999">off</span>')
+
+
+@admin.register(AdvisorConfig)
+class AdvisorConfigAdmin(admin.ModelAdmin):
+    """Standalone list so admins can quickly search and toggle advisors."""
+    list_display = ['game_code', 'advised_username', 'enabled', 'updated_at']
+    list_filter = ['enabled']
+    list_editable = ['enabled']
+    search_fields = ['game__code']
+    readonly_fields = ['created_at', 'updated_at']
+
+    @admin.display(description='Game', ordering='game__code')
+    def game_code(self, obj):
+        return obj.game.code
+
+    @admin.display(description='Player')
+    def advised_username(self, obj):
+        players = list(obj.game.players.select_related('user').order_by('order'))
+        if obj.advised_player_index < len(players):
+            return players[obj.advised_player_index].user.username
+        return f'index {obj.advised_player_index}'
 
 
 @admin.register(GamePlayer)
 class GamePlayerAdmin(admin.ModelAdmin):
-    list_display = ['game', 'user', 'order', 'prestige_points', 'is_online']
+    list_display = ['game', 'user', 'order', 'prestige_points', 'is_online', 'advisor_status']
     list_filter = ['game__status', 'is_online']
+    search_fields = ['user__username', 'game__code']
+    actions = ['enable_advisor', 'disable_advisor']
+
+    @admin.display(description='Advisor')
+    def advisor_status(self, obj):
+        try:
+            cfg = obj.game.advisor_config
+            if cfg.enabled and cfg.advised_player_index == obj.order:
+                return mark_safe('<span style="color:#22c55e;font-weight:bold">✓ ON</span>')
+        except AdvisorConfig.DoesNotExist:
+            pass
+        return mark_safe('<span style="color:#999">—</span>')
+
+    @admin.action(description='Enable AI advisor for selected player(s)')
+    def enable_advisor(self, request, queryset):
+        count = 0
+        for gp in queryset.select_related('game'):
+            cfg, _ = AdvisorConfig.objects.get_or_create(game=gp.game)
+            cfg.enabled = True
+            cfg.advised_player_index = gp.order
+            cfg.save()
+            count += 1
+        self.message_user(request, f'Advisor enabled for {count} player(s).', messages.SUCCESS)
+
+    @admin.action(description='Disable AI advisor for selected player(s)')
+    def disable_advisor(self, request, queryset):
+        count = 0
+        for gp in queryset.select_related('game'):
+            try:
+                cfg = gp.game.advisor_config
+                if cfg.advised_player_index == gp.order:
+                    cfg.enabled = False
+                    cfg.save()
+                    count += 1
+            except AdvisorConfig.DoesNotExist:
+                pass
+        self.message_user(request, f'Advisor disabled for {count} player(s).', messages.SUCCESS)
 
 
 @admin.register(GameInvitation)

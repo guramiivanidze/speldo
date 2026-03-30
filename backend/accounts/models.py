@@ -9,6 +9,10 @@ class UserProfile(models.Model):
     """Extended user profile with email verification status."""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     email_verified = models.BooleanField(default=False)
+    advisor_enabled = models.BooleanField(
+        default=False,
+        help_text='When checked, this player receives AI advisor hints in every game.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

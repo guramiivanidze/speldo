@@ -15,6 +15,8 @@ import MobileGameBoard from './mobile/MobileGameBoard';
 import ActionNotification from './ActionNotification';
 import TurnTimer from './TurnTimer';
 import { ChatMessage } from '@/hooks/useGameSocket';
+import { useAdvisor } from '@/hooks/useAdvisor';
+import { AdvisorHint } from './AdvisorHint';
 
 interface GameBoardProps {
   gameState: GameState;
@@ -120,7 +122,22 @@ export default function GameBoard({
     prevTurnNumberRef.current = currentTurn;
   }, [gameState.total_turns, gameState.last_action]);
 
-  // Render mobile layout
+  // Don't highlight current player when game is finished
+  const isGameActive = gameState.status === 'playing' || gameState.status === 'paused';
+  const currentPlayer = isGameActive ? gameState.players[gameState.current_player_index] : null;
+  const isMyTurn = currentPlayer?.id === myUserId;
+  const me = gameState.players.find((p) => p.id === myUserId);
+  const canReserveMore = me ? me.reserved_card_ids.length < 3 : false;
+
+  // AI advisor — only active when enabled server-side for this player
+  // Must be called before any early returns to satisfy Rules of Hooks
+  const advisor = useAdvisor({
+    gameCode: gameState.code,
+    isMyTurn,
+    enabled: gameState.status === 'playing',
+  });
+
+  // Render mobile layout (after all hooks)
   if (isMobile) {
     return (
       <MobileGameBoard
@@ -139,12 +156,20 @@ export default function GameBoard({
     );
   }
 
-  // Don't highlight current player when game is finished
-  const isGameActive = gameState.status === 'playing' || gameState.status === 'paused';
-  const currentPlayer = isGameActive ? gameState.players[gameState.current_player_index] : null;
-  const isMyTurn = currentPlayer?.id === myUserId;
-  const me = gameState.players.find((p) => p.id === myUserId);
-  const canReserveMore = me ? me.reserved_card_ids.length < 3 : false;
+  // Derive board-level hint indicators from advisor advice
+  const advice = advisor.active ? advisor.advice : null;
+  const hintCardId: number | null =
+    advice?.action === 'buy_card' ? (advice.card_id ?? null) :
+    advice?.action === 'reserve_card' && typeof advice.reserve_card_id === 'number' ? advice.reserve_card_id :
+    null;
+  const hintCardAction: 'buy' | 'reserve' | null =
+    advice?.action === 'buy_card' ? 'buy' :
+    advice?.action === 'reserve_card' ? 'reserve' :
+    null;
+  const hintGemColors: string[] =
+    advice?.action === 'take_gems' && advice.gems
+      ? Object.entries(advice.gems).flatMap(([c, n]) => Array(n as number).fill(c))
+      : [];
 
   // Check if I need to discard tokens (pending_discard is true and it's my turn)
   const showDiscardModal = gameState.pending_discard && isMyTurn && me;
@@ -399,6 +424,7 @@ export default function GameBoard({
                         isAffordable={affordable}
                         compact
                         isNewCard={isNewCard}
+                        advisorAction={hintCardId === cardId ? (hintCardAction ?? undefined) : undefined}
                       />
                     );
                   })}
@@ -420,7 +446,7 @@ export default function GameBoard({
               size="md"
               showLabel={false}
               vertical
-              hintColors={[]}
+              hintColors={hintGemColors}
             />
             {selectedTokens.length > 0 && (
               <div className="flex flex-col items-center gap-4">
@@ -502,6 +528,11 @@ export default function GameBoard({
       {/* Action Notification Toast - fixed position, doesn't affect layout */}
       {showNotification && gameState.last_action && (
         <ActionNotification lastAction={gameState.last_action} myUserId={myUserId} />
+      )}
+
+      {/* AI Advisor hint panel — only visible to the advised player */}
+      {advisor.active && advisor.advice && (
+        <AdvisorHint advice={advisor.advice} isYourTurn={advisor.isYourTurn} cardsData={cards_data} />
       )}
 
     </div>

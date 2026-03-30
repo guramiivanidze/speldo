@@ -212,6 +212,28 @@ class GameAction(models.Model):
         return f"Turn {self.turn_number}: {self.player.user.username} - {self.action_type}"
 
 
+class AdvisorConfig(models.Model):
+    """
+    Admin-only configuration for the AI advisor.
+    This model MUST NEVER be serialized into game state API responses —
+    it exists only in admin-facing endpoints.
+    """
+    game = models.OneToOneField(
+        Game, on_delete=models.CASCADE, related_name='advisor_config'
+    )
+    enabled = models.BooleanField(default=False)
+    advised_player_index = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return (
+            f"Advisor game={self.game.code} "
+            f"player={self.advised_player_index} "
+            f"enabled={self.enabled}"
+        )
+
+
 class GameInvitation(models.Model):
     """Invitation to join a game room."""
     STATUS_PENDING = 'pending'

@@ -16,7 +16,10 @@
       "Bash(grep -rn \"placement\\\\|position.*score\" backend/competitive/views.py frontend/app/profile/[username]/page.tsx)",
       "Bash(find c:/Users/guiv01/Documents/GitHub/speldo -type f \\\\\\(-name *.py -o -name *.tsx -o -name *.ts -o -name *.js \\\\\\) ! -path */node_modules/* ! -path */.venv/* ! -path */staticfiles/* ! -path */migrations/*)",
       "Bash(python backend/manage.py makemigrations accounts --name remove_advisor_enabled)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(find /c/Users/guiv01/Documents/GitHub/speldo/backend -type f -name *.py -o -name *.ts -o -name *.tsx)",
+      "Bash(find /c/Users/guiv01/Documents/GitHub/speldo/frontend -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\) ! -path */node_modules/* ! -path */.next/*)",
+      "Bash(python manage.py makemigrations game --name advisor_config)"
     ]
   }
 }

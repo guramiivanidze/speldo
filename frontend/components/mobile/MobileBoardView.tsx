@@ -39,7 +39,10 @@ interface MobileBoardViewProps {
     onReserveCard: (cardId?: number, level?: number) => void;
     onOpenTokenSelector: () => void;
     selectedTokens: TokenColor[];
-    newCardId?: number | null;  // The card that just appeared for animation
+    newCardId?: number | null;
+    hintCardId?: number | null;
+    hintCardAction?: 'buy' | 'reserve' | null;
+    hintGemColors?: string[];
 }
 
 const ROMAN: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
@@ -61,6 +64,9 @@ export default function MobileBoardView({
     onOpenTokenSelector,
     selectedTokens,
     newCardId = null,
+    hintCardId = null,
+    hintCardAction = null,
+    hintGemColors = [],
 }: MobileBoardViewProps) {
     const [zoomedCard, setZoomedCard] = useState<Card | null>(null);
     const [zoomedNoble, setZoomedNoble] = useState<Noble | null>(null);
@@ -93,8 +99,10 @@ export default function MobileBoardView({
                     onClick={() => onOpenTokenSelector()}
                     className={`
                         w-10 h-10 rounded-xl flex items-center justify-center shadow-lg
-                        bg-slate-800/90 text-indigo-400 border border-indigo-500/30
                         transition-all active:scale-95
+                        ${hintGemColors.length > 0
+                            ? 'bg-indigo-600/80 text-white border-2 border-indigo-400 hint-token'
+                            : 'bg-slate-800/90 text-indigo-400 border border-indigo-500/30'}
                     `}
                 >
                     <span className="text-lg">💎</span>
@@ -218,6 +226,12 @@ export default function MobileBoardView({
                                 const affordable = canAfford(cardId);
                                 const cardImage = getImageUrl(card);
                                 const isNewCard = newCardId === cardId;
+                                const isHintCard = hintCardId === cardId;
+                                const hintRing = isHintCard
+                                    ? hintCardAction === 'buy'
+                                        ? 'ring-2 ring-emerald-400 hint-buy'
+                                        : 'ring-2 ring-amber-400 hint-reserve'
+                                    : '';
 
                                 return (
                                     <button
@@ -225,8 +239,9 @@ export default function MobileBoardView({
                                         className={`
                       shrink-0 w-20 h-30 snap-start rounded-lg overflow-hidden relative
                       transition-transform active:scale-95
-                      ${affordable ? 'ring-2 ring-emerald-400' : ''}
+                      ${!isHintCard && affordable ? 'ring-2 ring-emerald-400' : ''}
                       ${isNewCard ? 'new-card-appear' : ''}
+                      ${hintRing}
                     `}
                                         onClick={() => setZoomedCard(card)}
                                     >

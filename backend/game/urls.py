@@ -7,6 +7,11 @@ from .views import (
     RespondGameInvitationView, PendingGameInvitationsView,
     PointsLeaderboardView,
 )
+from .advisor_views import (
+    AdminAdvisorToggleView,
+    AdminAdvisorHintView,
+    PlayerAdvisorHintView,
+)
 
 urlpatterns = [
     path('games/', GameListCreateView.as_view(), name='game-list-create'),
@@ -24,4 +29,11 @@ urlpatterns = [
     path('games/<str:code>/friends/', GameFriendsListView.as_view(), name='game-friends'),
     path('games/<str:code>/invite/', SendGameInvitationView.as_view(), name='send-game-invitation'),
     path('games/invitation/<int:invitation_id>/<str:action>/', RespondGameInvitationView.as_view(), name='respond-game-invitation'),
+
+    # ── Advisor (admin-only management) ──────────────────────
+    path('admin/advisor/toggle', AdminAdvisorToggleView.as_view(), name='advisor-toggle'),
+    path('admin/advisor/hint', AdminAdvisorHintView.as_view(), name='advisor-hint-admin'),
+
+    # ── Advisor (player polling) ──────────────────────────────
+    path('advisor/hint', PlayerAdvisorHintView.as_view(), name='advisor-hint-player'),
 ]
