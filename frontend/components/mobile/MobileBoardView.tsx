@@ -236,6 +236,7 @@ export default function MobileBoardView({
                                 return (
                                     <button
                                         key={cardId}
+                                        data-card-id={String(cardId)}
                                         className={`
                       shrink-0 w-20 h-30 snap-start rounded-lg overflow-hidden relative
                       transition-transform active:scale-95

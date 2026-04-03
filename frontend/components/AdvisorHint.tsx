@@ -179,7 +179,7 @@ export function AdvisorHint({ advice, isYourTurn, cardsData, floating = true }: 
     <div
       className={`
         ${floating ? 'fixed bottom-24 right-4 z-40' : ''}
-        w-auto rounded-xl
+        w-64 rounded-xl
         bg-gray-900/95 backdrop-blur-sm
         shadow-2xl shadow-black/50
         ${pulseClass}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { GameState, GemColor, TokenColor } from '@/types/game';
 import { GEM_COLORS } from '@/lib/colors';
 import { ChatMessage } from '@/hooks/useGameSocket';
@@ -18,6 +18,8 @@ import GameChat from '../GameChat';
 import TurnTimer from '../TurnTimer';
 import { useAdvisor } from '@/hooks/useAdvisor';
 import { AdvisorHint } from '../AdvisorHint';
+import { ReservationAnimation } from '../ReservationAnimation';
+import { Card } from '@/types/game';
 
 type MobileTab = 'board' | 'me' | 'opponents' | 'chat';
 
@@ -153,6 +155,20 @@ export default function MobileGameBoard({
   const prevTurnNumberRef = useRef<number>(0);
   const [newCardId, setNewCardId] = useState<number | null>(null);
 
+  // Reservation animation state
+  const prevReserveTurnRef = useRef<number>(0);
+  const [reservationAnim, setReservationAnim] = useState<{ card: Card; username: string; rect: { left: number; top: number; width: number; height: number } | null } | null>(null);
+
+  // Capture card DOM positions after every render
+  const cardPositionsRef = useRef<Record<string, { left: number; top: number; width: number; height: number }>>({});
+  useLayoutEffect(() => {
+    document.querySelectorAll<HTMLElement>('[data-card-id]').forEach(el => {
+      const id = el.dataset.cardId!;
+      const r = el.getBoundingClientRect();
+      cardPositionsRef.current[id] = { left: r.left, top: r.top, width: r.width, height: r.height };
+    });
+  });
+
   // Track action notification visibility (temporary, 3 seconds)
   const [showNotification, setShowNotification] = useState(false);
   const lastNotifiedTurnRef = useRef<number>(0);
@@ -217,6 +233,23 @@ export default function MobileGameBoard({
     // Update turn ref for non-animation actions
     prevTurnNumberRef.current = currentTurn;
   }, [gameState.total_turns, gameState.last_action]);
+
+  // Trigger reservation animation when a card is reserved from visible board
+  useEffect(() => {
+    const lastAction = gameState.last_action;
+    if (
+      lastAction?.type === 'reserve_card' &&
+      !lastAction.data.from_deck &&
+      lastAction.turn_number > prevReserveTurnRef.current
+    ) {
+      prevReserveTurnRef.current = lastAction.turn_number;
+      const card = cards_data[String(lastAction.data.card_id)];
+      if (card) {
+        const rect = cardPositionsRef.current[String(lastAction.data.card_id)] ?? null;
+        setReservationAnim({ card, username: lastAction.player_username, rect });
+      }
+    }
+  }, [gameState.last_action?.turn_number, gameState.last_action?.type, cards_data]);
 
   // Track unread chat messages
   useEffect(() => {
@@ -406,6 +439,16 @@ export default function MobileGameBoard({
         <div className="fixed bottom-20 right-3 z-40 w-60">
           <AdvisorHint advice={advice} isYourTurn={advisor.isYourTurn} cardsData={cards_data} floating={false} />
         </div>
+      )}
+
+      {/* Reservation animation overlay */}
+      {reservationAnim && (
+        <ReservationAnimation
+          card={reservationAnim.card}
+          username={reservationAnim.username}
+          rect={reservationAnim.rect}
+          onDone={() => setReservationAnim(null)}
+        />
       )}
     </div>
   );

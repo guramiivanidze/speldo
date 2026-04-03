@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { GameState, GemColor, TokenColor } from '@/types/game';
 import CardDisplay from './CardDisplay';
 import NobleDisplay from './NobleDisplay';
@@ -17,6 +17,8 @@ import TurnTimer from './TurnTimer';
 import { ChatMessage } from '@/hooks/useGameSocket';
 import { useAdvisor } from '@/hooks/useAdvisor';
 import { AdvisorHint } from './AdvisorHint';
+import { ReservationAnimation } from './ReservationAnimation';
+import { Card } from '@/types/game';
 
 interface GameBoardProps {
   gameState: GameState;
@@ -53,6 +55,20 @@ export default function GameBoard({
   // Track the new card for animation (only for buy/reserve actions)
   const prevTurnNumberRef = useRef<number>(0);
   const [newCardId, setNewCardId] = useState<number | null>(null);
+
+  // Reservation animation state
+  const prevReserveTurnRef = useRef<number>(0);
+  const [reservationAnim, setReservationAnim] = useState<{ card: Card; username: string; rect: { left: number; top: number; width: number; height: number } | null } | null>(null);
+
+  // Capture card DOM positions after every render (before they're removed from the board)
+  const cardPositionsRef = useRef<Record<string, { left: number; top: number; width: number; height: number }>>({});
+  useLayoutEffect(() => {
+    document.querySelectorAll<HTMLElement>('[data-card-id]').forEach(el => {
+      const id = el.dataset.cardId!;
+      const r = el.getBoundingClientRect();
+      cardPositionsRef.current[id] = { left: r.left, top: r.top, width: r.width, height: r.height };
+    });
+  });
 
   // Track action notification visibility (temporary, 3 seconds)
   const [showNotification, setShowNotification] = useState(false);
@@ -121,6 +137,23 @@ export default function GameBoard({
     // Update turn ref for non-animation actions
     prevTurnNumberRef.current = currentTurn;
   }, [gameState.total_turns, gameState.last_action]);
+
+  // Trigger reservation animation when a card is reserved from visible board
+  useEffect(() => {
+    const lastAction = gameState.last_action;
+    if (
+      lastAction?.type === 'reserve_card' &&
+      !lastAction.data.from_deck &&
+      lastAction.turn_number > prevReserveTurnRef.current
+    ) {
+      prevReserveTurnRef.current = lastAction.turn_number;
+      const card = gameState.cards_data[String(lastAction.data.card_id)];
+      if (card) {
+        const rect = cardPositionsRef.current[String(lastAction.data.card_id)] ?? null;
+        setReservationAnim({ card, username: lastAction.player_username, rect });
+      }
+    }
+  }, [gameState.last_action?.turn_number, gameState.last_action?.type, gameState.cards_data]);
 
   // Don't highlight current player when game is finished
   const isGameActive = gameState.status === 'playing' || gameState.status === 'paused';
@@ -413,19 +446,20 @@ export default function GameBoard({
                     const affordable = canAfford(cardId);
                     const isNewCard = newCardId === cardId;
                     return (
-                      <CardDisplay
-                        key={cardId}
-                        card={card}
-                        onBuy={() => onBuyCard(cardId)}
-                        onReserve={() => onReserveCard(cardId)}
-                        canBuy={isMyTurn && affordable && gameState.status === 'playing'}
-                        canReserve={isMyTurn && canReserveMore && gameState.status === 'playing'}
-                        showActions={isMyTurn && gameState.status === 'playing'}
-                        isAffordable={affordable}
-                        compact
-                        isNewCard={isNewCard}
-                        advisorAction={hintCardId === cardId ? (hintCardAction ?? undefined) : undefined}
-                      />
+                      <div key={cardId} data-card-id={String(cardId)} className="h-full">
+                        <CardDisplay
+                          card={card}
+                          onBuy={() => onBuyCard(cardId)}
+                          onReserve={() => onReserveCard(cardId)}
+                          canBuy={isMyTurn && affordable && gameState.status === 'playing'}
+                          canReserve={isMyTurn && canReserveMore && gameState.status === 'playing'}
+                          showActions={isMyTurn && gameState.status === 'playing'}
+                          isAffordable={affordable}
+                          compact
+                          isNewCard={isNewCard}
+                          advisorAction={hintCardId === cardId ? (hintCardAction ?? undefined) : undefined}
+                        />
+                      </div>
                     );
                   })}
                 </div>
@@ -533,6 +567,16 @@ export default function GameBoard({
       {/* AI Advisor hint panel — only visible to the advised player */}
       {advisor.active && advisor.advice && (
         <AdvisorHint advice={advisor.advice} isYourTurn={advisor.isYourTurn} cardsData={cards_data} />
+      )}
+
+      {/* Reservation animation overlay */}
+      {reservationAnim && (
+        <ReservationAnimation
+          card={reservationAnim.card}
+          username={reservationAnim.username}
+          rect={reservationAnim.rect}
+          onDone={() => setReservationAnim(null)}
+        />
       )}
 
     </div>

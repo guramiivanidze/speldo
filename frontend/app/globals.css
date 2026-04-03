@@ -364,3 +364,15 @@ body {
 .new-card-appear {
   animation: new-card-appear 1.8s ease-out forwards;
 }
+
+/* ─── Reservation animation (in-place) ────── */
+@keyframes reserve-anim-inplace {
+  0%   { opacity: 0.6; transform: scale(1); }
+  18%  { opacity: 1;   transform: scale(1.5); }
+  65%  { opacity: 1;   transform: scale(1.5); }
+  100% { opacity: 0;   transform: scale(1.5) translateY(-10px); }
+}
+.reserve-anim-inplace {
+  animation: reserve-anim-inplace 2.2s ease-in-out forwards;
+  transform-origin: center center;
+}
